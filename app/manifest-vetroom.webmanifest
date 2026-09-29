@@ -1,0 +1,16 @@
+{
+  "name": "Vetroom – gestionale veterinario",
+  "short_name": "Vetroom",
+  "id": "/app/clinica/",
+  "start_url": "/app/clinica/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#0f766e",
+  "lang": "it",
+  "icons": [
+    { "src": "/app/img/vetroom-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/app/img/vetroom-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/app/img/vetroom-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

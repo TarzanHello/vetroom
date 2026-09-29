@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2545">
+  <meta name="robots" content="noindex">
+  <title>Visita – FurrFinder</title>
+  <link rel="manifest" href="/app/manifest-furrfinder.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/furrfinder-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FurrFinder">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../js/proprietario.js"></script>
+  <script src="../js/documenti.js"></script>
+</head>
+<body data-shell="owner" data-nav="animali">
+
+  <main class="wrap">
+    <a class="back" id="back" href="./">← Torna all'animale</a>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <div class="page-head">
+        <div>
+          <h1 id="title"></h1>
+          <p class="muted" id="sub" style="margin:0"></p>
+        </div>
+      </div>
+      <section class="panel" id="body"></section>
+      <section class="panel" id="docsPanel" hidden>
+        <h2>Referti e allegati</h2>
+        <div id="docs"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadOwnerContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const { data: v, error } = await VR.sb.from('visits').select('*').eq('id', VR.param('id')).maybeSingle();
+    VR.hide(loading);
+    if (error || !v) { VR.say(msg, error ? VR.errorText(error) : 'Visita non trovata o non condivisa con te.', 'error'); return; }
+
+    const [{ data: pet }, { data: clinics }] = await Promise.all([
+      VR.sb.from('pets').select('id, name').eq('id', v.pet_id).maybeSingle(),
+      VR.sb.rpc('owner_pet_clinics', { p_pet: v.pet_id })
+    ]);
+    const clinic = (clinics || []).find((c) => c.clinic_id === v.clinic_id);
+    VR.$('#back').href = 'animale.html?id=' + v.pet_id;
+    VR.$('#title').textContent = `${v.visit_kind || 'Visita'} del ${VR.fmtDate(v.visit_date)}`;
+    VR.$('#sub').textContent = [pet?.name, clinic?.name].filter(Boolean).join(' · ');
+
+    const block = (label, text) => text ? `<div class="ro-block"><h3>${VR.esc(label)}</h3><p>${VR.esc(text)}</p></div>` : '';
+    let html = block('Motivo della visita', v.title) + block('Anamnesi ed esame clinico', v.notes);
+
+    // Scheda del modulo
+    const fd = v.form_data || {};
+    if (Array.isArray(fd.fields)) {
+      const vals = fd.values || {};
+      let rows = '', pending = null;
+      fd.fields.forEach((f) => {
+        if (f.type === 'section') { pending = f.label; return; }
+        const val = vals[f.key];
+        if (val === undefined || val === null || val === '' || (f.type === 'checkbox' && !val)) return;
+        if (pending) { rows += `<div class="ro-sec">${VR.esc(pending)}</div>`; pending = null; }
+        rows += `<div class="ro-field ${f.width === 'half' ? 'half' : ''}"><span>${VR.esc(f.label)}</span><strong>${VR.esc(VR.moduleValueText(f, val))}</strong></div>`;
+      });
+      if (rows) html += `<div class="ro-block"><h3>${VR.esc(fd.form_name || 'Scheda')}</h3><div class="ro-grid">${rows}</div></div>`;
+    }
+    if (fd.weight_kg != null) html += block('Peso rilevato', String(fd.weight_kg).replace('.', ',') + ' kg');
+    html += block('Diagnosi', v.diagnosis) + block('Terapia e indicazioni', v.therapy);
+    VR.$('#body').innerHTML = html || '<p class="muted" style="margin:0">Nessun dettaglio inserito.</p>';
+    VR.show(VR.$('#page'));
+
+    VR.show(VR.$('#docsPanel'));
+    VR.docsWidget({ el: VR.$('#docs'), petId: v.pet_id, clinicId: null, visitId: v.id, userId: ctx.uid, canEdit: false });
+  })();
+  </script>
+</body>
+</html>

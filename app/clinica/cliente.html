@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Proprietario – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+</head>
+<body data-shell="clinic" data-nav="clienti">
+
+  <main class="wrap">
+    <a class="back" href="clienti.html">← Tutti i proprietari</a>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <div class="page-head">
+        <div>
+          <h1 id="title">Nuovo proprietario</h1>
+          <span class="badge-owner" id="ownerBadge" hidden>Iscritto a Vetroom</span>
+        </div>
+      </div>
+
+      <!-- Animali del cliente -->
+      <section class="panel" id="petsPanel" hidden>
+        <div class="page-head" style="margin-bottom:1rem">
+          <h2 style="margin:0">Animali</h2>
+          <a class="btn btn-primary btn-small" id="addPet" href="#">Aggiungi animale</a>
+        </div>
+        <div class="pets" id="pets"></div>
+        <p class="muted" id="noPets" hidden style="margin:0">Nessun animale registrato per questo proprietario.</p>
+      </section>
+
+      <section class="panel" id="histPanel" hidden>
+        <h2>Storico visite (tutti gli animali)</h2>
+        <ul class="rows" id="hist" style="box-shadow:none;border:1px solid var(--line)"></ul>
+      </section>
+
+      <form id="form" novalidate>
+        <section class="panel">
+          <h2>Dati anagrafici</h2>
+          <div class="grid">
+            <div><label for="last_name">Cognome</label><input type="text" id="last_name" name="last_name" autocomplete="off" required></div>
+            <div><label for="first_name">Nome</label><input type="text" id="first_name" name="first_name" autocomplete="off"></div>
+            <div><label for="fiscal_code">Codice fiscale</label><input type="text" id="fiscal_code" name="fiscal_code" maxlength="16" data-upper autocomplete="off"></div>
+            <div><label for="birth_date">Data di nascita</label><input type="date" id="birth_date" name="birth_date"></div>
+            <div><label for="phone">Telefono</label><input type="tel" id="phone" name="phone" autocomplete="off"></div>
+            <div><label for="email">Email</label><input type="email" id="email" name="email" autocomplete="off">
+              <p class="hint-small">Se il cliente si iscrive a Vetroom con questa email, ritrova subito i suoi animali.</p></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Indirizzo</h2>
+          <div class="grid">
+            <div class="s8"><label for="address_street">Via / Piazza</label><input type="text" id="address_street" name="address_street"></div>
+            <div class="s4"><label for="address_number">Civico</label><input type="text" id="address_number" name="address_number"></div>
+            <div class="s3"><label for="address_zip">CAP</label><input type="text" id="address_zip" name="address_zip" maxlength="10"></div>
+            <div class="s4"><label for="address_city">Città</label><input type="text" id="address_city" name="address_city"></div>
+            <div class="s3"><label for="address_province">Provincia</label><input type="text" id="address_province" name="address_province" maxlength="2" data-upper placeholder="RM"></div>
+            <div class="s3"><label for="address_country">Nazione</label><input type="text" id="address_country" name="address_country" maxlength="2" data-upper value="IT"></div>
+          </div>
+          <p style="margin:1.25rem 0 0"><label class="check"><input type="checkbox" name="billing_is_different" id="billing_is_different"> Indirizzo di fatturazione diverso</label></p>
+          <div class="grid" id="billing" hidden style="margin-top:1rem">
+            <div class="s8"><label for="billing_street">Via / Piazza (fatturazione)</label><input type="text" id="billing_street" name="billing_street"></div>
+            <div class="s4"><label for="billing_number">Civico</label><input type="text" id="billing_number" name="billing_number"></div>
+            <div class="s3"><label for="billing_zip">CAP</label><input type="text" id="billing_zip" name="billing_zip" maxlength="10"></div>
+            <div class="s4"><label for="billing_city">Città</label><input type="text" id="billing_city" name="billing_city"></div>
+            <div class="s3"><label for="billing_province">Provincia</label><input type="text" id="billing_province" name="billing_province" maxlength="2" data-upper></div>
+            <div class="s3"><label for="billing_country">Nazione</label><input type="text" id="billing_country" name="billing_country" maxlength="2" data-upper></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Note</h2>
+          <textarea name="notes" id="notes" aria-label="Note sul cliente" placeholder="Note interne, visibili solo alla clinica"></textarea>
+        </section>
+
+        <div class="actions-bar">
+          <button class="btn btn-primary" type="submit" id="save">Salva proprietario</button>
+          <button class="btn btn-ghost" type="submit" id="saveAndPet" data-then="animale" hidden><img class="vr-action-icon" src="../img/icons/create_pet.png" alt="">Salva e aggiungi animale</button>
+          <span class="spacer"></span>
+          <button class="btn btn-danger" type="button" id="del" hidden>Elimina proprietario</button>
+        </div>
+        <div id="msg2" hidden></div>
+      </form>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), msg2 = VR.$('#msg2'), loading = VR.$('#loading');
+    const form = VR.$('#form');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+
+    const id = VR.param('id');
+    const billing = VR.$('#billing');
+    const toggleBilling = () => (VR.$('#billing_is_different').checked ? VR.show : VR.hide)(billing);
+    VR.$('#billing_is_different').addEventListener('change', toggleBilling);
+
+    let petsCount = 0;
+
+    if (id) {
+      const { data: c, error } = await VR.sb.from('clients').select('*')
+        .eq('id', id).eq('clinic_id', ctx.clinicId).maybeSingle();
+      if (error || !c) { VR.hide(loading); VR.say(msg, error ? VR.errorText(error) : 'Cliente non trovato.', 'error'); return; }
+      VR.fillForm(form, c);
+      toggleBilling();
+      VR.$('#title').textContent = VR.clientName(c);
+      document.title = VR.clientName(c) + ' – Vetroom';
+      if (c.owner_user_id) VR.show(VR.$('#ownerBadge'));
+      VR.$('#save').textContent = 'Salva modifiche';
+      VR.$('#addPet').href = 'animale.html?cliente=' + encodeURIComponent(id);
+
+      // Animali collegati
+      const { data: acc, error: e2 } = await VR.sb.from('pet_access')
+        .select('status, pets(*)').eq('client_id', id).eq('clinic_id', ctx.clinicId).eq('status', 'active');
+      if (e2) { VR.say(msg, VR.errorText(e2), 'error'); }
+      const pets = (acc || []).map((a) => a.pets).filter((p) => p && !p.deleted_at);
+      petsCount = pets.length;
+      const urls = await Promise.all(pets.map((p) => VR.fileUrl(p.photo_path)));
+      VR.$('#pets').innerHTML = pets.map((p, i) => `
+        <a class="pet-card" href="animale.html?id=${p.id}">
+          ${VR.avatarHtml(p, urls[i])}
+          <div><strong>${VR.esc(p.name)}</strong><span>${VR.esc(VR.petSubtitle(p) || 'Specie non indicata')}</span></div>
+        </a>`).join('');
+      if (!pets.length) VR.show(VR.$('#noPets'));
+
+      // Storico di tutte le visite dei suoi animali (solo veterinari)
+      if (ctx.isVet && pets.length) {
+        const names = Object.fromEntries(pets.map((p) => [p.id, p.name]));
+        const { data: hist } = await VR.sb.from('visits')
+          .select('id, pet_id, visit_date, visit_kind, title, diagnosis, finalized_at')
+          .in('pet_id', pets.map((p) => p.id)).eq('clinic_id', ctx.clinicId)
+          .order('visit_date', { ascending: false }).limit(200);
+        if (hist && hist.length) {
+          VR.$('#hist').innerHTML = hist.map((x) => `
+            <li class="visit-row"><a href="visita.html?id=${x.id}">
+              <span class="visit-date">${new Date(x.visit_date + 'T00:00:00').toLocaleDateString('it-IT')}</span>
+              <div class="main"><strong>${VR.esc(names[x.pet_id] || '')} · ${VR.esc(x.title || x.visit_kind || 'Visita')}</strong>
+                <span>${VR.esc(x.diagnosis ? 'Diagnosi: ' + x.diagnosis.slice(0, 100) : 'Nessuna diagnosi indicata')}</span></div>
+              <span class="pill">${x.finalized_at ? 'Definitivo' : VR.esc(x.visit_kind || 'Visita')}</span>
+            </a></li>`).join('');
+          VR.show(VR.$('#histPanel'));
+        }
+      }
+      VR.show(VR.$('#petsPanel'));
+      VR.show(VR.$('#del'));
+    }
+
+    VR.hide(loading);
+    VR.show(VR.$('#page'));
+    if (!id) {
+      VR.$('#last_name').focus();
+      VR.show(VR.$('#saveAndPet'));
+      // Arrivando da "Nuovo animale", il pulsante principale è "Salva e aggiungi animale"
+      if (VR.param('poi') === 'animale') { VR.$('#saveAndPet').className = 'btn btn-primary'; VR.$('#save').className = 'btn btn-ghost'; }
+    }
+
+    // Salvataggio
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const thenPet = ev.submitter?.dataset.then === 'animale';
+      VR.hide(msg2);
+      const v = VR.formValues(form);
+      if (!v.last_name && !v.first_name) { VR.say(msg2, 'Inserisci almeno il cognome o il nome.', 'error'); return; }
+      if (v.fiscal_code && !/^[A-Z0-9]{11,16}$/.test(v.fiscal_code)) {
+        VR.say(msg2, 'Il codice fiscale non sembra corretto: deve avere 16 caratteri (o 11 cifre se è una partita IVA).', 'error'); return;
+      }
+      if (v.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) { VR.say(msg2, 'L\'email non sembra corretta.', 'error'); return; }
+      if (!v.billing_is_different) {
+        ['billing_street','billing_number','billing_zip','billing_city','billing_province','billing_country'].forEach((k) => v[k] = null);
+      }
+      if (v.email) v.email = v.email.toLowerCase();
+
+      const btn = VR.$('#save'); btn.disabled = true;
+      if (id) {
+        const { error } = await VR.sb.from('clients').update(v).eq('id', id);
+        btn.disabled = false;
+        if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
+        VR.$('#title').textContent = VR.clientName(v);
+        VR.say(msg2, 'Modifiche salvate.', 'ok');
+      } else {
+        const { data, error } = await VR.sb.from('clients')
+          .insert({ ...v, clinic_id: ctx.clinicId }).select('id').single();
+        if (error) { btn.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return; }
+        location.replace(thenPet ? 'animale.html?cliente=' + data.id : 'cliente.html?id=' + data.id);
+      }
+    });
+
+    // Eliminazione (solo se non ha animali)
+    VR.$('#del').addEventListener('click', async () => {
+      if (petsCount > 0) {
+        VR.say(msg2, 'Questo cliente ha animali registrati: per eliminarlo, prima elimina o sposta le loro schede.', 'error'); return;
+      }
+      if (!confirm('Eliminare definitivamente questo cliente?')) return;
+      const { error } = await VR.sb.from('clients').delete().eq('id', id);
+      if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
+      location.replace('clienti.html');
+    });
+  })();
+  </script>
+</body>
+</html>

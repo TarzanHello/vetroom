@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Agenda – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+</head>
+<body data-shell="clinic" data-nav="agenda">
+
+  <main class="wrap wrap-wide">
+    <div class="page-head">
+      <div>
+        <h1>Agenda</h1>
+        <p class="muted" id="range" style="margin:0"></p>
+      </div>
+      <div class="actions-bar">
+        <button class="btn btn-ghost btn-small" id="prev" type="button" aria-label="Periodo precedente">←</button>
+        <button class="btn btn-ghost btn-small" id="today" type="button">Oggi</button>
+        <div class="seg seg-big" role="group" aria-label="Vista">
+          <button type="button" id="vWeek" aria-pressed="true">Settimana</button>
+          <button type="button" id="vMonth" aria-pressed="false">Mese</button>
+        </div>
+        <button class="btn btn-ghost btn-small" id="next" type="button" aria-label="Periodo successivo">→</button>
+        <a class="btn btn-ghost btn-small" href="orari.html">Orari</a>
+        <button class="btn btn-primary btn-small" id="add" type="button">Nuovo appuntamento</button>
+      </div>
+    </div>
+
+    <div id="requests" hidden></div>
+    <div id="msg" hidden></div>
+    <p class="notice notice-info" id="noHours" hidden>Non hai ancora impostato gli orari di apertura: <a href="orari.html">impostali qui</a> per vedere le fasce aperte in agenda.</p>
+
+    <div class="cal" id="cal"><p class="loader">Caricamento…</p></div>
+    <p class="hint-small">Clicca su uno spazio libero per creare un appuntamento a quell'ora.</p>
+  </main>
+
+  <!-- Finestra appuntamento -->
+  <dialog id="dlg" class="dlg">
+    <form method="dialog" id="apForm" novalidate>
+      <h2 id="dlgTitle">Nuovo appuntamento</h2>
+      <div class="grid">
+        <div class="s4"><label for="apDate">Data</label><input type="date" id="apDate" required></div>
+        <div class="s4"><label for="apTime">Ora</label><input type="time" id="apTime" step="300" required></div>
+        <div class="s4"><label for="apDur">Durata</label>
+          <select id="apDur"><option value="15">15 min</option><option value="20">20 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 ora</option><option value="90">1 ora e 30</option><option value="120">2 ore</option></select></div>
+
+        <div class="s12">
+          <label for="petSearch">Paziente</label>
+          <div id="petChosen" class="pet-chosen" hidden>
+            <span id="petChosenText"></span>
+            <a id="petLink" href="#" class="hint-small">apri scheda</a>
+            <button type="button" class="btn btn-ghost btn-small" id="petChange">Cambia</button>
+          </div>
+          <div id="petPicker">
+            <input type="search" id="petSearch" placeholder="Cerca per nome dell'animale o cognome del proprietario" autocomplete="off">
+            <div class="picker-results" id="petResults"></div>
+            <p class="hint-small">Puoi anche lasciarlo vuoto e scrivere chi è nelle note (es. nuovo proprietario al telefono).</p>
+          </div>
+        </div>
+
+        <div><label for="apType">Tipo</label>
+          <select id="apType"><option>Visita clinica</option><option>Controllo</option><option>Vaccinazione</option><option>Urgenza</option><option>Chirurgia</option><option>Esami diagnostici</option><option>Visita specialistica</option><option>Altro</option></select></div>
+        <div><label for="apStatus">Stato</label>
+          <select id="apStatus"><option value="confirmed">Confermato</option><option value="requested">Da confermare</option><option value="done">Svolto</option><option value="no_show">Non presentato</option><option value="cancelled">Annullato</option></select></div>
+        <div class="s12"><label for="apNotes">Note interne</label><textarea id="apNotes" rows="3" placeholder="Visibili solo alla clinica"></textarea></div>
+        <div class="s12" id="ownerNoteBox" hidden><label>Messaggio del proprietario</label><p id="ownerNote" class="readonly-note" style="margin:0"></p></div>
+      </div>
+      <div id="dlgMsg" hidden></div>
+      <div class="actions-bar" style="margin-top:1.25rem">
+        <button class="btn btn-primary" type="submit" id="apSave" value="save">Salva</button>
+        <a class="btn btn-ghost" id="apWa" href="#" target="_blank" rel="noopener" hidden>WhatsApp</a>
+        <a class="btn btn-ghost" id="apVisit" href="#" hidden><img class="vr-action-icon" src="../img/icons/add_visit.png" alt="">Inizia visita</a>
+        <button class="btn btn-ghost" type="button" id="apCancel">Chiudi</button>
+        <span class="spacer"></span>
+        <button class="btn btn-danger" type="button" id="apDelete" hidden>Elimina</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), cal = VR.$('#cal');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { cal.innerHTML = ''; VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+
+    // ---------- Utilità date ----------
+    const pad = (n) => String(n).padStart(2, '0');
+    const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+    const mondayOf = (d) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const wd = (x.getDay() + 6) % 7; return addDays(x, -wd); };
+    const toMin = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const DAYNAME = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+    const STATUS = { confirmed: 'Confermato', requested: 'Da confermare', done: 'Svolto', no_show: 'Non presentato', cancelled: 'Annullato' };
+    const PX_PER_MIN = 64 / 60;
+
+    // ---------- Stato ----------
+    let hours = [], appts = [], clientsCache = null;
+    let anchor = new Date();
+    const isNarrow = () => window.matchMedia('(max-width: 820px)').matches;
+
+    const { data: av } = await VR.sb.from('availabilities').select('*').eq('clinic_id', ctx.clinicId);
+    hours = av || [];
+    if (!hours.length) VR.show(VR.$('#noHours'));
+    const defaultSlot = hours[0]?.slot_minutes || 30;
+
+    let view = 'week'; // 'week' (giorno su telefono) oppure 'month'
+    const setView = (v) => {
+      view = v;
+      VR.$('#vWeek').setAttribute('aria-pressed', v === 'week');
+      VR.$('#vMonth').setAttribute('aria-pressed', v === 'month');
+      VR.$('#vWeek').textContent = isNarrow() ? 'Giorno' : 'Settimana';
+    };
+    const period = () => {
+      if (view === 'month') {
+        const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+        return { start: mondayOf(first), days: 42, month: anchor.getMonth() };
+      }
+      if (isNarrow()) { const s = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate()); return { start: s, days: 1 }; }
+      return { start: mondayOf(anchor), days: 7 };
+    };
+
+    // ---------- Caricamento ----------
+    const load = async () => {
+      const { start, days } = period();
+      const end = addDays(start, days);
+      const { data, error } = await VR.sb.from('appointments')
+        .select('*, pets(id, name, species), clients(first_name, last_name, phone)')
+        .eq('clinic_id', ctx.clinicId)
+        .gte('starts_at', start.toISOString()).lt('starts_at', end.toISOString())
+        .order('starts_at');
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      appts = data || [];
+      render();
+      loadRequests();
+    };
+
+    // Richieste in attesa (tutte, anche fuori dal periodo visualizzato)
+    const loadRequests = async () => {
+      const { data } = await VR.sb.from('appointments')
+        .select('*, pets(id, name), clients(first_name, last_name)')
+        .eq('clinic_id', ctx.clinicId).eq('status', 'requested')
+        .gte('starts_at', new Date().toISOString()).order('starts_at').limit(20);
+      const box = VR.$('#requests');
+      if (!data || !data.length) { VR.hide(box); return; }
+      box.className = 'notice notice-info';
+      box.innerHTML = `<strong>${data.length === 1 ? '1 richiesta da confermare' : data.length + ' richieste da confermare'}:</strong> ` +
+        data.map((a) => `<a href="#" data-req="${a.id}">${new Date(a.starts_at).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${VR.esc(a.pets?.name || 'senza paziente')}</a>`).join(' · ');
+      box._data = data;
+      VR.show(box);
+    };
+    VR.$('#requests').addEventListener('click', (ev) => {
+      const a = ev.target.closest('[data-req]'); if (!a) return;
+      ev.preventDefault();
+      const ap = VR.$('#requests')._data.find((x) => x.id === a.dataset.req);
+      if (ap) { anchor = new Date(ap.starts_at); load().then(() => openDialog(ap)); }
+    });
+
+    // ---------- Disegno ----------
+    // ---------- Vista mensile ----------
+    const renderMonth = () => {
+      const { start, month } = period();
+      const title = new Date(anchor.getFullYear(), anchor.getMonth(), 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+      VR.$('#range').textContent = title.charAt(0).toUpperCase() + title.slice(1);
+      const todayStr = ymd(new Date());
+      const cells = [];
+      for (let i = 0; i < 42; i++) {
+        const d = addDays(start, i);
+        const h = hours.find((x) => x.weekday === d.getDay());
+        const openMin = h ? (toMin(h.end_time) - toMin(h.start_time)) + ((h.start_time2 && h.end_time2) ? toMin(h.end_time2) - toMin(h.start_time2) : 0) : 0;
+        const list = appts.filter((a) => ymd(new Date(a.starts_at)) === ymd(d) && !['cancelled', 'no_show'].includes(a.status));
+        const busy = list.reduce((m, a) => m + a.duration_min, 0);
+        const load = !h ? 'closed' : busy === 0 ? 'free' : busy / openMin < 0.5 ? 'low' : busy / openMin < 0.85 ? 'mid' : 'full';
+        const req = list.filter((a) => a.status === 'requested').length;
+        cells.push(`
+          <button type="button" class="mcell ${d.getMonth() !== month ? 'is-out' : ''} ${ymd(d) === todayStr ? 'is-today' : ''} load-${load}" data-date="${ymd(d)}">
+            <span class="mnum">${d.getDate()}</span>
+            ${list.length ? `<span class="mcount">${list.length}${req ? ` <b title="da confermare">· ${req}!</b>` : ''}</span>` : ''}
+            <span class="mlist">${list.slice(0, 3).map((a) => `<i>${hm(new Date(a.starts_at))} ${VR.esc(a.pets?.name || 'app.')}</i>`).join('')}${list.length > 3 ? `<i>+${list.length - 3} altri</i>` : ''}</span>
+          </button>`);
+      }
+      cal.style.removeProperty('--days');
+      cal.innerHTML = `
+        <div class="month">
+          ${['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map((n) => `<div class="mhead">${n}</div>`).join('')}
+          ${cells.join('')}
+        </div>
+        <div class="mlegend"><span class="load-free">libero</span><span class="load-low">poco occupato</span><span class="load-mid">quasi pieno</span><span class="load-full">pieno</span><span class="load-closed">chiuso</span></div>`;
+    };
+
+    const render = () => {
+      if (view === 'month') return renderMonth();
+      const { start, days } = period();
+      const end = addDays(start, days - 1);
+      VR.$('#range').textContent = days === 1
+        ? start.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+        : `${start.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })} – ${end.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+
+      // Intervallo orario da mostrare
+      let from = 8 * 60, to = 20 * 60;
+      hours.forEach((h) => {
+        from = Math.min(from, toMin(h.start_time));
+        to = Math.max(to, toMin(h.end_time2 || h.end_time));
+      });
+      appts.forEach((a) => {
+        const s = new Date(a.starts_at); const m = s.getHours() * 60 + s.getMinutes();
+        from = Math.min(from, m); to = Math.max(to, m + a.duration_min);
+      });
+      from = Math.floor(from / 60) * 60; to = Math.min(24 * 60, Math.ceil(to / 60) * 60);
+      const height = (to - from) * PX_PER_MIN;
+
+      const todayStr = ymd(new Date());
+      const cols = [];
+      for (let i = 0; i < days; i++) {
+        const d = addDays(start, i);
+        const wd = d.getDay();
+        const h = hours.find((x) => x.weekday === wd);
+        const open = h ? [[toMin(h.start_time), toMin(h.end_time)], [toMin(h.start_time2), toMin(h.end_time2)]].filter((r) => r[0] != null && r[1] != null) : [];
+        const dayAppts = appts.filter((a) => ymd(new Date(a.starts_at)) === ymd(d));
+        cols.push({ d, open, dayAppts });
+      }
+
+      const timeLabels = [];
+      for (let m = from; m < to; m += 60) timeLabels.push(`<div class="cal-hour" style="top:${(m - from) * PX_PER_MIN}px">${pad(m / 60)}:00</div>`);
+
+      cal.style.setProperty('--days', days);
+      cal.innerHTML = `
+        <div class="cal-head">
+          <div></div>
+          ${cols.map((c) => `<div class="cal-day-head ${ymd(c.d) === todayStr ? 'is-today' : ''}"><span>${DAYNAME[c.d.getDay()]}</span> <strong>${c.d.getDate()}</strong></div>`).join('')}
+        </div>
+        <div class="cal-body" style="height:${height}px">
+          <div class="cal-times">${timeLabels.join('')}</div>
+          ${cols.map((c) => `
+            <div class="cal-col ${c.open.length ? '' : 'is-closed'}" data-date="${ymd(c.d)}">
+              ${c.open.map(([s, e]) => `<div class="cal-open" style="top:${(s - from) * PX_PER_MIN}px;height:${(e - s) * PX_PER_MIN}px"></div>`).join('')}
+              ${c.dayAppts.map((a) => {
+                const s = new Date(a.starts_at); const m = s.getHours() * 60 + s.getMinutes();
+                const who = a.pets?.name || (a.notes_internal || 'Appuntamento').split('\n')[0].slice(0, 40);
+                const owner = a.clients ? VR.clientName(a.clients) : '';
+                return `<button type="button" class="cal-appt st-${a.status}" data-id="${a.id}"
+                          style="top:${(m - from) * PX_PER_MIN}px;height:${Math.max(22, a.duration_min * PX_PER_MIN - 2)}px"
+                          title="${VR.esc(hm(s) + ' ' + who + (owner ? ' – ' + owner : '') + ' · ' + (STATUS[a.status] || ''))}">
+                          <b>${hm(s)}</b> ${VR.esc(who)}${owner ? ` <span>· ${VR.esc(owner)}</span>` : ''}
+                          <em>${VR.esc(a.type || '')}${a.status === 'requested' ? ' · da confermare' : ''}</em>
+                        </button>`;
+              }).join('')}
+            </div>`).join('')}
+        </div>`;
+      cal._from = from;
+    };
+
+    // Click su appuntamento o su spazio libero
+    cal.addEventListener('click', (ev) => {
+      const mc = ev.target.closest('.mcell');
+      if (mc) { anchor = new Date(mc.dataset.date + 'T12:00:00'); setView('week'); load(); return; }
+      const b = ev.target.closest('.cal-appt');
+      if (b) { const a = appts.find((x) => x.id === b.dataset.id); if (a) openDialog(a); return; }
+      const col = ev.target.closest('.cal-col');
+      if (!col) return;
+      const rect = col.getBoundingClientRect();
+      let m = cal._from + (ev.clientY - rect.top) / PX_PER_MIN;
+      m = Math.floor(m / 15) * 15;
+      openDialog(null, { date: col.dataset.date, time: `${pad(Math.floor(m / 60))}:${pad(m % 60)}` });
+    });
+
+    const shift = (dir) => {
+      if (view === 'month') anchor = new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1);
+      else anchor = addDays(anchor, (isNarrow() ? 1 : 7) * dir);
+      load();
+    };
+    VR.$('#prev').addEventListener('click', () => shift(-1));
+    VR.$('#next').addEventListener('click', () => shift(1));
+    VR.$('#vWeek').addEventListener('click', () => { setView('week'); load(); });
+    VR.$('#vMonth').addEventListener('click', () => { setView('month'); load(); });
+    setView('week');
+    VR.$('#today').addEventListener('click', () => { anchor = new Date(); load(); });
+    let wasNarrow = isNarrow();
+    window.addEventListener('resize', () => { if (isNarrow() !== wasNarrow) { wasNarrow = isNarrow(); load(); } });
+
+    // ---------- Scelta del paziente ----------
+    let chosen = null; // { petId, clientId, label }
+    const setChosen = (c) => {
+      chosen = c;
+      if (c) {
+        VR.$('#petChosenText').textContent = c.label;
+        VR.$('#petLink').href = 'animale.html?id=' + c.petId;
+        VR.show(VR.$('#petChosen')); VR.hide(VR.$('#petPicker'));
+      } else {
+        VR.hide(VR.$('#petChosen')); VR.show(VR.$('#petPicker'));
+        VR.$('#petSearch').value = ''; VR.$('#petResults').innerHTML = '';
+      }
+    };
+    const loadClients = async () => {
+      if (clientsCache) return clientsCache;
+      const data = await VR.fetchAll(() => VR.sb.from('clients')
+        .select('id, first_name, last_name, phone, pet_access(status, pets(id, name, species, deleted_at))')
+        .eq('clinic_id', ctx.clinicId).order('id')).catch(() => []);
+      clientsCache = [];
+      (data || []).forEach((c) => (c.pet_access || []).forEach((a) => {
+        if (a.status === 'active' && a.pets && !a.pets.deleted_at) {
+          const label = `${a.pets.name}${a.pets.species ? ' (' + a.pets.species + ')' : ''} – ${VR.clientName(c)}`;
+          clientsCache.push({ petId: a.pets.id, clientId: c.id, label, text: (label + ' ' + (c.phone || '')).toLowerCase() });
+        }
+      }));
+      return clientsCache;
+    };
+    VR.$('#petSearch').addEventListener('input', async (ev) => {
+      const list = await loadClients();
+      const terms = ev.target.value.toLowerCase().split(/\s+/).filter(Boolean);
+      const res = terms.length ? list.filter((p) => terms.every((t) => p.text.includes(t))).slice(0, 8) : [];
+      VR.$('#petResults').innerHTML = res.map((p, i) => `<button type="button" data-i="${list.indexOf(p)}">${VR.esc(p.label)}</button>`).join('')
+        || (terms.length ? '<p class="hint-small">Nessun paziente trovato. <a href="cliente.html?nuovo=1">Crea il proprietario</a> oppure scrivi nelle note.</p>' : '');
+    });
+    VR.$('#petResults').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button[data-i]'); if (!b) return;
+      setChosen(clientsCache[Number(b.dataset.i)]);
+    });
+    VR.$('#petChange').addEventListener('click', () => { setChosen(null); VR.$('#petSearch').focus(); });
+
+    // ---------- Finestra ----------
+    const dlg = VR.$('#dlg'), dlgMsg = VR.$('#dlgMsg');
+    let editing = null;
+    const openDialog = (a, preset = {}) => {
+      editing = a;
+      VR.hide(dlgMsg);
+      VR.$('#dlgTitle').textContent = a ? 'Appuntamento' : 'Nuovo appuntamento';
+      const s = a ? new Date(a.starts_at) : null;
+      VR.$('#apDate').value = a ? ymd(s) : (preset.date || ymd(new Date()));
+      VR.$('#apTime').value = a ? hm(s) : (preset.time || '');
+      VR.$('#apDur').value = String(a ? a.duration_min : defaultSlot);
+      if (![...VR.$('#apDur').options].some((o) => o.value === VR.$('#apDur').value)) {
+        VR.$('#apDur').insertAdjacentHTML('beforeend', `<option value="${a.duration_min}">${a.duration_min} min</option>`);
+        VR.$('#apDur').value = String(a.duration_min);
+      }
+      VR.$('#apType').value = a?.type || 'Visita clinica';
+      VR.$('#apStatus').value = a?.status || 'confirmed';
+      VR.$('#apNotes').value = a?.notes_internal || '';
+      (a?.notes_owner ? VR.show : VR.hide)(VR.$('#ownerNoteBox'));
+      VR.$('#ownerNote').textContent = a?.notes_owner || '';
+      setChosen(a && a.pets ? { petId: a.pets.id, clientId: a.client_id, label: `${a.pets.name}${a.clients ? ' – ' + VR.clientName(a.clients) : ''}` } : (preset.pet || null));
+      (a ? VR.show : VR.hide)(VR.$('#apDelete'));
+      const canVisit = a && a.pets && ctx.isVet && !['cancelled', 'no_show'].includes(a.status);
+      (canVisit ? VR.show : VR.hide)(VR.$('#apVisit'));
+      const canWa = a && a.clients?.phone && !['cancelled', 'no_show', 'done'].includes(a.status);
+      (canWa ? VR.show : VR.hide)(VR.$('#apWa'));
+      if (canWa) VR.$('#apWa').href = VR.waLink(a.clients.phone, VR.apptMessage({ pet: a.pets?.name, startsAt: a.starts_at, clinic: ctx.clinic.name || '' }));
+      if (canVisit) VR.$('#apVisit').href = `visita.html?animale=${a.pets.id}&apt=${a.id}&tipo=${encodeURIComponent(a.type || '')}`;
+      dlg.showModal();
+      if (!a && !VR.$('#apTime').value) VR.$('#apTime').focus();
+    };
+    VR.$('#add').addEventListener('click', () => openDialog(null));
+    VR.$('#apCancel').addEventListener('click', () => dlg.close());
+
+    VR.$('#apForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      VR.hide(dlgMsg);
+      const date = VR.$('#apDate').value, time = VR.$('#apTime').value;
+      if (!date || !time) { VR.say(dlgMsg, 'Indica data e ora.', 'error'); return; }
+      const startsAt = new Date(`${date}T${time}:00`);
+      const dur = Number(VR.$('#apDur').value);
+      const status = VR.$('#apStatus').value;
+
+      // Sovrapposizioni (solo se l'appuntamento cade nel periodo caricato)
+      const endsAt = new Date(startsAt.getTime() + dur * 60000);
+      const clash = appts.find((x) => x.id !== editing?.id && !['cancelled', 'no_show'].includes(x.status) &&
+        new Date(x.starts_at) < endsAt && new Date(new Date(x.starts_at).getTime() + x.duration_min * 60000) > startsAt);
+      if (clash && status !== 'cancelled' &&
+          !confirm(`Alle ${hm(new Date(clash.starts_at))} c'è già un appuntamento (${clash.pets?.name || 'senza paziente'}). Salvare comunque?`)) return;
+
+      const row = {
+        starts_at: startsAt.toISOString(), duration_min: dur, type: VR.$('#apType').value, status,
+        notes_internal: VR.$('#apNotes').value.trim() || null,
+        pet_id: chosen?.petId || null, client_id: chosen?.clientId || null
+      };
+      const btn = VR.$('#apSave'); btn.disabled = true;
+      const res = editing
+        ? await VR.sb.from('appointments').update(row).eq('id', editing.id)
+        : await VR.sb.from('appointments').insert({ ...row, clinic_id: ctx.clinicId });
+      btn.disabled = false;
+      if (res.error) { VR.say(dlgMsg, VR.errorText(res.error), 'error'); return; }
+      dlg.close();
+      anchor = startsAt;
+      load();
+    });
+
+    VR.$('#apDelete').addEventListener('click', async () => {
+      if (!editing || !confirm('Eliminare questo appuntamento? Se vuoi tenerne traccia, imposta invece lo stato "Annullato".')) return;
+      const { error } = await VR.sb.from('appointments').delete().eq('id', editing.id);
+      if (error) { VR.say(dlgMsg, VR.errorText(error), 'error'); return; }
+      dlg.close(); load();
+    });
+
+    // Arrivo dalla scheda di un animale: apri subito un nuovo appuntamento per lui
+    const petParam = VR.param('animale'), aptParam = VR.param('apt');
+    if (aptParam) {
+      const { data: ap } = await VR.sb.from('appointments').select('starts_at').eq('id', aptParam).maybeSingle();
+      if (ap) anchor = new Date(ap.starts_at);
+    }
+    await load();
+    if (petParam) {
+      const list = await loadClients();
+      const p = list.find((x) => x.petId === petParam);
+      openDialog(null, { pet: p || null });
+    } else if (VR.param('nuovo')) {
+      openDialog(null);
+    } else if (aptParam) {
+      const a = appts.find((x) => x.id === aptParam);
+      if (a) openDialog(a);
+    }
+  })();
+  </script>
+</body>
+</html>

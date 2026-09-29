@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="it" data-root="./">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f3f4f6">
+  <meta name="robots" content="noindex">
+  <title>Accedi – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="vendor/supabase-2.117.2.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/i18n.js"></script>
+</head>
+<body>
+  <main class="vr-login-wrap">
+    <div class="vr-login-card">
+      <img class="vr-login-logo" src="img/logo.png" alt="Vetroom">
+      <div class="ff-brand" translate="no"><img src="img/furrfinder-mark.png" alt=""><span>FurrFinder</span></div>
+      <h1 class="vr-login-title" id="loginTitle">Entra in Vetroom</h1>
+      <p class="vr-login-sub" id="loginSub">Gestionale veterinario e libretto sanitario del tuo pet. Gratis, per sempre.</p>
+
+      <div id="msg" hidden></div>
+
+      <button class="btn btn-google" id="btnGoogle" type="button">
+        <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/>
+        </svg>
+        Accedi con Google
+      </button>
+
+      <div class="login-roles">
+        <div><img src="img/icons/add_visit.png" alt=""><span>Veterinari e segreterie</span></div>
+        <div><img src="img/icons/pets.png" alt=""><span>Proprietari di pet</span></div>
+      </div>
+      <p class="switch-brand" id="switchBrand"></p>
+      <div class="lang-switch" translate="no">
+        <button type="button" data-set-lang="it">Italiano</button> · <button type="button" data-set-lang="en">English</button>
+      </div>
+      <p class="small">Stesso accesso per tutti: dopo ti chiediamo chi sei.<br>Accedendo accetti l'<a href="/privacy.html">informativa privacy</a>.</p>
+    </div>
+  </main>
+
+  <script>
+  document.querySelectorAll('[data-set-lang]').forEach((b) => {
+    if (b.dataset.setLang === VR.lang) b.setAttribute('aria-current', 'true');
+    b.addEventListener('click', () => { localStorage.setItem('vetroom_lang', b.dataset.setLang); location.reload(); });
+  });
+  (async () => {
+    const msg = VR.$('#msg');
+    const btn = VR.$('#btnGoogle');
+
+    if (!VR.configured) {
+      VR.say(msg, 'Configurazione mancante: inserisci Project URL e chiave pubblica di Supabase nel file js/config.js.', 'error');
+      btn.disabled = true;
+      return;
+    }
+
+    const params = new URLSearchParams(location.search);
+
+    // Link di invito: vetroom.it/v2/?invito=CODICE → lo teniamo da parte fino al login
+    // Codice clinica da QR: lo teniamo da parte fino all'accesso
+    if (params.get('codice')) localStorage.setItem('vetroom_codice', params.get('codice'));
+
+    // Ingresso dei proprietari (FurrFinder) oppure dei professionisti (Vetroom)
+    if (params.get('per') === 'proprietario' || params.get('da') === 'furrfinder' || params.get('codice')) localStorage.setItem('vetroom_intent', 'owner');
+    if (params.get('per') === 'clinica') localStorage.removeItem('vetroom_intent');
+    const ownerMode = localStorage.getItem('vetroom_intent') === 'owner';
+    if (ownerMode) {
+      document.body.classList.add('ff-mode');
+      document.title = 'Accedi – FurrFinder';
+      VR.$('#loginTitle').textContent = 'Il libretto sanitario digitale del tuo pet';
+      VR.$('#loginSub').textContent = 'Cartella clinica, vaccini, referti e documenti di cane e gatto, in un unico posto. Gratis.';
+      const mf = document.querySelector('link[rel="manifest"]'); if (mf) mf.href = '/app/manifest-furrfinder.webmanifest';
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b2545');
+      VR.$('#switchBrand').innerHTML = '<span>Sei un veterinario?</span> <a href="?per=clinica">Entra in Vetroom</a>';
+      const sm = document.querySelector('.vr-login-card .small');
+      if (sm) sm.innerHTML = 'Accedendo accetti l\'<a href="/privacy.html">informativa privacy</a>.';
+    } else {
+      VR.$('#switchBrand').innerHTML = '<span>Sei un proprietario di pet?</span> <a href="?per=proprietario">Vai a FurrFinder</a>';
+    }
+
+    const invite = params.get('invito');
+    if (invite) {
+      localStorage.setItem(VR.INVITE_KEY, invite);
+      VR.say(msg, 'Hai ricevuto un invito da una clinica. Accedi con l\'account Google a cui è stato inviato.', 'info');
+    }
+
+    // Errore di ritorno da Google
+    const err = params.get('error_description') || new URLSearchParams(location.hash.slice(1)).get('error_description');
+    if (err) VR.say(msg, 'Accesso non riuscito: ' + err, 'error');
+
+    // Già dentro? Vai avanti
+    const s = await VR.getSession();
+    if (s) { VR.go('benvenuto.html'); return; }
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try { await VR.signIn(); }
+      catch (e) { VR.say(msg, VR.errorText(e), 'error'); btn.disabled = false; }
+    });
+  })();
+  </script>
+  <script src="/assets/cookie-notice.js" defer></script>
+</body>
+</html>

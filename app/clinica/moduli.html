@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Moduli di visita – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../js/moduli.js"></script>
+</head>
+<body data-shell="clinic" data-nav="impostazioni">
+
+  <main class="wrap">
+    <a class="back" href="impostazioni.html">← Opzioni</a>
+    <div class="page-head">
+      <div>
+        <h1>Moduli di visita</h1>
+        <p class="muted" style="margin:0">Ogni modulo aggiunge alla visita i campi che ti servono e decide come appaiono nel referto PDF.</p>
+      </div>
+      <div class="actions-bar">
+        <label class="btn btn-ghost file-btn" id="importBtn" hidden><input type="file" id="importFile" accept=".json,application/json"><span>Importa modulo</span></label>
+        <button class="btn btn-primary" id="add" type="button" hidden>Nuovo modulo</button>
+      </div>
+    </div>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+    <ul class="rows" id="list" hidden></ul>
+    <div class="empty" id="empty" hidden>
+      <p><strong>Nessun modulo ancora.</strong></p>
+      <p class="muted">Parti da un modello pronto (visita clinica, oftalmologica, vaccinazione) e adattalo al tuo modo di lavorare.</p>
+    </div>
+  </main>
+
+  <dialog id="dlg" class="dlg">
+    <form id="newForm" novalidate>
+      <h2>Nuovo modulo</h2>
+      <div class="grid">
+        <div class="s12"><label for="tpl">Parti da</label>
+          <select id="tpl"></select></div>
+        <div class="s12"><label for="mname">Nome del modulo</label>
+          <input type="text" id="mname" required placeholder="Es. Visita oftalmologica"></div>
+      </div>
+      <div id="dlgMsg" hidden></div>
+      <div class="actions-bar" style="margin-top:1.25rem">
+        <button class="btn btn-primary" type="submit" id="create">Crea e apri l'editor</button>
+        <button class="btn btn-ghost" type="button" id="close">Annulla</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+
+    let modules;
+    try { modules = await VR.loadModules(ctx.clinicId); } catch (e) { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); return; }
+    VR.hide(loading);
+    if (ctx.isVet) { VR.show(VR.$('#add')); VR.show(VR.$('#importBtn')); }
+
+    // Importa un modulo esportato da Vetroom
+    const TYPES = ['section', 'text', 'textarea', 'number', 'select', 'checkbox', 'date'];
+    VR.$('#importFile').addEventListener('change', async (ev) => {
+      const file = ev.target.files[0]; ev.target.value = '';
+      if (!file) return;
+      VR.hide(msg);
+      try {
+        const data = JSON.parse(await file.text());
+        if (data.formato !== 'vetroom-modulo' || !Array.isArray(data.campi)) throw new Error('Il file non è un modulo esportato da Vetroom.');
+        const seen = new Set();
+        const fields = data.campi.filter((f) => f && typeof f.label === 'string' && TYPES.includes(f.type)).map((f) => {
+          let key = String(f.key || '').replace(/[^a-z0-9_]/gi, '').slice(0, 60) || VR.newFieldKey();
+          if (seen.has(key)) key = VR.newFieldKey();
+          seen.add(key);
+          const o = { key, label: f.label.slice(0, 120), type: f.type, width: f.width === 'half' ? 'half' : 'full', print: f.print !== false };
+          if (f.type === 'select') o.options = (Array.isArray(f.options) ? f.options : []).map((x) => String(x).slice(0, 80)).slice(0, 50);
+          if (f.type === 'number' && f.unit) o.unit = String(f.unit).slice(0, 20);
+          return o;
+        }).slice(0, 200);
+        if (!fields.length) throw new Error('Il modulo non contiene campi validi.');
+        const name = String(data.nome || 'Modulo importato').slice(0, 120);
+        const slug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Math.random().toString(36).slice(2, 6);
+        const { data: row, error } = await VR.sb.from('visit_forms').insert({ clinic_id: ctx.clinicId, name, slug, definition: { fields } }).select('id').single();
+        if (error) throw error;
+        location.href = 'modulo.html?id=' + row.id;
+      } catch (e) {
+        VR.say(msg, e instanceof SyntaxError ? 'Il file non è leggibile: deve essere un modulo esportato da Vetroom (.json).' : VR.errorText(e), 'error');
+      }
+    });
+    if (!ctx.isVet) VR.say(msg, 'Solo i veterinari possono creare o modificare i moduli.', 'info');
+
+    if (!modules.length) VR.show(VR.$('#empty'));
+    else {
+      VR.$('#list').innerHTML = modules.map((m) => {
+        const n = (m.definition?.fields || []).filter((x) => x.type !== 'section').length;
+        return `<li><a href="modulo.html?id=${m.id}"><div class="main"><strong>${VR.esc(m.name)}</strong><span>${n === 1 ? '1 campo' : n + ' campi'}</span></div><span class="chip">Modifica</span></a></li>`;
+      }).join('');
+      VR.show(VR.$('#list'));
+    }
+
+    // Nuovo modulo
+    const dlg = VR.$('#dlg'), tpl = VR.$('#tpl'), mname = VR.$('#mname');
+    tpl.innerHTML = Object.entries(VR.MODULE_TEMPLATES).map(([k, t]) => `<option value="${k}">${VR.esc(t.name)}</option>`).join('');
+    tpl.value = 'clinica';
+    const syncName = () => { if (!mname.dataset.touched) mname.value = tpl.value === 'vuoto' ? '' : VR.MODULE_TEMPLATES[tpl.value].name; };
+    tpl.addEventListener('change', syncName);
+    mname.addEventListener('input', () => mname.dataset.touched = '1');
+    VR.$('#add').addEventListener('click', () => { delete mname.dataset.touched; syncName(); VR.hide(VR.$('#dlgMsg')); dlg.showModal(); });
+    VR.$('#close').addEventListener('click', () => dlg.close());
+
+    VR.$('#newForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const name = mname.value.trim();
+      if (!name) { VR.say(VR.$('#dlgMsg'), 'Dai un nome al modulo.', 'error'); return; }
+      const slug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Math.random().toString(36).slice(2, 6);
+      const btn = VR.$('#create'); btn.disabled = true;
+      const { data, error } = await VR.sb.from('visit_forms').insert({
+        clinic_id: ctx.clinicId, name, slug, definition: { fields: VR.MODULE_TEMPLATES[tpl.value].fields(), doc_title: VR.MODULE_TEMPLATES[tpl.value].doc_title || null }
+      }).select('id').single();
+      btn.disabled = false;
+      if (error) { VR.say(VR.$('#dlgMsg'), VR.errorText(error), 'error'); return; }
+      location.href = 'modulo.html?id=' + data.id;
+    });
+  })();
+  </script>
+</body>
+</html>

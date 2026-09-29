@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Orari della clinica – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+</head>
+<body data-shell="clinic" data-nav="agenda">
+
+  <main class="wrap">
+    <a class="back" href="agenda.html">← Torna all'agenda</a>
+    <h1>Orari di apertura</h1>
+    <p class="muted">Servono all'agenda per mostrare le fasce aperte e, più avanti, ai proprietari per chiedere un appuntamento negli orari liberi.</p>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <form id="form" hidden novalidate>
+      <section class="panel">
+        <div class="hours" id="rows"></div>
+      </section>
+      <section class="panel">
+        <div class="grid">
+          <div class="s4"><label for="slot">Durata standard di un appuntamento</label>
+            <select id="slot">
+              <option value="15">15 minuti</option><option value="20">20 minuti</option>
+              <option value="30" selected>30 minuti</option><option value="45">45 minuti</option>
+              <option value="60">60 minuti</option>
+            </select></div>
+        </div>
+      </section>
+      <div class="actions-bar"><button class="btn btn-primary" type="submit" id="save">Salva orari</button></div>
+      <div id="msg2" hidden></div>
+    </form>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), msg2 = VR.$('#msg2'), loading = VR.$('#loading'), form = VR.$('#form');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+
+    const DAYS = [[1,'Lunedì'],[2,'Martedì'],[3,'Mercoledì'],[4,'Giovedì'],[5,'Venerdì'],[6,'Sabato'],[0,'Domenica']];
+    const { data, error } = await VR.sb.from('availabilities').select('*').eq('clinic_id', ctx.clinicId);
+    VR.hide(loading);
+    if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+    const byDay = Object.fromEntries((data || []).map((r) => [r.weekday, r]));
+    const t = (v) => (v || '').slice(0, 5);
+    const isNew = !data || data.length === 0;
+
+    VR.$('#rows').innerHTML = `
+      <div class="hours-head"><span>Giorno</span><span>Mattina / orario unico</span><span>Pomeriggio (facoltativo)</span></div>` +
+      DAYS.map(([wd, label]) => {
+        const r = byDay[wd];
+        const open = r ? true : (isNew && wd >= 1 && wd <= 5);
+        const s1 = r ? t(r.start_time) : '09:00', e1 = r ? t(r.end_time) : '13:00';
+        const s2 = r ? t(r.start_time2) : (isNew ? '15:00' : ''), e2 = r ? t(r.end_time2) : (isNew ? '19:00' : '');
+        return `
+        <div class="hours-row" data-wd="${wd}">
+          <label class="check"><input type="checkbox" class="open" ${open ? 'checked' : ''}> ${label}</label>
+          <div class="range"><input type="time" class="s1" value="${s1}" step="300" aria-label="${label} apertura"><span>–</span><input type="time" class="e1" value="${e1}" step="300" aria-label="${label} chiusura"></div>
+          <div class="range"><input type="time" class="s2" value="${s2}" step="300" aria-label="${label} riapertura"><span>–</span><input type="time" class="e2" value="${e2}" step="300" aria-label="${label} chiusura pomeriggio"></div>
+        </div>`;
+      }).join('');
+    const anySlot = (data || [])[0]?.slot_minutes;
+    if (anySlot) VR.$('#slot').value = String(anySlot);
+
+    const sync = () => document.querySelectorAll('.hours-row').forEach((row) => {
+      const on = row.querySelector('.open').checked;
+      row.classList.toggle('closed', !on);
+      row.querySelectorAll('input[type=time]').forEach((i) => i.disabled = !on);
+    });
+    VR.$('#rows').addEventListener('change', sync);
+    sync();
+    VR.show(form);
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      VR.hide(msg2);
+      const slot = Number(VR.$('#slot').value);
+      const upserts = [], closed = [];
+      for (const row of document.querySelectorAll('.hours-row')) {
+        const wd = Number(row.dataset.wd);
+        const label = DAYS.find((d) => d[0] === wd)[1];
+        if (!row.querySelector('.open').checked) { closed.push(wd); continue; }
+        const s1 = row.querySelector('.s1').value, e1 = row.querySelector('.e1').value;
+        const s2 = row.querySelector('.s2').value, e2 = row.querySelector('.e2').value;
+        if (!s1 || !e1 || e1 <= s1) { VR.say(msg2, `${label}: controlla l'orario (la chiusura deve essere dopo l'apertura).`, 'error'); return; }
+        if ((s2 && !e2) || (!s2 && e2)) { VR.say(msg2, `${label}: per il pomeriggio servono sia apertura sia chiusura, oppure lascia vuoti entrambi.`, 'error'); return; }
+        if (s2 && (e2 <= s2 || s2 < e1)) { VR.say(msg2, `${label}: il pomeriggio deve iniziare dopo la chiusura del mattino e finire dopo la riapertura.`, 'error'); return; }
+        upserts.push({ clinic_id: ctx.clinicId, weekday: wd, start_time: s1, end_time: e1,
+                       start_time2: s2 || null, end_time2: e2 || null, slot_minutes: slot });
+      }
+      const btn = VR.$('#save'); btn.disabled = true;
+      if (upserts.length) {
+        const { error } = await VR.sb.from('availabilities').upsert(upserts, { onConflict: 'clinic_id,weekday' });
+        if (error) { btn.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return; }
+      }
+      if (closed.length) {
+        const { error } = await VR.sb.from('availabilities').delete().eq('clinic_id', ctx.clinicId).in('weekday', closed);
+        if (error) { btn.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return; }
+      }
+      btn.disabled = false;
+      VR.say(msg2, 'Orari salvati.', 'ok');
+    });
+  })();
+  </script>
+</body>
+</html>

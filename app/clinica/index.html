@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0f766e">
+  <title>Oggi in studio – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../vendor/qrcode-generator.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../js/demo.js"></script>
+</head>
+<body data-shell="clinic" data-nav="home">
+  <main class="wrap">
+    <div class="page-head">
+      <div>
+        <h1>Oggi in studio</h1>
+        <p class="muted" id="today" style="margin:0">Riepilogo rapido della giornata.</p>
+      </div>
+      <select id="clinicSwitch" aria-label="Scegli la clinica" hidden style="width:auto"></select>
+    </div>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <!-- Per iniziare -->
+      <section class="panel onboarding" id="onboarding" hidden>
+        <h2>Per iniziare</h2>
+        <p class="hint-small" style="margin-top:0">Quattro passi e la clinica è pronta. Questa scheda sparisce quando li hai completati.</p>
+        <ol class="steps" id="steps"></ol>
+        <p class="hint-small" style="margin:12px 0 6px">Vuoi prima vedere come funziona?</p>
+        <button class="btn btn-ghost btn-small" type="button" id="mkDemo">Prova con dati di esempio</button>
+      </section>
+      <div class="notice notice-info" id="demoNotice" hidden>Nella clinica ci sono <b>dati di esempio</b> (proprietari, animali, visite e appuntamenti inventati). <button class="btn btn-ghost btn-small" type="button" id="rmDemo">Rimuovi i dati di esempio</button></div>
+
+      <div class="notice notice-info" id="backupReminder" hidden>
+        Non risulta un backup recente dei dati della clinica. <a href="backup.html"><b>Scarica il backup</b></a>: ci vuole un minuto.
+      </div>
+
+      <div class="kpi-row">
+        <a class="kpi" href="agenda.html"><img src="../img/icons/agenda.png" alt=""><div><div class="kpi-value" id="kToday">–</div><div class="kpi-label">Appuntamenti oggi</div></div></a>
+        <a class="kpi" href="clienti.html"><img src="../img/icons/owner.png" alt=""><div><div class="kpi-value" id="kOwners">–</div><div class="kpi-label">Proprietari</div></div></a>
+        <a class="kpi" href="animali.html"><img src="../img/icons/pets.png" alt=""><div><div class="kpi-value" id="kPets">–</div><div class="kpi-label">Animali</div></div></a>
+      </div>
+
+      <section class="panel" id="reqPanel" hidden>
+        <h2>Richieste di prenotazione (in attesa)</h2>
+        <div id="requests"></div>
+      </section>
+
+      <section class="panel" id="remPanel" hidden>
+        <h2>Richiami in scadenza</h2>
+        <div id="reminders"></div>
+      </section>
+
+      <section class="panel" id="tomPanel" hidden>
+        <h2>Promemoria per domani</h2>
+        <p class="hint-small" style="margin-top:0">Un tocco per ricordare l'appuntamento su WhatsApp, con il messaggio già scritto.</p>
+        <div class="appt-list" id="tomorrow"></div>
+      </section>
+
+      <section class="panel">
+        <div class="page-head" style="margin-bottom:8px">
+          <h2 style="margin:0">Agenda di oggi</h2>
+          <a class="btn btn-primary btn-small" href="agenda.html?nuovo=1"><img class="vr-action-icon" src="../img/icons/appointment.png" alt="">Nuovo appuntamento</a>
+        </div>
+        <div class="appt-list" id="todayList"></div>
+        <p class="muted" id="noToday" hidden style="margin:0">Nessun appuntamento per oggi.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Codice per i proprietari</h2>
+        <div class="code-share">
+          <div id="qr" class="qr" aria-label="QR code della clinica"></div>
+          <div>
+            <div class="code" id="code"></div>
+            <p class="hint-small">Il proprietario lo inserisce nella sua app (o inquadra il QR) e ti condivide la scheda del suo animale.</p>
+            <div class="actions-bar">
+              <button class="btn btn-ghost btn-small" type="button" id="copyCode">Copia link</button>
+              <button class="btn btn-ghost btn-small" type="button" id="printQr">Stampa QR</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      VR.hide(loading);
+      if (e.message === 'suspended') {
+        msg.className = 'notice notice-error'; VR.show(msg);
+        msg.innerHTML = `<b>La clinica ${VR.esc(e.clinic?.name || '')} è sospesa.</b> ` +
+          (e.clinic?.suspended_reason ? 'Motivo: ' + VR.esc(e.clinic.suspended_reason) + '. ' : '') +
+          'I dati sono al sicuro ma non accessibili. Per informazioni scrivi a <a href="mailto:info@vetroom.it">info@vetroom.it</a>.';
+        if (await VR.checkPlatformAdmin()) msg.insertAdjacentHTML('beforeend', ' <br><a class="btn btn-primary btn-small" style="margin-top:8px" href="../piattaforma/">Apri il pannello Piattaforma per riattivarla</a>');
+      } else if (e.message === 'noclinic') {
+        msg.className = 'notice notice-info'; VR.show(msg);
+        msg.innerHTML = 'Non fai parte di nessuna clinica attiva (forse l\'accesso è stato sospeso). Chiedi un nuovo invito oppure <button class="btn btn-primary btn-small" id="mk">crea la tua clinica</button>';
+        VR.$('#mk').addEventListener('click', async () => {
+          const n = prompt('Nome della clinica o dello studio:'); if (!n || !n.trim()) return;
+          const { data, error } = await VR.sb.rpc('create_clinic', { p_name: n.trim() });
+          if (error) { alert(VR.errorText(error)); return; }
+          localStorage.setItem(VR.CLINIC_KEY, data); location.reload();
+        });
+      } else if (e.message !== 'redirect') VR.say(msg, VR.errorText(e), 'error');
+      return;
+    }
+    const cid = ctx.clinicId;
+    VR.$('#today').textContent = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+    // Più cliniche: selettore
+    const sw = VR.$('#clinicSwitch');
+    if (ctx.memberships.length > 1) {
+      sw.innerHTML = ctx.memberships.map((r) => `<option value="${r.clinic_id}">${VR.esc(r.clinics?.name)}</option>`).join('');
+      sw.value = cid; VR.show(sw);
+      sw.addEventListener('change', () => { localStorage.setItem(VR.CLINIC_KEY, sw.value); location.reload(); });
+    }
+
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(end.getDate() + 1);
+    const hm = (d) => new Date(d).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+    const tom0 = new Date(end), tom1 = new Date(end); tom1.setDate(tom1.getDate() + 1);
+    const soon = new Date(); soon.setDate(soon.getDate() + 30);
+    const [remRes, tomRes, demoRes] = await Promise.all([
+      VR.sb.from('reminders').select('*, pets(id, name), clients(first_name, last_name, phone, email)')
+        .eq('clinic_id', cid).eq('status', 'open').lte('due_date', soon.toLocaleDateString('sv-SE')).order('due_date').limit(50),
+      VR.sb.from('appointments').select('*, pets(id, name), clients(first_name, last_name, phone)')
+        .eq('clinic_id', cid).in('status', ['confirmed', 'requested']).gte('starts_at', tom0.toISOString()).lt('starts_at', tom1.toISOString()).order('starts_at'),
+      VR.sb.from('clients').select('id', { count: 'exact', head: true }).eq('clinic_id', cid).eq('is_demo', true)
+    ]);
+    const [todayRes, reqRes, ownersRes, petsRes, clinicRes, hoursRes, teamRes] = await Promise.all([
+      VR.sb.from('appointments').select('*, pets(id, name, species), clients(first_name, last_name, phone)')
+        .eq('clinic_id', cid).gte('starts_at', start.toISOString()).lt('starts_at', end.toISOString()).order('starts_at'),
+      VR.sb.from('appointments').select('*, pets(id, name), clients(first_name, last_name)')
+        .eq('clinic_id', cid).eq('status', 'requested').gte('starts_at', new Date().toISOString()).order('starts_at').limit(30),
+      VR.sb.from('clients').select('id', { count: 'exact', head: true }).eq('clinic_id', cid),
+      VR.sb.from('pet_access').select('pet_id', { count: 'exact', head: true }).eq('clinic_id', cid).eq('status', 'active'),
+      VR.sb.from('clinics').select('*').eq('id', cid).single(),
+      VR.sb.from('availabilities').select('id', { count: 'exact', head: true }).eq('clinic_id', cid),
+      VR.sb.from('clinic_members').select('user_id', { count: 'exact', head: true }).eq('clinic_id', cid)
+    ]);
+    VR.hide(loading);
+    if (todayRes.error) { VR.say(msg, VR.errorText(todayRes.error), 'error'); return; }
+    VR.show(VR.$('#page'));
+
+    // KPI
+    const today = (todayRes.data || []);
+    VR.$('#kToday').textContent = today.filter((a) => !['cancelled', 'no_show'].includes(a.status)).length;
+    VR.$('#kOwners').textContent = ownersRes.count ?? '–';
+    VR.$('#kPets').textContent = petsRes.count ?? '–';
+
+    // Agenda di oggi
+    const STATUS = { confirmed: '', requested: 'da confermare', done: 'svolto', no_show: 'non presentato', cancelled: 'annullato' };
+    const clinicName = ctx.clinic.name || '';
+    const apptCard = (a, withVisit) => {
+      const who = a.pets?.name || (a.notes_internal || 'Appuntamento').split('\n')[0].slice(0, 40);
+      const owner = a.clients ? VR.clientName(a.clients) : '';
+      const acts = [];
+      if (withVisit && ctx.isVet && a.pets && !['cancelled', 'no_show', 'done'].includes(a.status))
+        acts.push(`<a class="btn btn-primary btn-small" href="visita.html?animale=${a.pets.id}&apt=${a.id}&tipo=${encodeURIComponent(a.type || '')}">Inizia visita</a>`);
+      if (a.clients?.phone && !['cancelled', 'no_show', 'done'].includes(a.status))
+        acts.push(`<a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="${VR.esc(VR.waLink(a.clients.phone, VR.apptMessage({ pet: a.pets?.name, startsAt: a.starts_at, clinic: clinicName })))}">WhatsApp</a>`);
+      return `<div class="appt-card st-${a.status}">
+        <a class="appt-link" href="agenda.html?apt=${a.id}"><span class="appt-time">${hm(a.starts_at)}</span>
+        <div class="appt-main"><strong>${VR.esc(who)}</strong><span>${VR.esc([owner, a.type, STATUS[a.status]].filter(Boolean).join(' · '))}</span></div></a>
+        ${acts.length ? `<div class="appt-acts">${acts.join('')}</div>` : ''}
+      </div>`;
+    };
+    VR.$('#todayList').innerHTML = today.map((a) => apptCard(a, true)).join('');
+    const tom = tomRes.data || [];
+    if (tom.length) { VR.$('#tomorrow').innerHTML = tom.map((a) => apptCard(a, false)).join(''); VR.show(VR.$('#tomPanel')); }
+
+    // Richiami in scadenza (entro 30 giorni e scaduti)
+    const todayStr = new Date().toLocaleDateString('sv-SE');
+    const renderRem = (rows) => {
+      if (!rows.length) { VR.hide(VR.$('#remPanel')); return; }
+      VR.$('#reminders').innerHTML = rows.map((r) => {
+        const late = r.due_date < todayStr;
+        const text = VR.reminderMessage({ pet: r.pets?.name || '', title: r.title, due: r.due_date, clinic: clinicName });
+        return `<div class="rem-row" data-id="${r.id}">
+          <div class="rem-main"><strong>${VR.esc(r.pets?.name || '')} · ${VR.esc(r.title)}</strong>
+            <span class="${late ? 'late' : ''}">${late ? 'Scaduto il ' : 'Entro il '}${new Date(r.due_date + 'T00:00:00').toLocaleDateString('it-IT')} · ${VR.esc(r.clients ? VR.clientName(r.clients) : '')}${r.notified_at ? ' · avvisato' : ''}</span></div>
+          <div class="rem-acts">
+            ${r.clients?.phone ? `<a class="btn btn-ghost btn-small" data-notify target="_blank" rel="noopener" href="${VR.esc(VR.waLink(r.clients.phone, text))}">WhatsApp</a>` : ''}
+            ${r.clients?.email ? `<a class="btn btn-ghost btn-small" data-notify href="${VR.esc(VR.mailLink(r.clients.email, 'Promemoria per ' + (r.pets?.name || ''), text))}">Email</a>` : ''}
+            <a class="btn btn-ghost btn-small" href="agenda.html?animale=${r.pet_id}">Prenota</a>
+            <button class="btn btn-primary btn-small" type="button" data-done>Fatto</button>
+          </div></div>`;
+      }).join('');
+      VR.show(VR.$('#remPanel'));
+    };
+    let rems = remRes.data || [];
+    renderRem(rems);
+    VR.$('#reminders').addEventListener('click', async (ev) => {
+      const row = ev.target.closest('.rem-row'); if (!row) return;
+      if (ev.target.closest('[data-notify]')) { VR.sb.from('reminders').update({ notified_at: new Date().toISOString() }).eq('id', row.dataset.id).then(() => {}); return; }
+      if (!ev.target.closest('[data-done]')) return;
+      const { error } = await VR.sb.from('reminders').update({ status: 'done' }).eq('id', row.dataset.id);
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      rems = rems.filter((r) => r.id !== row.dataset.id); renderRem(rems);
+    });
+
+    // Dati di esempio
+    if ((demoRes.count || 0) > 0) VR.show(VR.$('#demoNotice'));
+    VR.$('#mkDemo').addEventListener('click', async (ev) => {
+      ev.currentTarget.disabled = true;
+      try { await VR.createDemoData(ctx); location.reload(); }
+      catch (e) { VR.say(msg, VR.errorText(e), 'error'); ev.currentTarget.disabled = false; }
+    });
+    VR.$('#rmDemo').addEventListener('click', async (ev) => {
+      if (!confirm('Rimuovere tutti i dati di esempio? I tuoi dati veri non vengono toccati.')) return;
+      ev.currentTarget.disabled = true;
+      try { await VR.removeDemoData(ctx); location.reload(); }
+      catch (e) { VR.say(msg, VR.errorText(e), 'error'); ev.currentTarget.disabled = false; }
+    });
+    if (!today.length) VR.show(VR.$('#noToday'));
+
+    // Richieste in attesa: Approva / Rifiuta con un tocco
+    const renderReq = (list) => {
+      VR.$('#requests').innerHTML = list.map((a) => `
+        <div class="req-card" data-id="${a.id}">
+          <div class="appt-main">
+            <strong>${VR.esc(new Date(a.starts_at).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))} · ${VR.esc(a.pets?.name || 'senza paziente')}</strong>
+            <span>${VR.esc([a.clients ? VR.clientName(a.clients) : '', a.type, a.notes_owner ? '“' + a.notes_owner + '”' : ''].filter(Boolean).join(' · '))}</span>
+          </div>
+          <div class="actions-bar">
+            <button class="btn btn-primary btn-small" type="button" data-ok>Approva</button>
+            <button class="btn btn-danger btn-small" type="button" data-no>Rifiuta</button>
+          </div>
+        </div>`).join('');
+      (list.length ? VR.show : VR.hide)(VR.$('#reqPanel'));
+    };
+    let reqs = reqRes.data || [];
+    renderReq(reqs);
+    VR.$('#requests').addEventListener('click', async (ev) => {
+      const card = ev.target.closest('.req-card'); if (!card) return;
+      const ok = ev.target.closest('[data-ok]'), no = ev.target.closest('[data-no]');
+      if (!ok && !no) return;
+      if (no && !confirm('Rifiutare questa richiesta? Il proprietario la vedrà come annullata.')) return;
+      card.querySelectorAll('button').forEach((b) => b.disabled = true);
+      const { error } = await VR.sb.from('appointments').update({ status: ok ? 'confirmed' : 'cancelled' }).eq('id', card.dataset.id);
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); card.querySelectorAll('button').forEach((b) => b.disabled = false); return; }
+      reqs = reqs.filter((r) => r.id !== card.dataset.id);
+      renderReq(reqs);
+    });
+
+    // Per iniziare
+    const clinic = clinicRes.data || {};
+    const steps = [
+      { done: !!(clinic.header_address || clinic.header_phone || clinic.logo_path), t: 'Completa l\'intestazione dei referti', h: 'impostazioni.html' },
+      { done: (hoursRes.count || 0) > 0, t: 'Imposta gli orari di apertura', h: 'orari.html' },
+      { done: (ownersRes.count || 0) > 0, t: 'Registra il primo proprietario (o importa il tuo archivio da Excel)', h: (ownersRes.count || 0) > 0 ? 'clienti.html' : 'importa.html' },
+      { done: (teamRes.count || 0) > 1, t: 'Invita colleghi o segreteria (facoltativo)', h: 'team.html', optional: true }
+    ];
+    if (steps.filter((s) => !s.optional).some((s) => !s.done) && ctx.role === 'admin') {
+      VR.$('#steps').innerHTML = steps.map((s) => `<li class="${s.done ? 'is-done' : ''}"><a href="${s.h}">${VR.esc(s.t)}</a></li>`).join('');
+      VR.show(VR.$('#onboarding'));
+    }
+
+    // Promemoria backup (una volta al mese, solo per l'amministratore)
+    const lastB = localStorage.getItem('vetroom_last_backup_' + cid);
+    if (ctx.role === 'admin' && (ownersRes.count || 0) > 0 && (!lastB || Date.now() - new Date(lastB) > 30 * 864e5)) VR.show(VR.$('#backupReminder'));
+
+    // Codice e QR
+    const code = clinic.affiliation_code || ctx.clinic.affiliation_code || '';
+    const link = new URL('?codice=' + encodeURIComponent(code), VR.root).href;
+    VR.$('#code').textContent = code;
+    try {
+      const qr = qrcode(0, 'M'); qr.addData(link); qr.make();
+      VR.$('#qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+    } catch { VR.hide(VR.$('#qr')); }
+    VR.$('#copyCode').addEventListener('click', async (ev) => {
+      try { await navigator.clipboard.writeText(link); ev.target.textContent = 'Copiato!'; setTimeout(() => ev.target.textContent = 'Copia link', 1500); }
+      catch { prompt('Copia questo link:', link); }
+    });
+    VR.$('#printQr').addEventListener('click', () => {
+      const w = window.open('', '_blank'); if (!w) return;
+      w.document.write(`<!doctype html><title>QR ${VR.esc(clinic.name || '')}</title><body style="font-family:system-ui;text-align:center;padding:40px">
+        <h1 style="font-size:28px">${VR.esc(clinic.name || '')}</h1><p style="font-size:18px">Inquadra il codice con il telefono per collegare il tuo animale su Vetroom</p>
+        <div style="width:320px;margin:20px auto">${VR.$('#qr').innerHTML}</div><p style="font-size:26px;letter-spacing:.15em;font-weight:800">${VR.esc(code)}</p>
+        <script>setTimeout(()=>print(),300)<\/script></body>`);
+      w.document.close();
+    });
+  })();
+  </script>
+</body>
+</html>

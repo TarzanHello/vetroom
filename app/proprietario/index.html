@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0b2545">
+  <title>Home – FurrFinder</title>
+  <link rel="manifest" href="/app/manifest-furrfinder.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/furrfinder-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FurrFinder">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../js/proprietario.js"></script>
+</head>
+<body data-shell="owner" data-nav="home">
+  <main>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <section class="hero">
+        <h1 id="hello">Il libretto sanitario digitale del tuo pet</h1>
+        <p>Documenti, referti e visite. Ordinati in un unico posto, sempre disponibili.</p>
+        <a class="btn" id="heroBtn" href="animale.html?nuovo=1">Crea la scheda del tuo pet</a>
+      </section>
+
+      <section class="panel" id="apptPanel" hidden>
+        <h2>Prossimi appuntamenti</h2>
+        <div id="appts"></div>
+      </section>
+
+      <div id="books"></div>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadOwnerContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    // Un codice clinica arrivato da un QR? Si completa nella pagina Cliniche
+    if (localStorage.getItem('vetroom_codice')) { location.replace('cliniche.html'); return; }
+    await VR.sb.rpc('claim_my_pets');
+
+    const { data: pets, error } = await VR.sb.from('pets').select('*')
+      .eq('owner_user_id', ctx.uid).is('deleted_at', null).order('name');
+    VR.hide(loading);
+    if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+    const name = VR.firstName(ctx.profile, ctx.session);
+    if (pets.length) {
+      VR.$('#hello').textContent = name ? `Ciao ${name}` : 'Ciao!';
+      VR.$('#heroBtn').textContent = '+ Aggiungi un pet';
+    }
+    VR.show(VR.$('#page'));
+    if (!pets.length) return;
+
+    const ids = pets.map((p) => p.id);
+    const [docsRes, visitsRes, apptRes, urls, remRes] = await Promise.all([
+      VR.sb.from('documents').select('pet_id').in('pet_id', ids),
+      VR.sb.from('visits').select('pet_id, visit_kind, form_data').in('pet_id', ids),
+      VR.sb.from('appointments').select('id, starts_at, type, status, pet_id, pets(name), clinics(name)')
+        .in('pet_id', ids).in('status', ['requested', 'confirmed']).gte('starts_at', new Date().toISOString()).order('starts_at'),
+      Promise.all(pets.map((p) => VR.fileUrl(p.photo_path))),
+      VR.sb.from('reminders').select('pet_id, title, due_date').in('pet_id', ids).eq('status', 'open').order('due_date')
+    ]);
+    const remBy = {};
+    (remRes.data || []).forEach((r) => (remBy[r.pet_id] = remBy[r.pet_id] || []).push(r));
+    const todayS = new Date().toLocaleDateString('sv-SE');
+    const countBy = (rows, f = () => true) => (rows || []).reduce((m, r) => { if (f(r)) m[r.pet_id] = (m[r.pet_id] || 0) + 1; return m; }, {});
+    const docs = countBy(docsRes.data), visits = countBy(visitsRes.data);
+    const vacc = countBy(visitsRes.data, (v) => /vaccin/i.test(v.visit_kind || '') || /vaccin/i.test(v.form_data?.form_name || ''));
+
+    VR.$('#books').innerHTML = pets.map((p, i) => `
+      <section class="book">
+        <a class="book-head" href="animale.html?id=${p.id}">
+          ${VR.avatarHtml(p, urls[i])}
+          <div><strong>${VR.esc(p.name)}</strong><span>${VR.esc(VR.petSubtitle(p) || 'Apri il libretto →')}</span></div>
+        </a>
+        <div class="book-stats">
+          <div class="book-stat"><b>${docs[p.id] || 0}</b><span>Documenti</span></div>
+          <div class="book-stat"><b>${visits[p.id] || 0}</b><span>Visite</span></div>
+          <div class="book-stat"><b>${vacc[p.id] || 0}</b><span>Vaccini</span></div>
+          <div class="book-stat ${p.microchip ? 'ok' : 'ko'}"><b>${p.microchip ? '✓' : '!'}</b><span>${p.microchip ? 'Microchip OK' : 'Microchip mancante'}</span></div>
+        </div>
+        ${(remBy[p.id] || []).length ? `<div class="book-rem">${remBy[p.id].slice(0, 3).map((r) => `<span class="${r.due_date < todayS ? 'late' : ''}">🔔 ${VR.esc(r.title)} · ${r.due_date < todayS ? 'scaduto il' : 'entro il'} ${new Date(r.due_date + 'T00:00:00').toLocaleDateString('it-IT')}</span>`).join('')}</div>` : ''}
+        <div class="book-actions">
+          <a class="btn btn-primary btn-small" href="animale.html?id=${p.id}">Apri libretto</a>
+          <a class="btn btn-ghost btn-small" href="animale.html?id=${p.id}#documenti"><img class="vr-action-icon" src="../img/icons/upload_document.png" alt="">Carica documento</a>
+        </div>
+      </section>`).join('');
+
+    const loadAppts = (data) => {
+      if (!data || !data.length) { VR.hide(VR.$('#apptPanel')); return; }
+      VR.$('#appts').innerHTML = data.map((a) => `
+        <div class="member">
+          <div class="member-main">
+            <strong>${VR.esc(VR.fmtDateTime(a.starts_at))}</strong>
+            <span>${VR.esc([a.pets?.name, a.type, a.clinics?.name].filter(Boolean).join(' · '))}</span>
+          </div>
+          <div class="member-ctl">
+            <span class="pill ${a.status === 'requested' ? 'pill-wait' : 'pill-ok'}">${VR.APPT_STATUS[a.status]}</span>
+            <button type="button" class="btn btn-danger btn-small" data-cancel="${a.id}">Annulla</button>
+          </div>
+        </div>`).join('');
+      VR.show(VR.$('#apptPanel'));
+    };
+    let appts = apptRes.data || [];
+    loadAppts(appts);
+    VR.$('#appts').addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-cancel]'); if (!b) return;
+      if (!confirm('Annullare questo appuntamento? La clinica vedrà che l\'hai annullato.')) return;
+      const { error } = await VR.sb.from('appointments').update({ status: 'cancelled' }).eq('id', b.dataset.cancel);
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      appts = appts.filter((a) => a.id !== b.dataset.cancel); loadAppts(appts);
+    });
+  })();
+  </script>
+</body>
+</html>

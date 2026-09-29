@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Proprietari – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+</head>
+<body data-shell="clinic" data-nav="clienti">
+
+  <main class="wrap">
+    <div class="page-head">
+      <div><h1>Proprietari</h1><p class="muted" style="margin:0">Anagrafiche clienti con indirizzi completi.</p></div>
+      <div class="actions-bar"><a class="btn btn-ghost" href="importa.html">Importa da Excel</a><a class="btn btn-primary" href="cliente.html?nuovo=1"><img class="vr-action-icon" src="../img/icons/create_owner.png" alt="">Nuovo proprietario</a></div>
+    </div>
+
+    <input type="search" id="q" class="search" placeholder="Cerca per cognome, nome, telefono, email o nome dell'animale" aria-label="Cerca" hidden>
+    <p class="count" id="count"></p>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <ul class="rows" id="list" hidden></ul>
+
+    <div class="empty" id="empty" hidden>
+      <p><strong>Nessun proprietario ancora.</strong></p>
+      <p class="muted">Crea il primo proprietario e aggiungi il suo animale: ci vuole un minuto. Hai già un archivio? <a href="importa.html">Importalo da Excel</a>.</p>
+      <a class="btn btn-primary" href="cliente.html?nuovo=1">Nuovo proprietario</a>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+
+    let data = null, error = null;
+    try {
+      data = await VR.fetchAll(() => VR.sb.from('clients')
+        .select('id, first_name, last_name, email, phone, owner_user_id, pet_access(status, pets(id, name, species, deleted_at))')
+        .eq('clinic_id', ctx.clinicId)
+        .order('last_name', { ascending: true, nullsFirst: false }).order('id'));
+    } catch (e) { error = e; }
+    VR.hide(loading);
+    if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+
+    const clients = (data || []).map((c) => {
+      const pets = (c.pet_access || [])
+        .filter((a) => a.status === 'active' && a.pets && !a.pets.deleted_at)
+        .map((a) => a.pets);
+      const text = [c.first_name, c.last_name, c.email, c.phone, ...pets.map((p) => p.name)]
+        .filter(Boolean).join(' ').toLowerCase();
+      return { ...c, pets, text };
+    });
+
+    if (clients.length === 0) { VR.show(VR.$('#empty')); return; }
+
+    const list = VR.$('#list'), q = VR.$('#q'), count = VR.$('#count');
+    VR.show(q); VR.show(list);
+
+    const render = () => {
+      const terms = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+      const shown = clients.filter((c) => terms.every((t) => c.text.includes(t)));
+      count.textContent = terms.length
+        ? `${shown.length} risultati su ${clients.length} proprietari`
+        : (clients.length === 1 ? '1 proprietario' : `${clients.length} proprietari`);
+      list.innerHTML = shown.map((c) => `
+        <li><a href="cliente.html?id=${c.id}">
+          <div class="main">
+            <strong>${VR.esc(VR.clientName(c))}</strong>
+            <span>${VR.esc([c.phone, c.email].filter(Boolean).join(' · ') || 'Nessun contatto')}</span>
+          </div>
+          <div class="chips">${c.pets.map((p) => `<span class="chip">${VR.esc(p.name)}</span>`).join('')}</div>
+        </a></li>`).join('') || '<li><p class="muted" style="padding:1rem 1.25rem;margin:0">Nessun risultato per questa ricerca.</p></li>';
+    };
+    q.addEventListener('input', render);
+    render();
+    q.focus();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Backup ed esportazione – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../vendor/jszip.min.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+</head>
+<body data-shell="clinic" data-nav="impostazioni">
+  <main class="wrap">
+    <a class="back" href="impostazioni.html">← Opzioni</a>
+    <h1>Backup ed esportazione</h1>
+    <p class="muted">Scarica sul tuo computer una copia completa dei dati della clinica. Ti consigliamo di farlo almeno una volta al mese e di conservarla in un posto sicuro: contiene dati personali e sanitari.</p>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <section class="panel">
+        <h2>Backup completo</h2>
+        <p style="margin-top:0">Un unico file <b>.zip</b> con:</p>
+        <ul class="plain-list">
+          <li><b>Excel</b>: proprietari, animali, visite (con le schede compilate), appuntamenti e documenti, in file che si aprono con Excel</li>
+          <li><b>Documenti e foto</b>: referti PDF, allegati e foto degli animali, divisi per animale</li>
+          <li><b>Dati completi</b> in formato tecnico (JSON), utili per un eventuale ripristino o per passare ad altri programmi</li>
+        </ul>
+        <label class="check"><input type="checkbox" id="withFiles" checked> Includi documenti e foto (il file sarà più grande)</label>
+        <div class="actions-bar" style="margin-top:10px">
+          <button class="btn btn-primary" type="button" id="go"><img class="vr-action-icon" src="../img/icons/upload_document.png" alt="">Scarica il backup</button>
+        </div>
+        <div class="progress" id="progress" hidden>
+          <div class="progress-bar"><span id="bar"></span></div>
+          <p class="hint-small" id="step"></p>
+        </div>
+        <div id="msg2" hidden></div>
+      </section>
+
+      <section class="panel">
+        <h2>Da sapere</h2>
+        <ul class="plain-list">
+          <li>Il backup contiene i dati <b>che la tua clinica può vedere</b>: i tuoi proprietari, i pazienti condivisi con te, le tue visite e i tuoi documenti.</li>
+          <li>Degli animali per cui il proprietario ha revocato la condivisione trovi comunque le visite fatte da voi, ma non più la scheda e i file.</li>
+          <li>Il backup viene creato direttamente sul tuo computer: i dati non passano da altri servizi.</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    VR.hide(loading);
+    if (ctx.role !== 'admin') { VR.say(msg, 'Solo l\'amministratore della clinica può scaricare il backup.', 'info'); return; }
+    VR.show(VR.$('#page'));
+
+    const cid = ctx.clinicId;
+    const bar = VR.$('#bar'), step = VR.$('#step');
+    const progress = (pct, text) => { bar.style.width = Math.round(pct) + '%'; step.textContent = text; };
+
+    // ---------- Utilità CSV (Excel italiano: separatore ";" e BOM UTF-8) ----------
+    const cell = (v) => {
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'boolean') v = v ? 'Sì' : 'No';
+      if (typeof v === 'object') v = JSON.stringify(v);
+      v = String(v);
+      return /[";\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    };
+    const csv = (cols, rows) => '\ufeff' + [cols.map((c) => cell(c[0])).join(';'),
+      ...rows.map((r) => cols.map((c) => cell(typeof c[1] === 'function' ? c[1](r) : r[c[1]])).join(';'))].join('\r\n');
+    const d = (x) => x ? new Date(x.length === 10 ? x + 'T00:00:00' : x).toLocaleDateString('it-IT') : '';
+    const dt = (x) => x ? new Date(x).toLocaleString('it-IT') : '';
+    const safe = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9 ._-]+/g, '-').trim().slice(0, 60) || 'senza-nome';
+    const modText = (fd) => {
+      if (!fd || !Array.isArray(fd.fields)) return '';
+      const vals = fd.values || {};
+      return fd.fields.filter((f) => f.type !== 'section' && vals[f.key] !== undefined && vals[f.key] !== '')
+        .map((f) => `${f.label}: ${f.type === 'checkbox' ? (vals[f.key] ? 'Sì' : 'No') : vals[f.key]}${f.unit ? ' ' + f.unit : ''}`).join(' | ');
+    };
+
+    VR.$('#go').addEventListener('click', async () => {
+      const btn = VR.$('#go'); btn.disabled = true;
+      VR.hide(VR.$('#msg2')); VR.show(VR.$('#progress'));
+      const withFiles = VR.$('#withFiles').checked;
+      try {
+        // 1. Dati
+        progress(3, 'Leggo i dati della clinica…');
+        const q = (table, sel, extra = (x) => x) => VR.fetchAll(() => extra(VR.sb.from(table).select(sel)).order('id'));
+        const clinic = (await VR.sb.from('clinics').select('*').eq('id', cid).single()).data;
+        const members = (await VR.sb.from('clinic_members').select('user_id, role, status, created_at').eq('clinic_id', cid)).data || [];
+        const profs = members.length ? (await VR.sb.from('profiles').select('id, full_name, first_name, last_name, email').in('id', members.map((m) => m.user_id))).data || [] : [];
+        progress(10, 'Proprietari…');
+        const clients = await q('clients', '*', (x) => x.eq('clinic_id', cid));
+        progress(18, 'Animali…');
+        const access = await VR.fetchAll(() => VR.sb.from('pet_access').select('*').eq('clinic_id', cid).order('pet_id'));
+        const petIds = [...new Set(access.map((a) => a.pet_id))];
+        const pets = [];
+        for (let i = 0; i < petIds.length; i += 150) {
+          const { data } = await VR.sb.from('pets').select('*').in('id', petIds.slice(i, i + 150));
+          pets.push(...(data || []));
+        }
+        progress(28, 'Visite…');
+        const visits = await q('visits', '*', (x) => x.eq('clinic_id', cid));
+        progress(36, 'Appuntamenti e orari…');
+        const appts = await q('appointments', '*', (x) => x.eq('clinic_id', cid));
+        const hours = (await VR.sb.from('availabilities').select('*').eq('clinic_id', cid)).data || [];
+        const forms = (await VR.sb.from('visit_forms').select('*').eq('clinic_id', cid)).data || [];
+        progress(42, 'Documenti…');
+        const docsOwn = await q('documents', '*', (x) => x.eq('clinic_id', cid));
+        const docsOwner = [];
+        for (let i = 0; i < petIds.length; i += 150) {
+          const { data } = await VR.sb.from('documents').select('*').is('clinic_id', null).in('pet_id', petIds.slice(i, i + 150));
+          docsOwner.push(...(data || []));
+        }
+        const docs = [...docsOwn, ...docsOwner];
+
+        const P = Object.fromEntries(pets.map((p) => [p.id, p]));
+        const C = Object.fromEntries(clients.map((c) => [c.id, c]));
+        const A = Object.fromEntries(access.map((a) => [a.pet_id, a]));
+        const owner = (petId) => { const a = A[petId]; return a && C[a.client_id] ? VR.clientName(C[a.client_id]) : ''; };
+        const petName = (id) => P[id]?.name || '(condivisione revocata)';
+
+        // 2. ZIP
+        const zip = new JSZip();
+        const stamp = new Date().toLocaleDateString('sv-SE');
+        zip.file('LEGGIMI.txt',
+`Backup Vetroom - ${clinic.name}
+Creato il ${new Date().toLocaleString('it-IT')} da ${ctx.session.user.email}
+
+Cartelle:
+  excel/     file che si aprono con Excel (separatore ;)
+  file/      documenti e foto, divisi per animale
+  dati/      tutti i dati in formato JSON (per ripristino o migrazione)
+
+Contenuto:
+  ${clients.length} proprietari, ${pets.length} animali, ${visits.length} visite,
+  ${appts.length} appuntamenti, ${docs.length} documenti.
+
+ATTENZIONE: questo file contiene dati personali e sanitari.
+Conservalo in un luogo sicuro e non inviarlo a persone non autorizzate.
+`);
+        zip.file('dati/vetroom-backup.json', JSON.stringify({
+          formato: 'vetroom-backup', versione: 1, creato_il: new Date().toISOString(),
+          clinica: clinic, membri: members.map((m) => ({ ...m, profilo: profs.find((p) => p.id === m.user_id) || null })),
+          proprietari: clients, animali: pets, accessi: access, visite: visits, appuntamenti: appts,
+          orari: hours, moduli: forms, documenti: docs
+        }, null, 2));
+
+        zip.file('excel/proprietari.csv', csv([
+          ['Cognome', 'last_name'], ['Nome', 'first_name'], ['Codice fiscale', 'fiscal_code'], ['Data di nascita', (r) => d(r.birth_date)],
+          ['Telefono', 'phone'], ['Email', 'email'], ['Via', 'address_street'], ['Civico', 'address_number'], ['CAP', 'address_zip'],
+          ['Città', 'address_city'], ['Provincia', 'address_province'], ['Nazione', 'address_country'],
+          ['Fatturazione diversa', 'billing_is_different'], ['Fatt. via', 'billing_street'], ['Fatt. civico', 'billing_number'],
+          ['Fatt. CAP', 'billing_zip'], ['Fatt. città', 'billing_city'], ['Fatt. provincia', 'billing_province'],
+          ['Iscritto a Vetroom', (r) => !!r.owner_user_id], ['Note', 'notes'], ['Creato il', (r) => dt(r.created_at)]
+        ], clients));
+        zip.file('excel/animali.csv', csv([
+          ['Nome', 'name'], ['Specie', 'species'], ['Razza', 'breed'], ['Data di nascita', (r) => d(r.birth_date)],
+          ['Sesso', (r) => ({ M: 'Maschio', F: 'Femmina', U: 'Non noto' }[r.sex] || '')],
+          ['Sterilizzazione', (r) => ({ yes: 'Sì', no: 'No', unknown: 'Non noto' }[r.neuter_status] || '')],
+          ['Peso (kg)', (r) => r.weight_kg != null ? String(r.weight_kg).replace('.', ',') : ''], ['Microchip', 'microchip'],
+          ['Proprietario', (r) => owner(r.id)], ['Condivisione', (r) => A[r.id]?.status === 'active' ? 'Attiva' : 'Revocata'],
+          ['Eliminato', (r) => !!r.deleted_at], ['Note', 'notes']
+        ], pets));
+        zip.file('excel/visite.csv', csv([
+          ['Data', (r) => d(r.visit_date)], ['Animale', (r) => petName(r.pet_id)], ['Proprietario', (r) => owner(r.pet_id)],
+          ['Tipo', 'visit_kind'], ['Motivo', 'title'], ['Anamnesi ed esame clinico', 'notes'], ['Diagnosi', 'diagnosis'], ['Terapia', 'therapy'],
+          ['Peso (kg)', (r) => r.form_data?.weight_kg != null ? String(r.form_data.weight_kg).replace('.', ',') : ''],
+          ['Scheda', (r) => r.form_data?.form_name || ''], ['Campi della scheda', (r) => modText(r.form_data)],
+          ['Visibile al proprietario', 'visible_to_owner'], ['Referto definitivo', (r) => dt(r.finalized_at)]
+        ], visits.slice().sort((a, b) => (a.visit_date < b.visit_date ? 1 : -1))));
+        zip.file('excel/appuntamenti.csv', csv([
+          ['Data e ora', (r) => dt(r.starts_at)], ['Durata (min)', 'duration_min'], ['Animale', (r) => r.pet_id ? petName(r.pet_id) : ''],
+          ['Proprietario', (r) => r.client_id && C[r.client_id] ? VR.clientName(C[r.client_id]) : ''], ['Tipo', 'type'],
+          ['Stato', (r) => ({ requested: 'Da confermare', confirmed: 'Confermato', done: 'Svolto', no_show: 'Non presentato', cancelled: 'Annullato' }[r.status] || r.status)],
+          ['Note interne', 'notes_internal'], ['Messaggio del proprietario', 'notes_owner']
+        ], appts.slice().sort((a, b) => (a.starts_at < b.starts_at ? 1 : -1))));
+        zip.file('excel/documenti.csv', csv([
+          ['Animale', (r) => petName(r.pet_id)], ['Titolo', 'title'], ['Nome file', 'original_name'], ['Tipo', 'mime_type'],
+          ['Caricato da', (r) => r.clinic_id ? 'Clinica' : 'Proprietario'], ['Referto definitivo', (r) => r.doc_role === 'visit_pdf_final'],
+          ['Data', (r) => dt(r.created_at)], ['Percorso nel backup', (r) => r._zipPath || '']
+        ], docs));
+
+        // 3. File
+        if (withFiles) {
+          const files = [];
+          docs.forEach((doc) => files.push({ path: doc.storage_path, bucket: 'pet-files', doc,
+            name: `file/animali/${safe(petName(doc.pet_id))}_${doc.pet_id.slice(0, 6)}/${safe(doc.title || 'documento')}_${doc.id.slice(0, 6)}${(doc.original_name || '').match(/\.[a-z0-9]{2,5}$/i)?.[0] || ''}` }));
+          pets.filter((p) => p.photo_path).forEach((p) => files.push({ path: p.photo_path, bucket: 'pet-files',
+            name: `file/animali/${safe(p.name)}_${p.id.slice(0, 6)}/foto.jpg` }));
+          if (clinic.logo_path) files.push({ path: clinic.logo_path, bucket: 'clinic-assets', name: 'file/clinica/logo' + (clinic.logo_path.match(/\.\w+$/)?.[0] || '') });
+          if (clinic.stamp_path) files.push({ path: clinic.stamp_path, bucket: 'clinic-assets', name: 'file/clinica/timbro' + (clinic.stamp_path.match(/\.\w+$/)?.[0] || '') });
+          let ok = 0, ko = 0;
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            progress(45 + 45 * (i / Math.max(1, files.length)), `Scarico i file: ${i + 1} di ${files.length}…`);
+            const { data: blob, error } = await VR.sb.storage.from(f.bucket).download(f.path);
+            if (error || !blob) { ko++; continue; }
+            zip.file(f.name, blob); ok++;
+            if (f.doc) f.doc._zipPath = f.name;
+          }
+          // aggiorna l'elenco documenti con i percorsi dei file
+          zip.file('excel/documenti.csv', csv([
+            ['Animale', (r) => petName(r.pet_id)], ['Titolo', 'title'], ['Nome file', 'original_name'], ['Tipo', 'mime_type'],
+            ['Caricato da', (r) => r.clinic_id ? 'Clinica' : 'Proprietario'], ['Referto definitivo', (r) => r.doc_role === 'visit_pdf_final'],
+            ['Data', (r) => dt(r.created_at)], ['Percorso nel backup', (r) => r._zipPath || 'non disponibile']
+          ], docs));
+          if (ko) zip.file('file/NON-SCARICATI.txt', `${ko} file non sono stati scaricati (ad esempio perché il proprietario ha revocato la condivisione).`);
+        }
+
+        // 4. Creazione e download
+        progress(92, 'Preparo il file .zip…');
+        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+          (m) => progress(92 + m.percent * 0.08, 'Preparo il file .zip…'));
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Backup Vetroom ${safe(clinic.name)} ${stamp}.zip`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+        progress(100, 'Fatto.');
+        VR.say(VR.$('#msg2'), `Backup scaricato (${blob.size < 1048576 ? Math.max(1, Math.round(blob.size / 1024)) + ' KB' : (blob.size / 1048576).toFixed(1) + ' MB'}): ${clients.length} proprietari, ${pets.length} animali, ${visits.length} visite, ${appts.length} appuntamenti, ${docs.length} documenti.`, 'ok');
+        localStorage.setItem('vetroom_last_backup_' + cid, new Date().toISOString());
+      } catch (e) {
+        VR.say(VR.$('#msg2'), 'Backup non riuscito: ' + VR.errorText(e), 'error');
+      }
+      btn.disabled = false;
+    });
+  })();
+  </script>
+</body>
+</html>

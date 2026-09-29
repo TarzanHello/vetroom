@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2545">
+  <meta name="robots" content="noindex">
+  <title>Il mio profilo – FurrFinder</title>
+  <link rel="manifest" href="/app/manifest-furrfinder.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/furrfinder-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FurrFinder">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../vendor/jszip.min.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../js/proprietario.js"></script>
+</head>
+<body data-shell="owner" data-nav="profilo">
+
+  <main class="wrap">
+    <h1>Impostazioni</h1>
+    <p class="muted">Quando colleghi un tuo animale a una clinica, la clinica riceve questi dati per la tua scheda cliente.</p>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <form id="form" hidden novalidate>
+      <section class="panel">
+        <h2>Dati personali</h2>
+        <div class="grid">
+          <div><label for="first_name">Nome</label><input type="text" id="first_name" name="first_name"></div>
+          <div><label for="last_name">Cognome</label><input type="text" id="last_name" name="last_name"></div>
+          <div><label for="email">Email</label><input type="email" id="email" disabled>
+            <p class="hint-small">È l'email del tuo account Google.</p></div>
+          <div><label for="phone">Telefono</label><input type="tel" id="phone" name="phone"></div>
+          <div><label for="fiscal_code">Codice fiscale</label><input type="text" id="fiscal_code" name="fiscal_code" maxlength="16" data-upper></div>
+          <div><label for="birth_date">Data di nascita</label><input type="date" id="birth_date" name="birth_date"></div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Indirizzo</h2>
+        <div class="grid">
+          <div class="s8"><label for="address_street">Via / Piazza</label><input type="text" id="address_street" name="address_street"></div>
+          <div class="s4"><label for="address_number">Civico</label><input type="text" id="address_number" name="address_number"></div>
+          <div class="s3"><label for="address_zip">CAP</label><input type="text" id="address_zip" name="address_zip" maxlength="10"></div>
+          <div class="s4"><label for="address_city">Città</label><input type="text" id="address_city" name="address_city"></div>
+          <div class="s3"><label for="address_province">Provincia</label><input type="text" id="address_province" name="address_province" maxlength="2" data-upper></div>
+          <div class="s3"><label for="address_country">Nazione</label><input type="text" id="address_country" name="address_country" maxlength="2" data-upper></div>
+        </div>
+      </section>
+      <div class="actions-bar"><button class="btn btn-primary" type="submit" id="save">Salva profilo</button></div>
+      <div id="msg2" hidden></div>
+    </form>
+
+    <section class="panel" style="margin-top:12px">
+      <h2>Account</h2>
+      <div class="actions-bar">
+        <a class="btn btn-ghost" id="staffLink" href="../clinica/" hidden><img class="vr-action-icon" src="../img/icons/dashboard.png" alt="">Vai al gestionale della clinica</a>
+        <a class="btn btn-ghost" href="/privacy.html">Informativa privacy</a>
+        <button class="btn btn-danger" type="button" data-action="logout">Esci</button>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top:12px">
+      <h2>I tuoi dati</h2>
+      <p class="hint-small" style="margin-top:0">Scarica una copia di tutto quello che hai nel libretto: schede dei pet, visite condivise, appuntamenti, documenti e foto.</p>
+      <div class="actions-bar"><button class="btn btn-ghost" type="button" id="export">Scarica i miei dati</button></div>
+      <div id="exportMsg" hidden></div>
+    </section>
+
+    <section class="panel danger-zone" style="margin-top:12px">
+      <h2>Elimina il mio account</h2>
+      <p class="hint-small" style="margin-top:0">Cancelliamo il tuo profilo, i documenti che hai caricato e i pet senza storia clinica. Le visite fatte dalle cliniche restano nei loro archivi, senza più il collegamento a te. L'operazione non si può annullare.</p>
+      <div class="actions-bar"><button class="btn btn-danger" type="button" id="delAccount">Elimina il mio account</button></div>
+      <div id="delMsg" hidden></div>
+    </section>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading'), form = VR.$('#form'), msg2 = VR.$('#msg2');
+    let ctx;
+    try { ctx = await VR.loadOwnerContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    VR.fillForm(form, ctx.profile);
+    VR.$('#email').value = ctx.profile.email || ctx.session.user.email;
+    VR.hide(loading); VR.show(form);
+
+    // ---------- Scarica i miei dati ----------
+    VR.$('#export').addEventListener('click', async (ev) => {
+      const b = ev.currentTarget, m = VR.$('#exportMsg'); b.disabled = true; VR.say(m, 'Preparo il file…', 'info');
+      try {
+        const { data: pets } = await VR.sb.from('pets').select('*').eq('owner_user_id', ctx.uid);
+        const ids = (pets || []).map((p) => p.id);
+        const [visits, docs, appts] = ids.length ? await Promise.all([
+          VR.sb.from('visits').select('visit_date, visit_kind, title, notes, diagnosis, therapy, form_data, pet_id, clinic_id').in('pet_id', ids).then((r) => r.data || []),
+          VR.sb.from('documents').select('*').in('pet_id', ids).then((r) => r.data || []),
+          VR.sb.from('appointments').select('starts_at, duration_min, type, status, pet_id, clinic_id, notes_owner').in('pet_id', ids).then((r) => r.data || [])
+        ]) : [[], [], []];
+        const zip = new JSZip();
+        const safe = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9 ._-]+/g, '-').trim().slice(0, 50) || 'file';
+        zip.file('miei-dati.json', JSON.stringify({ creato_il: new Date().toISOString(), profilo: ctx.profile, animali: pets, visite: visits, documenti: docs, appuntamenti: appts }, null, 2));
+        const name = (id) => safe((pets.find((p) => p.id === id) || {}).name);
+        const files = [...docs.map((d) => ({ path: d.storage_path, name: `file/${name(d.pet_id)}/${safe(d.title || d.original_name)}_${d.id.slice(0, 6)}${(d.original_name || '').match(/\.[a-z0-9]{2,5}$/i)?.[0] || ''}` })),
+                       ...pets.filter((p) => p.photo_path).map((p) => ({ path: p.photo_path, name: `file/${safe(p.name)}/foto.jpg` }))];
+        for (const f of files) {
+          const { data } = await VR.sb.storage.from('pet-files').download(f.path);
+          if (data) zip.file(f.name, data);
+        }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'FurrFinder - i miei dati.zip';
+        document.body.appendChild(a); a.click(); a.remove();
+        VR.say(m, 'File scaricato.', 'ok');
+      } catch (e) { VR.say(m, VR.errorText(e), 'error'); }
+      b.disabled = false;
+    });
+
+    // ---------- Elimina il mio account ----------
+    VR.$('#delAccount').addEventListener('click', async (ev) => {
+      const m = VR.$('#delMsg');
+      if (ctx.profile.is_staff) { VR.say(m, 'Fai parte di una clinica: prima esci dalla clinica o eliminala da Impostazioni nel gestionale.', 'error'); return; }
+      const t = prompt('Per confermare scrivi ELIMINA (in maiuscolo).');
+      if (t !== 'ELIMINA') return;
+      const b = ev.currentTarget; b.disabled = true; VR.say(m, 'Eliminazione in corso…', 'info');
+      try {
+        // prima i file caricati da te
+        const { data: pets } = await VR.sb.from('pets').select('id, photo_path').eq('owner_user_id', ctx.uid);
+        const ids = (pets || []).map((p) => p.id);
+        if (ids.length) {
+          const { data: docs } = await VR.sb.from('documents').select('storage_path').in('pet_id', ids).is('clinic_id', null);
+          const paths = (docs || []).map((d) => d.storage_path);
+          for (let i = 0; i < paths.length; i += 100) await VR.sb.storage.from('pet-files').remove(paths.slice(i, i + 100));
+        }
+        const { error } = await VR.sb.rpc('delete_my_account');
+        if (error) throw error;
+        localStorage.clear(); sessionStorage.clear();
+        await VR.sb.auth.signOut().catch(() => {});
+        location.replace('/');
+      } catch (e) { VR.say(m, VR.errorText(e), 'error'); b.disabled = false; }
+    });
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault(); VR.hide(msg2);
+      const v = VR.formValues(form);
+      if (v.fiscal_code && !/^[A-Z0-9]{16}$/.test(v.fiscal_code)) { VR.say(msg2, 'Il codice fiscale deve avere 16 caratteri.', 'error'); return; }
+      v.full_name = [v.first_name, v.last_name].filter(Boolean).join(' ') || ctx.profile.full_name;
+      const b = VR.$('#save'); b.disabled = true;
+      const { error } = await VR.sb.from('profiles').update(v).eq('id', ctx.uid);
+      b.disabled = false;
+      if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
+      VR.say(msg2, 'Profilo salvato. I nuovi collegamenti con le cliniche useranno questi dati.', 'ok');
+    });
+  })();
+  </script>
+</body>
+</html>

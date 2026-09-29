@@ -1,0 +1,16 @@
+{
+  "name": "FurrFinder – libretto sanitario del tuo pet",
+  "short_name": "FurrFinder",
+  "id": "/app/proprietario/",
+  "start_url": "/app/proprietario/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0b2545",
+  "lang": "it",
+  "icons": [
+    { "src": "/app/img/furrfinder-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/app/img/furrfinder-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/app/img/furrfinder-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

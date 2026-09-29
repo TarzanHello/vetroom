@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2545">
+  <meta name="robots" content="noindex">
+  <title>Chiedi un appuntamento – FurrFinder</title>
+  <link rel="manifest" href="/app/manifest-furrfinder.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/furrfinder-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FurrFinder">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../js/proprietario.js"></script>
+</head>
+<body data-shell="owner" data-nav="cliniche">
+
+  <main class="wrap">
+    <a class="back" id="back" href="./">← Torna all'animale</a>
+    <h1>Chiedi un appuntamento</h1>
+    <p class="muted" id="sub"></p>
+    <p class="loader" id="loading">Cerco gli orari liberi…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <section class="panel">
+        <h2>1. Scegli un orario</h2>
+        <div id="days"></div>
+        <div class="actions-bar" style="margin-top:1rem">
+          <button class="btn btn-ghost btn-small" type="button" id="more" hidden>Mostra altri giorni</button>
+        </div>
+      </section>
+
+      <form class="panel" id="form" hidden novalidate>
+        <h2>2. Conferma la richiesta</h2>
+        <p id="chosen" class="notice notice-info" style="margin-top:0"></p>
+        <div class="grid">
+          <div><label for="type">Motivo</label>
+            <select id="type"><option>Visita clinica</option><option>Controllo</option><option>Vaccinazione</option><option>Visita specialistica</option><option>Altro</option></select></div>
+          <div class="s12"><label for="note">Messaggio per la clinica (facoltativo)</label>
+            <textarea id="note" rows="3" maxlength="600" placeholder="Es. da due giorni mangia poco"></textarea></div>
+        </div>
+        <p class="hint-small">La clinica riceverà la richiesta e la confermerà. In caso di urgenza, telefona direttamente.</p>
+        <div class="actions-bar"><button class="btn btn-primary" type="submit" id="send">Invia richiesta</button></div>
+        <div id="msg2" hidden></div>
+      </form>
+
+      <div id="done" hidden class="panel">
+        <h2>Richiesta inviata</h2>
+        <p>La clinica vedrà la tua richiesta nella sua agenda. Troverai lo stato dell'appuntamento nella pagina <a href="./">I miei animali</a>.</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadOwnerContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const petId = VR.param('animale'), clinicId = VR.param('clinica');
+    VR.$('#back').href = 'animale.html?id=' + encodeURIComponent(petId || '');
+    const fail = (t) => { VR.hide(loading); VR.say(msg, t, 'error'); };
+    if (!petId || !clinicId) return fail('Apri questa pagina dalla scheda del tuo animale.');
+
+    const [{ data: pet }, { data: clinics }, { data: acc }, { data: hours }] = await Promise.all([
+      VR.sb.from('pets').select('id, name').eq('id', petId).eq('owner_user_id', ctx.uid).maybeSingle(),
+      VR.sb.rpc('owner_pet_clinics', { p_pet: petId }),
+      VR.sb.from('pet_access').select('client_id, status').eq('pet_id', petId).eq('clinic_id', clinicId).maybeSingle(),
+      VR.sb.from('availabilities').select('*').eq('clinic_id', clinicId)
+    ]);
+    const clinic = (clinics || []).find((c) => c.clinic_id === clinicId);
+    if (!pet) return fail('Animale non trovato.');
+    if (!clinic || clinic.status !== 'active' || acc?.status !== 'active') return fail('Questo animale non è condiviso con la clinica: collegalo prima dalla sua scheda.');
+    VR.$('#sub').textContent = `${pet.name} · ${clinic.name}`;
+    if (!hours || !hours.length) {
+      return fail(`${clinic.name} non ha ancora pubblicato i suoi orari su Vetroom.` + (clinic.header_phone ? ` Puoi chiamare al ${clinic.header_phone}.` : ''));
+    }
+
+    // ---------- Calcolo degli orari liberi ----------
+    const pad = (n) => String(n).padStart(2, '0');
+    const toMin = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const DAYS = 28;
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(end.getDate() + DAYS);
+    const { data: busy, error: busyErr } = await VR.sb.rpc('get_busy_slots', {
+      p_clinic: clinicId, p_from: start.toISOString(), p_to: end.toISOString()
+    });
+    if (busyErr) return fail(VR.errorText(busyErr));
+    const busyRanges = (busy || []).map((b) => { const s = new Date(b.starts_at).getTime(); return [s, s + b.duration_min * 60000]; });
+    const minStart = Date.now() + 2 * 3600e3; // almeno 2 ore di preavviso
+
+    const days = [];
+    for (let i = 0; i < DAYS; i++) {
+      const d = new Date(start); d.setDate(d.getDate() + i);
+      const h = hours.find((x) => x.weekday === d.getDay());
+      if (!h) continue;
+      const slot = h.slot_minutes || 30;
+      const ranges = [[toMin(h.start_time), toMin(h.end_time)], [toMin(h.start_time2), toMin(h.end_time2)]].filter((r) => r[0] != null && r[1] != null);
+      const slots = [];
+      ranges.forEach(([a, b]) => {
+        for (let m = a; m + slot <= b; m += slot) {
+          const t = new Date(d); t.setHours(Math.floor(m / 60), m % 60, 0, 0);
+          const s = t.getTime(), e = s + slot * 60000;
+          if (s < minStart) continue;
+          if (busyRanges.some(([bs, be]) => bs < e && be > s)) continue;
+          slots.push({ t, slot });
+        }
+      });
+      if (slots.length) days.push({ d, slots });
+    }
+    VR.hide(loading);
+    if (!days.length) return fail('Nelle prossime settimane non ci sono orari liberi prenotabili online. Contatta direttamente la clinica.');
+
+    let shown = 3, chosen = null;
+    const render = () => {
+      VR.$('#days').innerHTML = days.slice(0, shown).map((day, di) => `
+        <div class="day-slots">
+          <h3>${VR.esc(day.d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }))}</h3>
+          <div class="slot-list">${day.slots.map((s, si) => `<button type="button" class="slot ${chosen === s ? 'is-chosen' : ''}" data-d="${di}" data-s="${si}">${pad(s.t.getHours())}:${pad(s.t.getMinutes())}</button>`).join('')}</div>
+        </div>`).join('');
+      (shown < days.length ? VR.show : VR.hide)(VR.$('#more'));
+    };
+    VR.$('#more').addEventListener('click', () => { shown += 3; render(); });
+    VR.$('#days').addEventListener('click', (ev) => {
+      const b = ev.target.closest('.slot'); if (!b) return;
+      chosen = days[Number(b.dataset.d)].slots[Number(b.dataset.s)];
+      render();
+      VR.$('#chosen').textContent = `${pet.name} · ${VR.fmtDateTime(chosen.t)} · ${clinic.name}`;
+      VR.show(VR.$('#form'));
+      VR.$('#form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    render();
+    VR.show(VR.$('#page'));
+
+    // ---------- Invio ----------
+    VR.$('#form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      if (!chosen) return;
+      const b = VR.$('#send'); b.disabled = true;
+      const { error } = await VR.sb.from('appointments').insert({
+        clinic_id: clinicId, pet_id: petId, client_id: acc?.client_id || null,
+        starts_at: chosen.t.toISOString(), duration_min: chosen.slot,
+        type: VR.$('#type').value, status: 'requested', booked_by: ctx.uid,
+        notes_owner: VR.$('#note').value.trim() || null
+      });
+      b.disabled = false;
+      if (error) { VR.say(VR.$('#msg2'), VR.errorText(error), 'error'); return; }
+      VR.hide(VR.$('#form')); VR.hide(VR.$('#days').closest('.panel'));
+      VR.show(VR.$('#done'));
+    });
+  })();
+  </script>
+</body>
+</html>

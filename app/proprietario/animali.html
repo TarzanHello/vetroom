@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0b2545">
+  <title>I miei pet – FurrFinder</title>
+  <link rel="manifest" href="/app/manifest-furrfinder.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/furrfinder-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FurrFinder">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../js/proprietario.js"></script>
+</head>
+<body data-shell="owner" data-nav="animali">
+  <main>
+    <div class="page-head">
+      <h1>I miei pet</h1>
+      <a class="btn btn-primary" href="animale.html?nuovo=1"><img class="vr-action-icon" src="../img/icons/create_pet.png" alt="">Aggiungi pet</a>
+    </div>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+    <div class="pets" id="pets"></div>
+    <div class="empty" id="empty" hidden>
+      <p><strong>Nessun pet ancora.</strong></p>
+      <p class="muted">Aggiungi il tuo pet: nome, specie, microchip.</p>
+      <a class="btn btn-primary" href="animale.html?nuovo=1">Aggiungi pet</a>
+    </div>
+  </main>
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadOwnerContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const { data: pets, error } = await VR.sb.from('pets').select('*').eq('owner_user_id', ctx.uid).is('deleted_at', null).order('name');
+    VR.hide(loading);
+    if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+    if (!pets.length) { VR.show(VR.$('#empty')); return; }
+    const urls = await Promise.all(pets.map((p) => VR.fileUrl(p.photo_path)));
+    VR.$('#pets').innerHTML = pets.map((p, i) => `
+      <a class="pet-card" href="animale.html?id=${p.id}">
+        ${VR.avatarHtml(p, urls[i])}
+        <div><strong>${VR.esc(p.name)}</strong><span>${VR.esc(VR.petSubtitle(p) || 'Apri la scheda')}</span></div>
+      </a>`).join('');
+  })();
+  </script>
+</body>
+</html>

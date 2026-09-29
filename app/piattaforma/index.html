@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Piattaforma – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+</head>
+<body data-shell="clinic" data-nav="piattaforma">
+  <main class="wrap wrap-wide">
+    <div class="page-head">
+      <div>
+        <h1>Piattaforma Vetroom</h1>
+        <p class="muted" style="margin:0">Visibile solo agli amministratori della piattaforma.</p>
+      </div>
+      <button class="btn btn-ghost btn-small" type="button" id="reload">Aggiorna</button>
+    </div>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <div class="stat-grid" id="stats"></div>
+
+      <section class="panel">
+        <div class="page-head" style="margin-bottom:6px">
+          <h2 style="margin:0">Crescita (ultime 12 settimane)</h2>
+          <div class="seg seg-big" role="group" aria-label="Serie">
+            <button type="button" data-s="users" aria-pressed="true">Iscritti</button>
+            <button type="button" data-s="clinics" aria-pressed="false">Cliniche</button>
+            <button type="button" data-s="visits" aria-pressed="false">Visite</button>
+            <button type="button" data-s="appointments" aria-pressed="false">Appuntamenti</button>
+          </div>
+        </div>
+        <div id="chart" class="chart"></div>
+      </section>
+
+      <section class="panel">
+        <div class="page-head" style="margin-bottom:8px">
+          <h2 style="margin:0">Cliniche</h2>
+          <input type="search" id="q" class="search" placeholder="Cerca per nome o email" style="max-width:280px">
+        </div>
+        <div class="table-wrap">
+          <table class="vtable" id="clinics">
+            <thead><tr><th>Clinica</th><th>Amministratore</th><th class="num">Team</th><th class="num">Proprietari</th><th class="num">Animali</th><th class="num">Visite</th><th class="num">Appunt.</th><th>Iscritta</th><th>Ultima attività</th><th>Stato</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Ultimi iscritti</h2>
+        <div class="table-wrap">
+          <table class="vtable" id="users">
+            <thead><tr><th>Email</th><th>Nome</th><th>Ruolo</th><th>Iscritto il</th><th>Ultimo accesso</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    VR.buildShell();
+    let session;
+    try { session = await VR.requireSession(); } catch { return; }
+    VR.$('#who').textContent = session.user.email;
+    VR.$('#shellClinic').textContent = 'Piattaforma';
+    VR.$('#shellRole').textContent = 'Amministratore Vetroom';
+    const isPlat = await VR.checkPlatformAdmin();
+    document.querySelectorAll('[data-admin-only]').forEach((x) => x.removeAttribute('hidden'));
+    if (!isPlat) { VR.hide(loading); VR.say(msg, 'Area riservata agli amministratori della piattaforma.', 'error'); return; }
+
+    const n = (x) => Number(x || 0).toLocaleString('it-IT');
+    const d = (x) => x ? new Date(x).toLocaleDateString('it-IT') : '—';
+    const ago = (x) => {
+      if (!x) return '—';
+      const days = Math.floor((Date.now() - new Date(x)) / 864e5);
+      return days <= 0 ? 'oggi' : days === 1 ? 'ieri' : days < 30 ? `${days} giorni fa` : d(x);
+    };
+    let growth = [], series = 'users', clinics = [];
+
+    const LABELS = [
+      ['utenti', 'Iscritti totali'], ['nuovi_utenti_30gg', 'Nuovi iscritti (30 gg)'], ['staff', 'Veterinari e segreterie'], ['proprietari', 'Proprietari iscritti'],
+      ['cliniche', 'Cliniche'], ['nuove_cliniche_30gg', 'Nuove cliniche (30 gg)'], ['cliniche_attive_30gg', 'Cliniche attive (30 gg)'], ['cliniche_sospese', 'Cliniche sospese'],
+      ['clienti', 'Proprietari in anagrafica'], ['animali', 'Animali'], ['visite', 'Visite'], ['referti_definitivi', 'Referti definitivi'],
+      ['appuntamenti', 'Appuntamenti'], ['prenotazioni_online', 'Prenotazioni online'], ['documenti', 'Documenti']
+    ];
+
+    const renderChart = () => {
+      document.querySelectorAll('[data-s]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.s === series));
+      const vals = growth.map((g) => Number(g[series] || 0));
+      const max = Math.max(1, ...vals);
+      VR.$('#chart').innerHTML = `<div class="bars">${growth.map((g, i) => `
+        <div class="bar-col" title="Settimana del ${d(g.week_start)}: ${vals[i]}">
+          <span class="bar-val">${vals[i] || ''}</span>
+          <span class="bar" style="height:${Math.round(vals[i] / max * 100)}%"></span>
+          <span class="bar-lab">${new Date(g.week_start).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</span>
+        </div>`).join('')}</div>`;
+    };
+    document.querySelectorAll('[data-s]').forEach((b) => b.addEventListener('click', () => { series = b.dataset.s; renderChart(); }));
+
+    const renderClinics = () => {
+      const t = VR.$('#q').value.toLowerCase().trim();
+      const rows = clinics.filter((c) => !t || (c.name + ' ' + (c.admin_email || '')).toLowerCase().includes(t));
+      VR.$('#clinics tbody').innerHTML = rows.map((c) => `
+        <tr class="${c.status === 'suspended' ? 'is-suspended' : ''}">
+          <td><strong>${VR.esc(c.name)}</strong>${c.suspended_reason ? `<br><span class="muted" style="font-size:12px">${VR.esc(c.suspended_reason)}</span>` : ''}</td>
+          <td>${c.admin_email ? `<a href="mailto:${VR.esc(c.admin_email)}">${VR.esc(c.admin_email)}</a>` : '—'}</td>
+          <td class="num">${n(c.members)}</td><td class="num">${n(c.clients)}</td><td class="num">${n(c.pets)}</td>
+          <td class="num">${n(c.visits)}</td><td class="num">${n(c.appointments)}</td>
+          <td>${d(c.created_at)}</td><td>${ago(c.last_activity)}</td>
+          <td><span class="pill ${c.status === 'suspended' ? 'pill-bad' : 'pill-ok'}">${c.status === 'suspended' ? 'Sospesa' : 'Attiva'}</span></td>
+          <td class="row-actions">
+            ${c.status === 'suspended'
+              ? `<button class="btn btn-ghost btn-small" data-act="active" data-id="${c.id}">Riattiva</button>`
+              : `<button class="btn btn-danger btn-small" data-act="suspended" data-id="${c.id}" data-name="${VR.esc(c.name)}">Sospendi</button>`}
+            ${Number(c.clients) === 0 && Number(c.visits) === 0 ? `<button class="btn btn-ghost btn-small" data-act="delete" data-id="${c.id}" data-name="${VR.esc(c.name)}">Elimina</button>` : ''}
+          </td>
+        </tr>`).join('') || '<tr><td colspan="11" class="muted">Nessuna clinica.</td></tr>';
+    };
+    VR.$('#q').addEventListener('input', renderClinics);
+
+    VR.$('#clinics').addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-act]'); if (!b) return;
+      VR.hide(msg);
+      let res;
+      if (b.dataset.act === 'suspended') {
+        const reason = prompt(`Sospendere "${b.dataset.name}"?\nI membri non potranno più vedere i dati finché non la riattivi.\n\nMotivo (visibile alla clinica):`, '');
+        if (reason === null) return;
+        res = await VR.sb.rpc('platform_set_clinic_status', { p_clinic: b.dataset.id, p_status: 'suspended', p_reason: reason });
+      } else if (b.dataset.act === 'active') {
+        if (!confirm('Riattivare la clinica?')) return;
+        res = await VR.sb.rpc('platform_set_clinic_status', { p_clinic: b.dataset.id, p_status: 'active', p_reason: null });
+      } else {
+        if (!confirm(`Eliminare definitivamente "${b.dataset.name}"? È vuota (nessun proprietario né visita).`)) return;
+        res = await VR.sb.rpc('platform_delete_empty_clinic', { p_clinic: b.dataset.id });
+      }
+      if (res.error) { VR.say(msg, VR.errorText(res.error), 'error'); return; }
+      load();
+    });
+
+    const load = async () => {
+      const [st, gr, cl, us] = await Promise.all([
+        VR.sb.rpc('platform_stats'), VR.sb.rpc('platform_growth', { p_weeks: 12 }),
+        VR.sb.rpc('platform_clinics'), VR.sb.rpc('platform_recent_users', { p_limit: 50 })
+      ]);
+      VR.hide(loading);
+      const err = st.error || gr.error || cl.error || us.error;
+      if (err) { VR.say(msg, VR.errorText(err), 'error'); return; }
+      const s = st.data || {};
+      VR.$('#stats').innerHTML = LABELS.map(([k, l]) => `<div class="stat"><b>${n(s[k])}</b><span>${l}</span></div>`).join('');
+      growth = gr.data || []; renderChart();
+      clinics = cl.data || []; renderClinics();
+      VR.$('#users tbody').innerHTML = (us.data || []).map((u) => `
+        <tr><td>${VR.esc(u.email || '')}</td><td>${VR.esc(u.full_name || '')}</td>
+          <td>${[u.is_staff ? 'Clinica' : '', u.is_owner ? 'Proprietario' : ''].filter(Boolean).join(' + ') || '<span class="muted">non ancora scelto</span>'}</td>
+          <td>${d(u.created_at)}</td><td>${ago(u.last_sign_in_at)}</td></tr>`).join('');
+      VR.show(VR.$('#page'));
+    };
+    VR.$('#reload').addEventListener('click', load);
+    load();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Importa da Excel – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../vendor/xlsx-mini-0.18.5.min.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+</head>
+<body data-shell="clinic" data-nav="clienti">
+  <main class="wrap">
+    <a class="back" href="clienti.html">← Tutti i proprietari</a>
+    <h1>Importa proprietari e animali</h1>
+    <p class="muted">Porta in Vetroom l'archivio del vecchio programma: basta un file Excel (.xlsx) o CSV, con una riga per ogni animale e i dati del suo proprietario.</p>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <section class="panel">
+        <h2>1. Scegli il file</h2>
+        <p class="hint-small" style="margin-top:0">Le colonne vengono riconosciute da sole (cognome, nome, telefono, email, indirizzo, nome dell'animale, specie, razza, microchip…). Se un proprietario ha più animali, ripeti i suoi dati su più righe. <a href="#" id="tpl">Scarica un file di esempio</a>.</p>
+        <label class="btn btn-primary file-btn"><input type="file" id="file" accept=".xlsx,.xls,.csv,.txt"><span>Scegli il file</span></label>
+        <p class="hint-small" id="fileInfo"></p>
+      </section>
+
+      <section class="panel" id="mapPanel" hidden>
+        <h2>2. Controlla le colonne</h2>
+        <p class="hint-small" style="margin-top:0">Per ogni colonna del tuo file, verifica dove va in Vetroom. Le colonne che non servono lasciale su "Non importare".</p>
+        <div class="map-grid" id="mapGrid"></div>
+      </section>
+
+      <section class="panel" id="previewPanel" hidden>
+        <h2>3. Anteprima</h2>
+        <p id="summary" style="margin-top:0"></p>
+        <div class="table-wrap"><table class="vtable" id="preview"></table></div>
+        <label class="check" style="margin-top:10px"><input type="checkbox" id="skipDup" checked> Se un proprietario esiste già (stesso codice fiscale o email), non duplicarlo: aggiungi solo gli animali nuovi</label>
+        <div class="actions-bar" style="margin-top:12px">
+          <button class="btn btn-primary" type="button" id="go">Importa</button>
+        </div>
+        <div class="progress" id="progress" hidden><div class="progress-bar"><span id="bar"></span></div><p class="hint-small" id="step"></p></div>
+        <div id="msg2" hidden></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    VR.hide(loading); VR.show(VR.$('#page'));
+
+    // ---------- Campi di destinazione e parole con cui riconoscerli ----------
+    const FIELDS = [
+      ['', 'Non importare', []],
+      ['o.full', 'Proprietario: nome completo', ['proprietario', 'cliente', 'nominativo', 'intestatario', 'owner', 'nome e cognome', 'cognome e nome']],
+      ['o.last', 'Proprietario: cognome', ['cognome', 'cognome proprietario', 'surname', 'last name']],
+      ['o.first', 'Proprietario: nome', ['nome', 'nome proprietario', 'first name']],
+      ['o.cf', 'Proprietario: codice fiscale', ['codice fiscale', 'cf', 'cod fiscale', 'codicefiscale', 'c f']],
+      ['o.phone', 'Proprietario: telefono', ['telefono', 'cellulare', 'tel', 'cell', 'mobile', 'recapito', 'phone']],
+      ['o.email', 'Proprietario: email', ['email', 'e mail', 'mail', 'posta']],
+      ['o.street', 'Proprietario: indirizzo', ['indirizzo', 'via', 'residenza', 'address']],
+      ['o.number', 'Proprietario: civico', ['civico', 'numero civico', 'n civico']],
+      ['o.zip', 'Proprietario: CAP', ['cap', 'codice postale']],
+      ['o.city', 'Proprietario: città', ['citta', 'comune', 'localita', 'city']],
+      ['o.prov', 'Proprietario: provincia', ['provincia', 'prov', 'pr']],
+      ['o.notes', 'Proprietario: note', ['note cliente', 'note proprietario']],
+      ['p.name', 'Animale: nome', ['nome animale', 'animale', 'paziente', 'nome paziente', 'pet', 'nome pet']],
+      ['p.species', 'Animale: specie', ['specie', 'tipo animale', 'species']],
+      ['p.breed', 'Animale: razza', ['razza', 'breed']],
+      ['p.sex', 'Animale: sesso', ['sesso', 'sex']],
+      ['p.birth', 'Animale: data di nascita', ['data di nascita', 'data nascita', 'nascita', 'nato il', 'nata il', 'birth']],
+      ['p.chip', 'Animale: microchip', ['microchip', 'chip', 'numero microchip', 'transponder']],
+      ['p.weight', 'Animale: peso (kg)', ['peso', 'peso kg', 'weight']],
+      ['p.neuter', 'Animale: sterilizzato', ['sterilizzato', 'castrato', 'sterilizzazione']],
+      ['p.notes', 'Animale: note', ['note', 'note animale', 'annotazioni', 'allergie']]
+    ];
+    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const guess = (h) => {
+      const n = norm(h);
+      let best = '', score = 0;
+      for (const [k, , words] of FIELDS) for (const w of words) {
+        const sc = n === w ? 3 : (n.includes(w) && w.length > 3 ? 2 : 0);
+        if (sc > score) { score = sc; best = k; }
+      }
+      return best;
+    };
+
+    // ---------- Lettura del file ----------
+    let headers = [], rows = [], mapping = [];
+    VR.$('#tpl').addEventListener('click', (e) => {
+      e.preventDefault();
+      const csv = '\ufeffCognome;Nome;Codice fiscale;Telefono;Email;Indirizzo;CAP;Città;Provincia;Nome animale;Specie;Razza;Sesso;Data di nascita;Microchip;Peso\r\n' +
+        'Rossi;Mario;RSSMRA80A01H501U;3331234567;mario.rossi@email.it;Via Roma 1;00100;Roma;RM;Fido;Cane;Labrador;M;01/05/2020;380260000123456;24,5\r\n' +
+        'Rossi;Mario;RSSMRA80A01H501U;3331234567;mario.rossi@email.it;Via Roma 1;00100;Roma;RM;Micia;Gatto;Europeo;F;15/03/2022;;4\r\n';
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'Esempio importazione Vetroom.csv'; a.click();
+    });
+    VR.$('#file').addEventListener('change', async (ev) => {
+      const f = ev.target.files[0]; ev.target.value = '';
+      if (!f) return;
+      VR.hide(msg);
+      try {
+        const buf = await f.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true, raw: false });
+        const sh = wb.Sheets[wb.SheetNames[0]];
+        const aoa = XLSX.utils.sheet_to_json(sh, { header: 1, defval: '', raw: false, dateNF: 'dd/mm/yyyy' })
+          .filter((r) => r.some((c) => String(c).trim() !== ''));
+        if (aoa.length < 2) throw new Error('Il file sembra vuoto: servono una riga di intestazione e almeno una riga di dati.');
+        headers = aoa[0].map((h, i) => String(h).trim() || `Colonna ${i + 1}`);
+        rows = aoa.slice(1).map((r) => headers.map((_, i) => String(r[i] ?? '').trim()));
+        mapping = headers.map(guess);
+        // una sola colonna per campo (la prima)
+        const used = new Set(); mapping = mapping.map((k) => (k && !used.has(k) ? (used.add(k), k) : ''));
+        VR.$('#fileInfo').textContent = `${f.name}: ${rows.length} righe, ${headers.length} colonne.`;
+        renderMap(); VR.show(VR.$('#mapPanel')); VR.show(VR.$('#previewPanel')); renderPreview();
+      } catch (e) { VR.say(msg, 'File non leggibile: ' + VR.errorText(e), 'error'); }
+    });
+
+    const renderMap = () => {
+      VR.$('#mapGrid').innerHTML = headers.map((h, i) => `
+        <div class="map-row"><span class="map-src" title="${VR.esc(h)}">${VR.esc(h)}<small>${VR.esc(rows.find((r) => r[i])?.[i] || '')}</small></span>
+          <select data-i="${i}" aria-label="Destinazione di ${VR.esc(h)}">${FIELDS.map(([k, l]) => `<option value="${k}" ${k === mapping[i] ? 'selected' : ''}>${VR.esc(l)}</option>`).join('')}</select></div>`).join('');
+    };
+    VR.$('#mapGrid').addEventListener('change', (e) => { const s = e.target.closest('select'); if (!s) return; mapping[+s.dataset.i] = s.value; renderPreview(); });
+
+    // ---------- Normalizzazione dei valori ----------
+    const SPECIES = { cane: 'Cane', cani: 'Cane', dog: 'Cane', gatto: 'Gatto', gatti: 'Gatto', cat: 'Gatto', coniglio: 'Coniglio', furetto: 'Furetto', cavallo: 'Cavallo',
+      criceto: 'Roditore', cavia: 'Roditore', roditore: 'Roditore', uccello: 'Uccello', pappagallo: 'Uccello', rettile: 'Rettile', tartaruga: 'Rettile' };
+    const toDate = (v) => {
+      if (!v) return null;
+      let m = v.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+      if (m) { let y = +m[3]; if (y < 100) y += y > 40 ? 1900 : 2000; const d = new Date(Date.UTC(y, +m[2] - 1, +m[1])); return isNaN(d) ? null : d.toISOString().slice(0, 10); }
+      m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+      return null;
+    };
+    const rowData = (r) => {
+      const o = {}, p = {};
+      mapping.forEach((k, i) => { if (!k || !r[i]) return; const [g, f] = k.split('.'); (g === 'o' ? o : p)[f] = r[i]; });
+      if (o.full && !o.last && !o.first) { const parts = o.full.split(/\s+/); o.last = parts.shift(); o.first = parts.join(' '); }
+      const client = {
+        last_name: o.last || null, first_name: o.first || null,
+        fiscal_code: o.cf ? o.cf.toUpperCase().replace(/\s/g, '') : null, phone: o.phone || null,
+        email: o.email ? o.email.toLowerCase() : null, address_street: o.street || null, address_number: o.number || null,
+        address_zip: o.zip || null, address_city: o.city || null, address_province: o.prov ? o.prov.toUpperCase().slice(0, 2) : null, notes: o.notes || null
+      };
+      let pet = null;
+      if (p.name) {
+        const sx = norm(p.sex);
+        const w = p.weight ? Number(p.weight.replace(',', '.').replace(/[^0-9.]/g, '')) : null;
+        const nt = norm(p.neuter);
+        pet = {
+          name: p.name, species: p.species ? (SPECIES[norm(p.species)] || p.species) : null, breed: p.breed || null,
+          sex: /^(m|maschio|male)$/.test(sx) ? 'M' : /^(f|femmina|female)$/.test(sx) ? 'F' : null,
+          birth_date: toDate(p.birth), microchip: p.chip ? p.chip.replace(/\s/g, '') : null,
+          weight_kg: w && !isNaN(w) ? w : null, neuter_status: /^(si|s|yes|x|1|sterilizzato|sterilizzata|castrato|castrata)$/.test(nt) ? 'yes' : /^(no|n|0)$/.test(nt) ? 'no' : null,
+          notes: p.notes || null
+        };
+      }
+      return { client, pet };
+    };
+    const ownerKey = (c) => (c.fiscal_code ? 'cf:' + c.fiscal_code : c.email ? 'em:' + c.email :
+      'nm:' + norm((c.last_name || '') + ' ' + (c.first_name || '') + ' ' + (c.phone || '')));
+
+    const build = () => {
+      const owners = new Map(); let skipped = 0;
+      rows.forEach((r) => {
+        const { client, pet } = rowData(r);
+        if (!client.last_name && !client.first_name) { skipped++; return; }
+        const k = ownerKey(client);
+        if (!owners.has(k)) owners.set(k, { client, pets: [] });
+        if (pet) owners.get(k).pets.push(pet);
+      });
+      return { owners: [...owners.values()], skipped };
+    };
+
+    const renderPreview = () => {
+      const { owners, skipped } = build();
+      const pets = owners.reduce((n, o) => n + o.pets.length, 0);
+      VR.$('#summary').innerHTML = `Verranno importati <b>${owners.length}</b> proprietari e <b>${pets}</b> animali.` +
+        (skipped ? ` <span class="muted">${skipped} righe senza cognome né nome verranno saltate.</span>` : '');
+      const sample = owners.slice(0, 8);
+      VR.$('#preview').innerHTML = '<thead><tr><th>Proprietario</th><th>Telefono</th><th>Email</th><th>Città</th><th>Animali</th></tr></thead><tbody>' +
+        sample.map((o) => `<tr><td>${VR.esc(VR.clientName(o.client))}${o.client.fiscal_code ? `<br><small class="muted">${VR.esc(o.client.fiscal_code)}</small>` : ''}</td>
+          <td>${VR.esc(o.client.phone || '')}</td><td>${VR.esc(o.client.email || '')}</td><td>${VR.esc(o.client.address_city || '')}</td>
+          <td>${o.pets.map((p) => VR.esc([p.name, p.species, p.birth_date ? new Date(p.birth_date + 'T00:00:00').toLocaleDateString('it-IT') : ''].filter(Boolean).join(' · '))).join('<br>')}</td></tr>`).join('') +
+        '</tbody>' + (owners.length > 8 ? `<tfoot><tr><td colspan="5" class="muted">…e altri ${owners.length - 8}</td></tr></tfoot>` : '');
+      VR.$('#go').disabled = !owners.length;
+    };
+
+    // ---------- Importazione ----------
+    VR.$('#go').addEventListener('click', async () => {
+      const { owners } = build();
+      if (!owners.length) return;
+      if (!confirm(`Importare ${owners.length} proprietari e i loro animali?`)) return;
+      const b = VR.$('#go'); b.disabled = true;
+      const bar = VR.$('#bar'), step = VR.$('#step'); VR.show(VR.$('#progress'));
+      const prog = (p, t) => { bar.style.width = Math.round(p) + '%'; step.textContent = t; };
+      try {
+        prog(3, 'Controllo i proprietari già presenti…');
+        const existing = await VR.fetchAll(() => VR.sb.from('clients').select('id, fiscal_code, email, last_name, first_name, phone').eq('clinic_id', ctx.clinicId).order('id'));
+        const byKey = new Map(existing.map((c) => [ownerKey({ ...c, email: c.email?.toLowerCase(), fiscal_code: c.fiscal_code?.toUpperCase() }), c.id]));
+        const newClients = [], petsRows = [], accessRows = [];
+        let reused = 0;
+        for (const o of owners) {
+          let cid = VR.$('#skipDup').checked ? byKey.get(ownerKey(o.client)) : null;
+          if (cid) reused++;
+          else { cid = crypto.randomUUID(); newClients.push({ id: cid, clinic_id: ctx.clinicId, ...o.client }); }
+          for (const p of o.pets) {
+            const pid = crypto.randomUUID();
+            petsRows.push({ id: pid, created_by_clinic_id: ctx.clinicId, ...p });
+            accessRows.push({ pet_id: pid, clinic_id: ctx.clinicId, client_id: cid });
+          }
+        }
+        const chunk = async (table, list, from, to, label) => {
+          for (let i = 0; i < list.length; i += 300) {
+            const { error } = await VR.sb.from(table).insert(list.slice(i, i + 300));
+            if (error) throw error;
+            prog(from + (to - from) * Math.min(1, (i + 300) / list.length), `${label}: ${Math.min(i + 300, list.length)} di ${list.length}`);
+          }
+        };
+        await chunk('clients', newClients, 5, 40, 'Proprietari');
+        await chunk('pets', petsRows, 40, 75, 'Animali');
+        await chunk('pet_access', accessRows, 75, 100, 'Collegamenti');
+        prog(100, 'Fatto.');
+        VR.say(VR.$('#msg2'), `Importazione completata: ${newClients.length} nuovi proprietari${reused ? `, ${reused} già presenti` : ''}, ${petsRows.length} animali.`, 'ok');
+        VR.$('#msg2').insertAdjacentHTML('beforeend', ' <a href="clienti.html">Vai ai proprietari</a>');
+      } catch (e) {
+        VR.say(VR.$('#msg2'), 'Importazione interrotta: ' + VR.errorText(e) + '. I dati già importati restano: puoi correggere il file e riprovare con "non duplicare" attivo.', 'error');
+        b.disabled = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

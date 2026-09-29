@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Team – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+</head>
+<body data-shell="clinic" data-nav="team">
+
+  <main class="wrap">
+    <div class="page-head">
+      <div>
+        <h1>Team</h1>
+        <p class="muted" style="margin:0" id="sub"></p>
+      </div>
+      <button class="btn btn-primary" id="invite" type="button" hidden>Invita qualcuno</button>
+    </div>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <section class="panel" id="membersPanel" hidden>
+      <h2>Persone della clinica</h2>
+      <div id="members"></div>
+    </section>
+
+    <section class="panel" id="invitesPanel" hidden>
+      <h2>Inviti in attesa</h2>
+      <div id="invites"></div>
+    </section>
+
+    <section class="panel" id="rolesInfo" hidden>
+      <h2>Cosa può fare ogni ruolo</h2>
+      <ul class="roles-list">
+        <li><strong>Amministratore</strong> — tutto, compresi team, impostazioni, intestazione dei referti.</li>
+        <li><strong>Veterinario</strong> — clienti, pazienti, agenda, visite, referti e moduli.</li>
+        <li><strong>Segreteria</strong> — proprietari, animali, agenda e documenti generali. Non vede visite e referti.</li>
+      </ul>
+    </section>
+  </main>
+
+  <dialog id="dlg" class="dlg">
+    <form id="invForm" novalidate>
+      <h2>Invita nel team</h2>
+      <div class="grid">
+        <div class="s8"><label for="invEmail">Email Google della persona</label><input type="email" id="invEmail" required placeholder="nome@gmail.com"></div>
+        <div class="s4"><label for="invRole">Ruolo</label>
+          <select id="invRole"><option value="vet">Veterinario</option><option value="secretary">Segreteria</option></select></div>
+      </div>
+      <p class="hint-small">La persona dovrà accedere a Vetroom con l'account Google di questa email. L'invito vale 14 giorni.</p>
+      <div id="dlgMsg" hidden></div>
+
+      <div id="invResult" hidden>
+        <p class="notice notice-ok" style="margin-bottom:.75rem">Invito creato. Mandalo alla persona con uno di questi pulsanti:</p>
+        <input type="text" id="invLink" readonly aria-label="Link di invito">
+        <div class="actions-bar" style="margin-top:.75rem">
+          <button class="btn btn-ghost btn-small" type="button" id="copyLink">Copia link</button>
+          <a class="btn btn-ghost btn-small" id="mailLink" href="#">Invia per email</a>
+          <a class="btn btn-ghost btn-small" id="waLink" href="#" target="_blank" rel="noopener">Invia su WhatsApp</a>
+        </div>
+      </div>
+
+      <div class="actions-bar" style="margin-top:1.25rem">
+        <button class="btn btn-primary" type="submit" id="invSave">Crea invito</button>
+        <button class="btn btn-ghost" type="button" id="invClose">Chiudi</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const me = ctx.session.user.id;
+    const isAdmin = ctx.role === 'admin';
+    const clinicName = ctx.clinic.name || 'la clinica';
+    VR.$('#sub').textContent = clinicName;
+    if (isAdmin) VR.show(VR.$('#invite'));
+    VR.show(VR.$('#rolesInfo'));
+
+    const inviteUrl = (token) => new URL('?invito=' + encodeURIComponent(token), VR.root).href;
+    const fmt = (d) => new Date(d).toLocaleDateString('it-IT');
+
+    // ---------- Membri ----------
+    const loadMembers = async () => {
+      const { data: rows, error } = await VR.sb.from('clinic_members')
+        .select('user_id, role, status, created_at').eq('clinic_id', ctx.clinicId).order('created_at');
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      const ids = rows.map((r) => r.user_id);
+      const { data: profs } = await VR.sb.from('profiles').select('id, full_name, first_name, last_name, email').in('id', ids);
+      const P = Object.fromEntries((profs || []).map((p) => [p.id, p]));
+      VR.$('#members').innerHTML = rows.map((r) => {
+        const p = P[r.user_id] || {};
+        const name = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.full_name || p.email || 'Utente';
+        const self = r.user_id === me;
+        const controls = isAdmin ? `
+          <div class="member-ctl">
+            <select data-role="${r.user_id}" aria-label="Ruolo di ${VR.esc(name)}">
+              ${Object.entries(VR.ROLE).map(([k, l]) => `<option value="${k}" ${k === r.role ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
+            ${self ? '' : `<button type="button" class="btn btn-ghost btn-small" data-status="${r.user_id}" data-to="${r.status === 'active' ? 'suspended' : 'active'}">${r.status === 'active' ? 'Sospendi' : 'Riattiva'}</button>
+            <button type="button" class="btn btn-danger btn-small" data-remove="${r.user_id}" data-name="${VR.esc(name)}">Rimuovi</button>`}
+          </div>` : `<span class="pill">${VR.ROLE[r.role] || r.role}</span>`;
+        return `
+          <div class="member ${r.status !== 'active' ? 'is-suspended' : ''}">
+            <span class="avatar" aria-hidden="true">${VR.esc(VR.initials(name))}</span>
+            <div class="member-main">
+              <strong>${VR.esc(name)}${self ? ' <span class="muted">(tu)</span>' : ''}</strong>
+              <span>${VR.esc(p.email || '')}${r.status !== 'active' ? ' · <b>sospeso</b>' : ''}</span>
+            </div>
+            ${controls}
+          </div>`;
+      }).join('');
+      VR.show(VR.$('#membersPanel'));
+    };
+
+    // ---------- Inviti ----------
+    const loadInvites = async () => {
+      if (!isAdmin) return;
+      const { data, error } = await VR.sb.from('clinic_invites')
+        .select('id, email, role, token, expires_at, created_at')
+        .eq('clinic_id', ctx.clinicId).is('accepted_at', null).is('revoked_at', null)
+        .order('created_at', { ascending: false });
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      const now = new Date();
+      VR.$('#invites').innerHTML = (data || []).length ? data.map((i) => {
+        const expired = new Date(i.expires_at) < now;
+        return `
+        <div class="member">
+          <div class="member-main">
+            <strong>${VR.esc(i.email)}</strong>
+            <span>${VR.ROLE[i.role]} · ${expired ? '<b>scaduto</b>' : 'valido fino al ' + fmt(i.expires_at)}</span>
+          </div>
+          <div class="member-ctl">
+            ${expired ? '' : `<button type="button" class="btn btn-ghost btn-small" data-copy="${VR.esc(i.token)}">Copia link</button>`}
+            <button type="button" class="btn btn-danger btn-small" data-revoke="${i.id}">${expired ? 'Elimina' : 'Annulla invito'}</button>
+          </div>
+        </div>`;
+      }).join('') : '<p class="muted" style="margin:0">Nessun invito in attesa.</p>';
+      VR.show(VR.$('#invitesPanel'));
+    };
+
+    await Promise.all([loadMembers(), loadInvites()]);
+    VR.hide(loading);
+
+    const copy = async (text, btn) => {
+      try { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = 'Copiato!'; setTimeout(() => btn.textContent = t, 1500); }
+      catch { prompt('Copia questo link:', text); }
+    };
+
+    // Azioni sui membri
+    VR.$('#members').addEventListener('change', async (ev) => {
+      const s = ev.target.closest('[data-role]'); if (!s) return;
+      VR.hide(msg);
+      const { error } = await VR.sb.from('clinic_members').update({ role: s.value })
+        .eq('clinic_id', ctx.clinicId).eq('user_id', s.dataset.role);
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); }
+      else if (s.dataset.role === me && s.value !== 'admin') { location.reload(); return; }
+      loadMembers();
+    });
+    VR.$('#members').addEventListener('click', async (ev) => {
+      const st = ev.target.closest('[data-status]'), rm = ev.target.closest('[data-remove]');
+      VR.hide(msg);
+      if (st) {
+        const { error } = await VR.sb.from('clinic_members').update({ status: st.dataset.to })
+          .eq('clinic_id', ctx.clinicId).eq('user_id', st.dataset.status);
+        if (error) VR.say(msg, VR.errorText(error), 'error');
+        loadMembers();
+      }
+      if (rm) {
+        if (!confirm(`Rimuovere ${rm.dataset.name} dalla clinica? Non potrà più accedere ai dati della clinica. Le visite che ha scritto restano.`)) return;
+        const { error } = await VR.sb.from('clinic_members').delete()
+          .eq('clinic_id', ctx.clinicId).eq('user_id', rm.dataset.remove);
+        if (error) VR.say(msg, VR.errorText(error), 'error');
+        loadMembers();
+      }
+    });
+
+    // Azioni sugli inviti
+    VR.$('#invites').addEventListener('click', async (ev) => {
+      const c = ev.target.closest('[data-copy]'), r = ev.target.closest('[data-revoke]');
+      if (c) copy(inviteUrl(c.dataset.copy), c);
+      if (r) {
+        const { error } = await VR.sb.from('clinic_invites').update({ revoked_at: new Date().toISOString() }).eq('id', r.dataset.revoke);
+        if (error) VR.say(msg, VR.errorText(error), 'error');
+        loadInvites();
+      }
+    });
+
+    // Nuovo invito
+    const dlg = VR.$('#dlg');
+    VR.$('#invite').addEventListener('click', () => {
+      VR.$('#invForm').reset(); VR.hide(VR.$('#invResult')); VR.hide(VR.$('#dlgMsg'));
+      VR.show(VR.$('#invSave')); VR.$('#invEmail').disabled = false; VR.$('#invRole').disabled = false;
+      dlg.showModal(); VR.$('#invEmail').focus();
+    });
+    VR.$('#invClose').addEventListener('click', () => dlg.close());
+    VR.$('#copyLink').addEventListener('click', (ev) => copy(VR.$('#invLink').value, ev.target));
+
+    VR.$('#invForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const dm = VR.$('#dlgMsg'); VR.hide(dm);
+      const email = VR.$('#invEmail').value.trim().toLowerCase();
+      const role = VR.$('#invRole').value;
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { VR.say(dm, 'Inserisci un indirizzo email valido.', 'error'); return; }
+      const b = VR.$('#invSave'); b.disabled = true;
+      const { data, error } = await VR.sb.from('clinic_invites')
+        .insert({ clinic_id: ctx.clinicId, email, role, created_by: me }).select('token').single();
+      b.disabled = false;
+      if (error) { VR.say(dm, VR.errorText(error), 'error'); return; }
+
+      const link = inviteUrl(data.token);
+      const text = `Ciao! Ti invito a unirti a ${clinicName} su Vetroom come ${VR.ROLE[role].toLowerCase()}.\n\n` +
+        `Apri questo link e accedi con il tuo account Google (${email}):\n${link}\n\nL'invito vale 14 giorni.`;
+      VR.$('#invLink').value = link;
+      VR.$('#mailLink').href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Invito su Vetroom – ' + clinicName)}&body=${encodeURIComponent(text)}`;
+      VR.$('#waLink').href = 'https://wa.me/?text=' + encodeURIComponent(text);
+      VR.$('#invEmail').disabled = true; VR.$('#invRole').disabled = true;
+      VR.hide(VR.$('#invSave')); VR.show(VR.$('#invResult'));
+      loadInvites();
+    });
+  })();
+  </script>
+</body>
+</html>

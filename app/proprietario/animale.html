@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2545">
+  <meta name="robots" content="noindex">
+  <title>Il mio animale – FurrFinder</title>
+  <link rel="manifest" href="/app/manifest-furrfinder.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/furrfinder-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FurrFinder">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../js/proprietario.js"></script>
+  <script src="../js/documenti.js"></script>
+</head>
+<body data-shell="owner" data-nav="animali">
+
+  <main class="wrap">
+    <a class="back" href="./">← I miei animali</a>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <div class="page-head"><h1 id="title">Nuovo animale</h1></div>
+
+      <section class="panel" id="photoPanel" hidden>
+        <div class="photo-box">
+          <div id="photo"></div>
+          <div>
+            <label class="btn btn-ghost btn-small file-btn">
+              <input type="file" id="photoFile" accept="image/*">
+              <span id="photoLabel">Carica una foto</span>
+            </label>
+            <p class="hint-small">La foto viene ridotta automaticamente prima del caricamento.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Veterinari -->
+      <section class="panel" id="vetsPanel" hidden>
+        <h2>I suoi veterinari</h2>
+        <div id="vets"></div>
+        <form class="link-form" id="linkForm" novalidate>
+          <label for="code">Collega a una clinica che usa Vetroom</label>
+          <div class="row-inline">
+            <input type="text" id="code" maxlength="12" placeholder="Codice clinica" autocomplete="off" class="code-input">
+            <button class="btn btn-primary btn-small" type="submit" id="codeBtn">Cerca</button>
+          </div>
+          <p class="hint-small">Il codice te lo dà la clinica. Collegandoti, la clinica vedrà la scheda di questo animale, i documenti che carichi e i tuoi dati di contatto. Puoi revocare in qualsiasi momento.</p>
+          <div id="linkConfirm" hidden class="notice notice-info"></div>
+        </form>
+        <div id="vetsMsg" hidden></div>
+      </section>
+
+      <section class="panel" id="remPanel" hidden>
+        <h2>Promemoria dal veterinario</h2>
+        <div id="rem"></div>
+      </section>
+
+      <section class="panel" id="weightPanel" hidden>
+        <h2>Andamento del peso</h2>
+        <div id="weight"></div>
+      </section>
+
+      <!-- Visite -->
+      <section class="panel" id="visitsPanel" hidden>
+        <h2>Visite</h2>
+        <ul class="rows" id="visits" hidden></ul>
+        <p class="muted" id="noVisits" hidden style="margin:0">Nessuna visita condivisa dai veterinari per ora.</p>
+      </section>
+
+      <!-- Scheda -->
+      <form id="form" novalidate>
+        <section class="panel">
+          <h2>Scheda</h2>
+          <div class="grid">
+            <div><label for="name">Nome</label><input type="text" id="name" name="name" required autocomplete="off"></div>
+            <div><label for="species">Specie</label><select id="species" name="species"></select></div>
+            <div><label for="breed">Razza</label><input type="text" id="breed" name="breed" autocomplete="off"></div>
+            <div><label for="birth_date">Data di nascita</label><input type="date" id="birth_date" name="birth_date"><p class="hint-small" id="ageHint"></p></div>
+            <div class="s4"><label for="sex">Sesso</label>
+              <select id="sex" name="sex"><option value="">—</option><option value="M">Maschio</option><option value="F">Femmina</option><option value="U">Non noto</option></select></div>
+            <div class="s4"><label for="neuter_status">Sterilizzazione</label>
+              <select id="neuter_status" name="neuter_status"><option value="">—</option><option value="yes">Sterilizzato/a</option><option value="no">Non sterilizzato/a</option><option value="unknown">Non noto</option></select></div>
+            <div class="s4"><label for="weight_kg">Peso (kg)</label><input type="number" id="weight_kg" name="weight_kg" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="s12"><label for="microchip">Microchip</label><input type="text" id="microchip" name="microchip" maxlength="30" inputmode="numeric" autocomplete="off"></div>
+            <div class="s12"><label for="notes">Note</label><textarea id="notes" name="notes" placeholder="Allergie, alimentazione, carattere…"></textarea></div>
+          </div>
+        </section>
+        <div class="actions-bar">
+          <button class="btn btn-primary" type="submit" id="save">Salva</button>
+          <span class="spacer"></span>
+          <button class="btn btn-danger" type="button" id="del" hidden>Elimina scheda</button>
+        </div>
+        <div id="msg2" hidden></div>
+      </form>
+
+      <!-- Documenti -->
+      <section class="panel" id="docsPanel" hidden style="margin-top:12px">
+        <span id="documenti"></span>
+        <h2>Documenti</h2>
+        <p class="hint-small" style="margin-top:0">Libretto sanitario, esami, certificati… I documenti che carichi sono visibili alle cliniche collegate.</p>
+        <div id="docs"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), msg2 = VR.$('#msg2'), loading = VR.$('#loading'), form = VR.$('#form');
+    VR.fillSpecies(VR.$('#species'));
+    let ctx;
+    try { ctx = await VR.loadOwnerContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const id = VR.param('id');
+    let pet = null;
+
+    const showAge = () => { const a = VR.age(VR.$('#birth_date').value); VR.$('#ageHint').textContent = a ? 'Età: ' + a : ''; };
+    VR.$('#birth_date').addEventListener('change', showAge);
+
+    const renderPhoto = async () => {
+      const url = await VR.fileUrl(pet?.photo_path);
+      VR.$('#photo').innerHTML = VR.avatarHtml(pet, url, 'photo');
+      VR.$('#photoLabel').textContent = pet?.photo_path ? 'Cambia foto' : 'Carica una foto';
+    };
+
+    if (id) {
+      const { data, error } = await VR.sb.from('pets').select('*').eq('id', id).eq('owner_user_id', ctx.uid).maybeSingle();
+      if (error || !data) { VR.hide(loading); VR.say(msg, error ? VR.errorText(error) : 'Animale non trovato.', 'error'); return; }
+      pet = data;
+      if (pet.species && !VR.SPECIES.includes(pet.species)) VR.$('#species').insertAdjacentHTML('beforeend', `<option>${VR.esc(pet.species)}</option>`);
+      VR.fillForm(form, pet); showAge();
+      VR.$('#title').textContent = pet.name; document.title = pet.name + ' – FurrFinder';
+      VR.$('#save').textContent = 'Salva modifiche';
+      VR.show(VR.$('#photoPanel')); renderPhoto();
+      VR.show(VR.$('#del'));
+    }
+    VR.hide(loading);
+    VR.show(VR.$('#page'));
+    if (!id) { VR.$('#name').focus(); }
+
+    // ---------- Salvataggio ----------
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault(); VR.hide(msg2);
+      const v = VR.formValues(form);
+      if (!v.name) { VR.say(msg2, 'Inserisci il nome dell\'animale.', 'error'); return; }
+      if (v.weight_kg !== null && (isNaN(v.weight_kg) || v.weight_kg < 0)) { VR.say(msg2, 'Il peso non è valido.', 'error'); return; }
+      if (v.microchip) v.microchip = v.microchip.replace(/\s+/g, '');
+      const b = VR.$('#save'); b.disabled = true;
+      if (pet) {
+        const { error } = await VR.sb.from('pets').update(v).eq('id', pet.id);
+        b.disabled = false;
+        if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
+        pet = { ...pet, ...v }; VR.$('#title').textContent = v.name;
+        VR.say(msg2, 'Modifiche salvate.', 'ok');
+      } else {
+        const { data, error } = await VR.sb.from('pets').insert({ ...v, owner_user_id: ctx.uid }).select('id').single();
+        if (error) { b.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return; }
+        if (!ctx.profile.is_owner) await VR.sb.from('profiles').update({ is_owner: true }).eq('id', ctx.uid);
+        location.replace('animale.html?id=' + data.id);
+      }
+    });
+
+    VR.$('#del').addEventListener('click', async () => {
+      if (!confirm(`Eliminare la scheda di ${pet.name}? Le cliniche collegate conserveranno le visite già registrate.`)) return;
+      const { error } = await VR.sb.from('pets').update({ deleted_at: new Date().toISOString() }).eq('id', pet.id);
+      if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
+      location.replace('./');
+    });
+
+    VR.$('#photoFile').addEventListener('change', async (ev) => {
+      const file = ev.target.files[0]; ev.target.value = '';
+      if (!file || !pet) return;
+      VR.$('#photoLabel').textContent = 'Caricamento…';
+      try {
+        const blob = await VR.resizeImage(file);
+        const path = `${pet.id}/foto-${Date.now()}.jpg`;
+        const up = await VR.sb.storage.from('pet-files').upload(path, blob, { contentType: 'image/jpeg' });
+        if (up.error) throw up.error;
+        const old = pet.photo_path;
+        const { error } = await VR.sb.from('pets').update({ photo_path: path }).eq('id', pet.id);
+        if (error) throw error;
+        pet.photo_path = path;
+        if (old) VR.sb.storage.from('pet-files').remove([old]);
+      } catch (e) { VR.say(msg2, 'Foto non caricata: ' + VR.errorText(e), 'error'); }
+      renderPhoto();
+    });
+
+    if (!pet) return;
+
+    // ---------- Veterinari ----------
+    const vetsMsg = VR.$('#vetsMsg');
+    let clinics = [];
+    const loadVets = async () => {
+      const { data, error } = await VR.sb.rpc('owner_pet_clinics', { p_pet: pet.id });
+      if (error) { VR.say(vetsMsg, VR.errorText(error), 'error'); return; }
+      clinics = data || [];
+      VR.$('#vets').innerHTML = clinics.length ? clinics.map((c) => `
+        <div class="member ${c.status !== 'active' ? 'is-suspended' : ''}">
+          <div class="member-main">
+            <strong>${VR.esc(c.name)}</strong>
+            <span>${VR.esc([c.header_address, c.header_phone].filter(Boolean).join(' · '))}${c.status !== 'active' ? ' · <b>condivisione revocata</b>' : ''}</span>
+          </div>
+          <div class="member-ctl">
+            ${c.status === 'active'
+              ? `<a class="btn btn-primary btn-small" href="prenota.html?animale=${pet.id}&clinica=${c.clinic_id}">Chiedi appuntamento</a>
+                 <button type="button" class="btn btn-ghost btn-small" data-revoke="${c.clinic_id}" data-name="${VR.esc(c.name)}">Revoca</button>`
+              : `<button type="button" class="btn btn-ghost btn-small" data-activate="${c.clinic_id}">Condividi di nuovo</button>`}
+          </div>
+        </div>`).join('') : '<p class="muted" style="margin:0 0 1rem">Nessuna clinica collegata.</p>';
+      VR.show(VR.$('#vetsPanel'));
+    };
+    VR.$('#vets').addEventListener('click', async (ev) => {
+      const r = ev.target.closest('[data-revoke]'), a = ev.target.closest('[data-activate]');
+      VR.hide(vetsMsg);
+      if (r) {
+        if (!confirm(`Revocare la condivisione con ${r.dataset.name}? La clinica non vedrà più la scheda né i nuovi documenti, ma conserverà le visite già fatte.`)) return;
+        const { error } = await VR.sb.from('pet_access').update({ status: 'revoked' }).eq('pet_id', pet.id).eq('clinic_id', r.dataset.revoke);
+        if (error) VR.say(vetsMsg, VR.errorText(error), 'error');
+        loadVets();
+      }
+      if (a) {
+        const { error } = await VR.sb.from('pet_access').update({ status: 'active' }).eq('pet_id', pet.id).eq('clinic_id', a.dataset.activate);
+        if (error) VR.say(vetsMsg, VR.errorText(error), 'error');
+        loadVets();
+      }
+    });
+
+    // Collegamento con codice
+    let found = null;
+    const confirmBox = VR.$('#linkConfirm');
+    VR.$('#code').addEventListener('input', () => { found = null; VR.hide(confirmBox); VR.$('#codeBtn').textContent = 'Cerca'; });
+    VR.$('#linkForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault(); VR.hide(vetsMsg);
+      const code = VR.$('#code').value.trim().toUpperCase();
+      if (!code) return;
+      const btn = VR.$('#codeBtn'); btn.disabled = true;
+      if (!found) {
+        const { data, error } = await VR.sb.rpc('clinic_by_code', { p_code: code });
+        btn.disabled = false;
+        if (error) { VR.say(vetsMsg, VR.errorText(error), 'error'); return; }
+        if (!data || !data.length) { VR.say(vetsMsg, 'Nessuna clinica con questo codice. Controlla di averlo scritto bene.', 'error'); return; }
+        found = data[0];
+        confirmBox.innerHTML = `Stai per condividere <strong>${VR.esc(pet.name)}</strong> con <strong>${VR.esc(found.name)}</strong>${found.header_address ? ' (' + VR.esc(found.header_address) + ')' : ''}. Premi <strong>Collega</strong> per confermare.`;
+        VR.show(confirmBox); btn.textContent = 'Collega';
+        return;
+      }
+      const { error } = await VR.sb.rpc('link_pet_to_clinic', { p_code: code, p_pet_id: pet.id });
+      btn.disabled = false;
+      if (error) { VR.say(vetsMsg, VR.errorText(error), 'error'); return; }
+      VR.$('#code').value = ''; found = null; VR.hide(confirmBox); btn.textContent = 'Cerca';
+      VR.say(vetsMsg, 'Fatto! La clinica ora vede la scheda del tuo animale.', 'ok');
+      loadVets();
+    });
+    await loadVets();
+
+    // ---------- Visite condivise ----------
+    const { data: visits } = await VR.sb.from('visits')
+      .select('id, clinic_id, visit_date, visit_kind, title, diagnosis, form_data')
+      .eq('pet_id', pet.id).order('visit_date', { ascending: false });
+    const cname = Object.fromEntries(clinics.map((c) => [c.clinic_id, c.name]));
+    if (visits && visits.length) {
+      VR.$('#visits').innerHTML = visits.map((x) => `
+        <li class="visit-row"><a href="visita.html?id=${x.id}">
+          <span class="visit-date">${VR.fmtDate(x.visit_date)}</span>
+          <div class="main">
+            <strong>${VR.esc(x.title || x.visit_kind || 'Visita')}</strong>
+            <span>${VR.esc(cname[x.clinic_id] || 'Clinica')}${x.diagnosis ? ' · ' + VR.esc(x.diagnosis.slice(0, 90)) : ''}</span>
+          </div>
+          <span class="pill">${VR.esc(x.visit_kind || 'Visita')}</span>
+        </a></li>`).join('');
+      VR.show(VR.$('#visits'));
+    } else VR.show(VR.$('#noVisits'));
+    VR.show(VR.$('#visitsPanel'));
+
+    // ---------- Promemoria e peso ----------
+    const { data: rems } = await VR.sb.from('reminders').select('title, due_date').eq('pet_id', pet.id).eq('status', 'open').order('due_date');
+    if (rems && rems.length) {
+      const t = new Date().toLocaleDateString('sv-SE');
+      VR.$('#rem').innerHTML = rems.map((r) => `<div class="rem-row"><div class="rem-main"><strong>${VR.esc(r.title)}</strong>
+        <span class="${r.due_date < t ? 'late' : ''}">${r.due_date < t ? 'Scaduto il ' : 'Entro il '}${new Date(r.due_date + 'T00:00:00').toLocaleDateString('it-IT')}</span></div></div>`).join('');
+      VR.show(VR.$('#remPanel'));
+    }
+    const wpts = (visits || []).map((x) => ({ d: x.visit_date, w: Number(x.form_data?.weight_kg) })).filter((p) => p.w > 0);
+    if (wpts.length) { VR.show(VR.$('#weightPanel')); VR.weightChart(VR.$('#weight'), wpts); }
+
+    // ---------- Documenti ----------
+    VR.show(VR.$('#docsPanel'));
+    VR.docsWidget({ el: VR.$('#docs'), petId: pet.id, clinicId: null, userId: ctx.uid, canEdit: true });
+  })();
+  </script>
+</body>
+</html>

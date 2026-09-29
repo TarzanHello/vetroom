@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Animale – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../js/documenti.js"></script>
+  <script src="../js/promemoria.js"></script>
+</head>
+<body data-shell="clinic" data-nav="animali">
+
+  <main class="wrap">
+    <a class="back" id="back" href="clienti.html">← Torna al proprietario</a>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <div class="page-head">
+        <div>
+          <h1 id="title">Nuovo animale</h1>
+          <p class="muted" id="ownerLine" style="margin:0"></p>
+        </div>
+      </div>
+
+      <section class="panel" id="pickOwner" hidden>
+        <h2>Di chi è l'animale?</h2>
+        <input type="search" id="ownerSearch" placeholder="Cerca il proprietario per cognome, nome o telefono" autocomplete="off">
+        <div class="picker-results" id="ownerResults"></div>
+        <p class="hint-small">Non è ancora registrato? <a href="cliente.html?nuovo=1&amp;poi=animale">Crea prima il proprietario</a>: subito dopo potrai aggiungere l'animale.</p>
+      </section>
+
+      <section class="panel" id="photoPanel" hidden>
+        <div class="photo-box">
+          <div id="photo"></div>
+          <div>
+            <label class="btn btn-ghost btn-small file-btn">
+              <input type="file" id="photoFile" accept="image/*">
+              <span id="photoLabel">Carica una foto</span>
+            </label>
+            <p class="hint-small">La foto viene ridotta automaticamente prima del caricamento.</p>
+          </div>
+        </div>
+      </section>
+
+      <form id="form" novalidate>
+        <section class="panel">
+          <h2>Scheda</h2>
+          <div class="grid">
+            <div><label for="name">Nome</label><input type="text" id="name" name="name" required autocomplete="off"></div>
+            <div><label for="species">Specie</label><select id="species" name="species"></select></div>
+            <div><label for="breed">Razza</label><input type="text" id="breed" name="breed" autocomplete="off"></div>
+            <div><label for="birth_date">Data di nascita</label><input type="date" id="birth_date" name="birth_date">
+              <p class="hint-small" id="ageHint"></p></div>
+            <div class="s4"><label for="sex">Sesso</label>
+              <select id="sex" name="sex"><option value="">—</option><option value="M">Maschio</option><option value="F">Femmina</option><option value="U">Non noto</option></select></div>
+            <div class="s4"><label for="neuter_status">Sterilizzazione</label>
+              <select id="neuter_status" name="neuter_status"><option value="">—</option><option value="yes">Sterilizzato/a</option><option value="no">Non sterilizzato/a</option><option value="unknown">Non noto</option></select></div>
+            <div class="s4"><label for="weight_kg">Peso (kg)</label><input type="number" id="weight_kg" name="weight_kg" step="0.01" min="0" max="2000" inputmode="decimal"></div>
+            <div class="s12"><label for="microchip">Microchip</label><input type="text" id="microchip" name="microchip" maxlength="30" autocomplete="off" inputmode="numeric"></div>
+            <div class="s12"><label for="notes">Note</label><textarea id="notes" name="notes" placeholder="Allergie, carattere, indicazioni utili…"></textarea></div>
+          </div>
+        </section>
+
+        <div class="actions-bar">
+          <button class="btn btn-primary" type="submit" id="save">Salva animale</button>
+          <span class="spacer"></span>
+          <button class="btn btn-danger" type="button" id="del" hidden>Elimina scheda</button>
+        </div>
+        <div id="msg2" hidden></div>
+      </form>
+
+      <section class="panel" id="visitsPanel" hidden style="margin-top:1.25rem">
+        <div class="page-head" style="margin-bottom:1rem">
+          <h2 style="margin:0">Visite</h2>
+          <div class="actions-bar">
+            <a class="btn btn-ghost btn-small" id="newAppt" href="#">Nuovo appuntamento</a>
+            <a class="btn btn-primary btn-small" id="newVisit" href="#" hidden>Nuova visita</a>
+          </div>
+        </div>
+        <ul class="rows" id="visits" hidden></ul>
+        <p class="muted" id="noVisits" hidden style="margin:0">Nessuna visita registrata.</p>
+      </section>
+
+      <section class="panel" id="remPanel" hidden>
+        <h2>Promemoria e richiami</h2>
+        <div id="rem"></div>
+      </section>
+
+      <section class="panel" id="weightPanel" hidden>
+        <h2>Andamento del peso</h2>
+        <div id="weight"></div>
+      </section>
+
+      <section class="panel" id="docsPanel" hidden>
+        <h2>Documenti</h2>
+        <div id="docs"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), msg2 = VR.$('#msg2'), loading = VR.$('#loading');
+    const form = VR.$('#form');
+    VR.fillSpecies(VR.$('#species'));
+
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+
+    const id = VR.param('id');
+    let clientId = VR.param('cliente');
+    let pet = null;
+
+    const showAge = () => {
+      const a = VR.age(VR.$('#birth_date').value);
+      VR.$('#ageHint').textContent = a ? 'Età: ' + a : '';
+    };
+    VR.$('#birth_date').addEventListener('change', showAge);
+
+    const renderPhoto = async () => {
+      const url = await VR.fileUrl(pet?.photo_path);
+      VR.$('#photo').innerHTML = VR.avatarHtml(pet || { name: VR.$('#name').value }, url, 'photo');
+      VR.$('#photoLabel').textContent = pet?.photo_path ? 'Cambia foto' : 'Carica una foto';
+    };
+
+    if (id) {
+      const { data, error } = await VR.sb.from('pets').select('*').eq('id', id).maybeSingle();
+      if (error || !data) { VR.hide(loading); VR.say(msg, error ? VR.errorText(error) : 'Animale non trovato.', 'error'); return; }
+      pet = data;
+      // Cliente di riferimento in questa clinica
+      const { data: acc } = await VR.sb.from('pet_access')
+        .select('client_id, clients(first_name, last_name, phone, email)')
+        .eq('pet_id', id).eq('clinic_id', ctx.clinicId).maybeSingle();
+      clientId = acc?.client_id || null;
+      if (acc?.clients) VR.$('#ownerLine').textContent = 'Proprietario: ' + VR.clientName(acc.clients);
+      if (pet.owner_user_id) VR.$('#ownerLine').textContent += ' · iscritto a Vetroom';
+
+      // Se la select non ha la specie salvata (es. dati importati), aggiungila
+      if (pet.species && !VR.SPECIES.includes(pet.species)) {
+        VR.$('#species').insertAdjacentHTML('beforeend', `<option>${VR.esc(pet.species)}</option>`);
+      }
+      VR.fillForm(form, pet);
+      showAge();
+      VR.$('#title').textContent = pet.name;
+      document.title = pet.name + ' – Vetroom';
+      VR.$('#save').textContent = 'Salva modifiche';
+      VR.show(VR.$('#photoPanel')); renderPhoto();
+      if (ctx.isVet) VR.show(VR.$('#visitsPanel'));
+      if (!pet.owner_user_id) VR.show(VR.$('#del'));
+
+      // Visite di questa clinica
+      VR.$('#newAppt').href = 'agenda.html?animale=' + pet.id;
+      if (ctx.isVet) { VR.$('#newVisit').href = 'visita.html?animale=' + pet.id; VR.show(VR.$('#newVisit')); }
+      const { data: visits } = await VR.sb.from('visits')
+        .select('id, visit_date, visit_kind, title, diagnosis, form_data')
+        .eq('pet_id', pet.id).eq('clinic_id', ctx.clinicId)
+        .order('visit_date', { ascending: false });
+      if (visits && visits.length) {
+        VR.$('#visits').innerHTML = visits.map((x) => `
+          <li class="visit-row"><a href="visita.html?id=${x.id}">
+            <span class="visit-date">${new Date(x.visit_date + 'T00:00:00').toLocaleDateString('it-IT')}</span>
+            <div class="main">
+              <strong>${VR.esc(x.title || x.visit_kind || 'Visita')}</strong>
+              <span>${VR.esc(x.diagnosis ? 'Diagnosi: ' + x.diagnosis.slice(0, 120) : 'Nessuna diagnosi indicata')}</span>
+            </div>
+            <span class="pill">${VR.esc(x.visit_kind || 'Visita')}</span>
+          </a></li>`).join('');
+        VR.show(VR.$('#visits'));
+      } else VR.show(VR.$('#noVisits'));
+
+      // Documenti dell'animale
+      VR.show(VR.$('#docsPanel'));
+      // Promemoria e peso
+      VR.show(VR.$('#remPanel'));
+      VR.remindersWidget({ el: VR.$('#rem'), petId: pet.id, clinicId: ctx.clinicId, clientId, clinicName: ctx.clinic.name || '',
+        petName: pet.name, client: acc?.clients || null, userId: ctx.session.user.id });
+      if (ctx.isVet) {
+        VR.show(VR.$('#weightPanel'));
+        VR.weightChart(VR.$('#weight'), (visits || []).map((x) => ({ d: x.visit_date, w: Number(x.form_data?.weight_kg) })));
+      }
+      VR.docsWidget({ el: VR.$('#docs'), petId: pet.id, clinicId: ctx.clinicId,
+                      userId: ctx.session.user.id, canEdit: true });
+    } else if (clientId) {
+      const { data: c } = await VR.sb.from('clients').select('first_name, last_name')
+        .eq('id', clientId).eq('clinic_id', ctx.clinicId).maybeSingle();
+      if (!c) { VR.hide(loading); VR.say(msg, 'Proprietario non trovato.', 'error'); return; }
+      VR.$('#ownerLine').textContent = 'Proprietario: ' + VR.clientName(c);
+    } else {
+      // Nuovo animale senza proprietario scelto: prima si sceglie il proprietario
+      const cl = await VR.fetchAll(() => VR.sb.from('clients').select('id, first_name, last_name, phone, email')
+        .eq('clinic_id', ctx.clinicId).order('last_name').order('id')).catch(() => []);
+      const all = (cl || []).map((c) => ({ ...c, text: [c.first_name, c.last_name, c.phone, c.email].filter(Boolean).join(' ').toLowerCase() }));
+      VR.show(VR.$('#pickOwner')); VR.hide(form);
+      const res = VR.$('#ownerResults');
+      VR.$('#ownerSearch').addEventListener('input', (ev) => {
+        const terms = ev.target.value.toLowerCase().split(/\s+/).filter(Boolean);
+        const found = terms.length ? all.filter((c) => terms.every((t) => c.text.includes(t))).slice(0, 8) : [];
+        res.innerHTML = found.map((c) => `<button type="button" data-id="${c.id}">${VR.esc(VR.clientName(c))}${c.phone ? ' · ' + VR.esc(c.phone) : ''}</button>`).join('')
+          || (terms.length ? '<p class="hint-small">Nessun proprietario trovato.</p>' : '');
+      });
+      res.addEventListener('click', (ev) => {
+        const b = ev.target.closest('button[data-id]'); if (!b) return;
+        clientId = b.dataset.id;
+        VR.$('#ownerLine').textContent = 'Proprietario: ' + b.textContent.split(' · ')[0];
+        VR.$('#back').href = 'cliente.html?id=' + encodeURIComponent(clientId);
+        VR.hide(VR.$('#pickOwner')); VR.show(form); VR.$('#name').focus();
+      });
+      setTimeout(() => VR.$('#ownerSearch').focus(), 50);
+    }
+
+    if (clientId) VR.$('#back').href = 'cliente.html?id=' + encodeURIComponent(clientId);
+    VR.hide(loading);
+    VR.show(VR.$('#page'));
+    if (!id && clientId) VR.$('#name').focus();
+
+    // Salvataggio
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      VR.hide(msg2);
+      const v = VR.formValues(form);
+      if (!v.name) { VR.say(msg2, 'Inserisci il nome dell\'animale.', 'error'); return; }
+      if (v.weight_kg !== null && (isNaN(v.weight_kg) || v.weight_kg < 0)) { VR.say(msg2, 'Il peso non è valido.', 'error'); return; }
+      if (v.microchip) v.microchip = v.microchip.replace(/\s+/g, '');
+
+      const btn = VR.$('#save'); btn.disabled = true;
+      if (id) {
+        const { error } = await VR.sb.from('pets').update(v).eq('id', id);
+        btn.disabled = false;
+        if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
+        pet = { ...pet, ...v };
+        VR.$('#title').textContent = v.name;
+        VR.say(msg2, 'Modifiche salvate.', 'ok');
+      } else {
+        const { data, error } = await VR.sb.from('pets')
+          .insert({ ...v, created_by_clinic_id: ctx.clinicId }).select('id').single();
+        if (error) { btn.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return; }
+        const { error: e2 } = await VR.sb.from('pet_access')
+          .insert({ pet_id: data.id, clinic_id: ctx.clinicId, client_id: clientId });
+        if (e2) { btn.disabled = false; VR.say(msg2, 'Animale creato, ma non collegato al proprietario: ' + VR.errorText(e2), 'error'); return; }
+        location.replace('animale.html?id=' + data.id);
+      }
+    });
+
+    // Foto
+    VR.$('#photoFile').addEventListener('change', async (ev) => {
+      const file = ev.target.files[0];
+      ev.target.value = '';
+      if (!file || !pet) return;
+      VR.hide(msg2);
+      VR.$('#photoLabel').textContent = 'Caricamento…';
+      try {
+        const blob = await VR.resizeImage(file);
+        const path = `${pet.id}/foto-${Date.now()}.jpg`;
+        const { error } = await VR.sb.storage.from('pet-files').upload(path, blob, { contentType: 'image/jpeg' });
+        if (error) throw error;
+        const old = pet.photo_path;
+        const { error: e2 } = await VR.sb.from('pets').update({ photo_path: path }).eq('id', pet.id);
+        if (e2) throw e2;
+        pet.photo_path = path;
+        if (old) VR.sb.storage.from('pet-files').remove([old]); // pulizia, senza attendere
+        await renderPhoto();
+      } catch (e) {
+        VR.say(msg2, 'Foto non caricata: ' + VR.errorText(e), 'error');
+        renderPhoto();
+      }
+    });
+
+    // Eliminazione (solo schede non appartenenti a un proprietario iscritto)
+    VR.$('#del').addEventListener('click', async () => {
+      if (!confirm(`Eliminare la scheda di ${pet.name}? Le eventuali visite restano nell'archivio della clinica.`)) return;
+      const { error } = await VR.sb.from('pets').update({ deleted_at: new Date().toISOString() }).eq('id', pet.id);
+      if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
+      location.replace(clientId ? 'cliente.html?id=' + clientId : 'clienti.html');
+    });
+  })();
+  </script>
+</body>
+</html>

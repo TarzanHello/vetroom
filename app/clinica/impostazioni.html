@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Opzioni – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/layout.js"></script>
+  <script src="../js/clinica.js"></script>
+  <script src="../vendor/jspdf-2.5.2.min.js"></script>
+  <script src="../js/pdf.js"></script>
+</head>
+<body data-shell="clinic" data-nav="impostazioni">
+
+  <main class="wrap">
+    <h1>Opzioni della clinica</h1>
+    <p class="muted">Questi dati compaiono nell'intestazione dei referti PDF.</p>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+    <p class="readonly-note" id="readonly" hidden>Solo l'amministratore della clinica può modificare queste impostazioni.</p>
+
+    <form id="form" hidden novalidate>
+      <section class="panel">
+        <h2>Clinica</h2>
+        <div class="grid">
+          <div class="s12"><label for="name">Nome della clinica (usato nell'app)</label><input type="text" id="name" name="name" required></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Intestazione dei referti</h2>
+        <div class="grid">
+          <div class="s12"><label for="header_name">Nome in intestazione</label><input type="text" id="header_name" name="header_name" placeholder="Es. Ambulatorio Veterinario San Francesco"></div>
+          <div class="s12"><label for="header_title">Sottotitolo</label><input type="text" id="header_title" name="header_title" placeholder="Es. Dr. Mario Rossi – Medico Veterinario"></div>
+          <div class="s12"><label for="header_address">Indirizzo</label><input type="text" id="header_address" name="header_address" placeholder="Via, civico, CAP, città (provincia)"></div>
+          <div><label for="header_phone">Telefono</label><input type="tel" id="header_phone" name="header_phone"></div>
+          <div><label for="header_email">Email</label><input type="email" id="header_email" name="header_email"></div>
+          <div><label for="header_piva">Partita IVA</label><input type="text" id="header_piva" name="header_piva" maxlength="16"></div>
+          <div><label for="header_albo">Iscrizione all'Albo</label><input type="text" id="header_albo" name="header_albo" placeholder="Es. Roma n. 1234"></div>
+        </div>
+      </section>
+
+      <div class="actions-bar"><button class="btn btn-primary" type="submit" id="save">Salva impostazioni</button></div>
+      <div id="msg2" hidden></div>
+    </form>
+
+    <section class="panel" id="stylePanel" hidden style="margin-top:12px">
+      <h2>Stile del referto</h2>
+      <label>Colore</label>
+      <div class="swatches" id="swatches"></div>
+      <div class="grid" style="margin-top:12px">
+        <div><label for="pdfStyle">Sezioni</label>
+          <select id="pdfStyle"><option value="lines">Con linee (pulito)</option><option value="boxed">In riquadri (come il Vetroom originale)</option></select></div>
+        <div><label for="pdfHeader">Intestazione</label>
+          <select id="pdfHeader"><option value="split">Logo a sinistra, dati a destra</option><option value="center">Logo e dati al centro</option></select></div>
+      </div>
+      <div class="lh-box">
+        <label>Carta intestata (facoltativa)</label>
+        <p class="hint-small" style="margin-top:0">Carica un'immagine A4 verticale (PNG o JPG) della vostra carta intestata: il referto verrà stampato sopra, al posto dell'intestazione di Vetroom. Indica quanto spazio lasciare libero in alto e in basso per non coprire la grafica.</p>
+        <div class="bg-row">
+          <div class="bg-thumb" id="lhThumb"></div>
+          <div style="flex:1;min-width:220px">
+            <div class="actions-bar">
+              <label class="btn btn-ghost btn-small file-btn"><input type="file" id="lhFile" accept="image/png,image/jpeg"><span id="lhLabel">Carica carta intestata</span></label>
+              <button class="btn btn-danger btn-small" type="button" id="lhRemove" hidden>Rimuovi</button>
+            </div>
+            <div class="grid" id="lhMargins" style="margin-top:10px">
+              <div><label for="lhTop">Spazio libero in alto (mm)</label><input type="number" id="lhTop" min="10" max="150" step="1"></div>
+              <div><label for="lhBottom">Spazio libero in basso (mm)</label><input type="number" id="lhBottom" min="10" max="120" step="1"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="actions-bar" style="margin-top:12px">
+        <button class="btn btn-ghost btn-small" type="button" id="stylePreview">Anteprima PDF</button>
+        <button class="btn btn-primary btn-small" type="button" id="styleSave">Salva stile</button>
+      </div>
+      <div id="styleMsg" hidden></div>
+    </section>
+
+    <section class="panel" style="margin-top:12px">
+      <div class="page-head" style="margin:0">
+        <div><h2 style="margin:0 0 .3rem">Backup ed esportazione</h2>
+        <p class="muted" style="margin:0" id="lastBackup">Scarica una copia completa dei dati: Excel, documenti e foto.</p></div>
+        <a class="btn btn-primary btn-small" href="backup.html">Backup</a>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top:12px">
+      <div class="page-head" style="margin:0">
+        <div><h2 style="margin:0 0 .3rem">Moduli di visita</h2>
+        <p class="muted" style="margin:0">Campi personalizzati per ogni tipo di visita e loro disposizione nel referto.</p></div>
+        <a class="btn btn-primary btn-small" href="moduli.html">Gestisci moduli</a>
+      </div>
+    </section>
+
+    <section class="panel danger-zone" id="dangerZone" hidden>
+      <h2>Account e clinica</h2>
+      <div id="leaveBox">
+        <p class="hint-small" style="margin-top:0">Esci dalla clinica: non vedrai più i suoi dati. Le visite che hai scritto restano alla clinica.</p>
+        <button class="btn btn-ghost" type="button" id="leave">Esci dalla clinica</button>
+      </div>
+      <div id="deleteBox" hidden style="margin-top:14px">
+        <p class="hint-small" style="margin-top:0">Elimina la clinica: cancella per sempre proprietari, animali creati dalla clinica, visite, referti, appuntamenti e documenti. <b>Scarica prima il backup.</b> Gli animali dei proprietari iscritti restano nei loro libretti.</p>
+        <button class="btn btn-danger" type="button" id="delClinic">Elimina la clinica</button>
+      </div>
+      <div id="dzMsg" hidden></div>
+    </section>
+
+    <section class="panel" id="images" hidden>
+      <h2>Logo e timbro</h2>
+      <p class="muted">Meglio un'immagine PNG con sfondo trasparente. Il timbro compare accanto alla firma.</p>
+      <div class="grid">
+        <div>
+          <label>Logo</label>
+          <div class="asset-box" id="logoBox"></div>
+          <div class="actions-bar" style="margin-top:.6rem">
+            <label class="btn btn-ghost btn-small file-btn"><input type="file" accept="image/png,image/jpeg" data-kind="logo"><span>Carica logo</span></label>
+            <button type="button" class="btn btn-danger btn-small" data-remove="logo" hidden>Rimuovi</button>
+          </div>
+        </div>
+        <div>
+          <label>Timbro o firma</label>
+          <div class="asset-box" id="stampBox"></div>
+          <div class="actions-bar" style="margin-top:.6rem">
+            <label class="btn btn-ghost btn-small file-btn"><input type="file" accept="image/png,image/jpeg" data-kind="stamp"><span>Carica timbro</span></label>
+            <button type="button" class="btn btn-danger btn-small" data-remove="stamp" hidden>Rimuovi</button>
+          </div>
+        </div>
+      </div>
+      <div id="msg3" hidden></div>
+    </section>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), msg2 = VR.$('#msg2'), msg3 = VR.$('#msg3'), loading = VR.$('#loading'), form = VR.$('#form');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const isAdmin = ctx.role === 'admin';
+    const lb = localStorage.getItem('vetroom_last_backup_' + ctx.clinicId);
+    if (lb) VR.$('#lastBackup').textContent = 'Ultimo backup da questo dispositivo: ' + new Date(lb).toLocaleDateString('it-IT') + '.';
+
+    const { data: clinic, error } = await VR.sb.from('clinics').select('*').eq('id', ctx.clinicId).single();
+    VR.hide(loading);
+    if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+    VR.fillForm(form, clinic);
+    VR.show(form); VR.show(VR.$('#images'));
+    if (!isAdmin) {
+      VR.show(VR.$('#readonly'));
+      [...form.elements].forEach((el) => el.disabled = true);
+      document.querySelectorAll('#images input, #images button').forEach((el) => el.disabled = true);
+    }
+
+    // ---------- Stile del referto ----------
+    const COLORS = [['#34AEA7', 'Verde acqua'], ['#0f766e', 'Verde petrolio'], ['#033860', 'Blu notte'], ['#4f46e5', 'Indaco'],
+                    ['#059669', 'Smeraldo'], ['#e11d48', 'Rosa'], ['#334155', 'Ardesia']];
+    const ps = { accent: '#34AEA7', style: 'lines', header: 'split', ...(clinic.pdf_settings || {}) };
+    const sw = VR.$('#swatches');
+    const renderSw = () => {
+      const custom = !COLORS.some(([c]) => c.toLowerCase() === (ps.accent || '').toLowerCase());
+      sw.innerHTML = COLORS.map(([c, n]) => `<button type="button" class="swatch" data-c="${c}" title="${n}" aria-label="${n}" aria-pressed="${c.toLowerCase() === ps.accent.toLowerCase()}" style="--c:${c}"></button>`).join('') +
+        `<label class="swatch swatch-custom" title="Colore personalizzato" aria-pressed="${custom}" style="--c:${custom ? ps.accent : '#fff'}"><input type="color" id="swCustom" value="${ps.accent}">+</label>`;
+    };
+    renderSw();
+    sw.addEventListener('click', (ev) => { const b = ev.target.closest('[data-c]'); if (!b) return; ps.accent = b.dataset.c; renderSw(); });
+    sw.addEventListener('input', (ev) => { if (ev.target.id === 'swCustom') { ps.accent = ev.target.value; renderSw(); } });
+    VR.$('#pdfStyle').value = ps.style; VR.$('#pdfHeader').value = ps.header;
+    VR.$('#pdfStyle').addEventListener('change', (e) => ps.style = e.target.value);
+    VR.$('#pdfHeader').addEventListener('change', (e) => ps.header = e.target.value);
+    // Carta intestata
+    ps.lh_top = ps.lh_top ?? 45; ps.lh_bottom = ps.lh_bottom ?? 25;
+    VR.$('#lhTop').value = ps.lh_top; VR.$('#lhBottom').value = ps.lh_bottom;
+    VR.$('#lhTop').addEventListener('input', (e) => ps.lh_top = Number(e.target.value) || 45);
+    VR.$('#lhBottom').addEventListener('input', (e) => ps.lh_bottom = Number(e.target.value) || 25);
+    const renderLh = async () => {
+      const url = ps.letterhead_path ? await VR.fileUrl(ps.letterhead_path, 'clinic-assets') : null;
+      VR.$('#lhThumb').innerHTML = url ? `<img src="${VR.esc(url)}" alt="">` : '<span class="muted">Nessuna</span>';
+      (ps.letterhead_path ? VR.show : VR.hide)(VR.$('#lhRemove'));
+      (ps.letterhead_path ? VR.show : VR.hide)(VR.$('#lhMargins'));
+      VR.$('#lhLabel').textContent = ps.letterhead_path ? 'Cambia carta intestata' : 'Carica carta intestata';
+    };
+    renderLh();
+    VR.$('#lhFile').addEventListener('change', async (ev) => {
+      const file = ev.target.files[0]; ev.target.value = '';
+      if (!file) return;
+      VR.$('#lhLabel').textContent = 'Caricamento…';
+      try {
+        const isPng = file.type === 'image/png';
+        const blob = await VR.resizeImage(file, 2000, 0.88, isPng ? 'image/png' : 'image/jpeg');
+        const path = `${ctx.clinicId}/carta-intestata-${Date.now()}.${isPng ? 'png' : 'jpg'}`;
+        const up = await VR.sb.storage.from('clinic-assets').upload(path, blob, { contentType: isPng ? 'image/png' : 'image/jpeg' });
+        if (up.error) throw up.error;
+        ps.letterhead_path = path;
+        VR.say(VR.$('#styleMsg'), 'Carta intestata caricata: controlla l\'anteprima e premi "Salva stile".', 'info');
+      } catch (e) { VR.say(VR.$('#styleMsg'), 'Immagine non caricata: ' + VR.errorText(e), 'error'); }
+      renderLh();
+    });
+    VR.$('#lhRemove').addEventListener('click', () => { ps.letterhead_path = null; renderLh(); });
+
+    VR.show(VR.$('#stylePanel'));
+    if (!isAdmin) { VR.hide(VR.$('#styleSave')); document.querySelectorAll('#stylePanel .lh-box input, #stylePanel .lh-box button').forEach((x) => x.disabled = true); VR.$('#pdfStyle').disabled = true; VR.$('#pdfHeader').disabled = true; sw.style.pointerEvents = 'none'; }
+    VR.$('#stylePreview').addEventListener('click', async (ev) => {
+      const b = ev.target; b.disabled = true;
+      try {
+        const doc = await VR.samplePdf({ clinic: { ...clinic, ...VR.formValues(form), pdf_settings: { ...ps } }, vetName: VR.firstName(ctx.profile, ctx.session) });
+        window.open(doc.output('bloburl'), '_blank');
+      } catch (e) { VR.say(VR.$('#styleMsg'), 'Anteprima non riuscita: ' + VR.errorText(e), 'error'); }
+      b.disabled = false;
+    });
+    VR.$('#styleSave').addEventListener('click', async (ev) => {
+      const b = ev.target; b.disabled = true;
+      const next = { ...(clinic.pdf_settings || {}), accent: ps.accent, style: ps.style, header: ps.header,
+                     letterhead_path: ps.letterhead_path || null, lh_top: ps.lh_top, lh_bottom: ps.lh_bottom };
+      const { error } = await VR.sb.from('clinics').update({ pdf_settings: next }).eq('id', ctx.clinicId);
+      b.disabled = false;
+      if (error) { VR.say(VR.$('#styleMsg'), VR.errorText(error), 'error'); return; }
+      clinic.pdf_settings = next;
+      VR.say(VR.$('#styleMsg'), 'Stile salvato: i prossimi referti useranno queste impostazioni.', 'ok');
+    });
+
+    // ---------- Esci / elimina la clinica ----------
+    VR.show(VR.$('#dangerZone'));
+    if (isAdmin) VR.show(VR.$('#deleteBox'));
+    VR.$('#leave').addEventListener('click', async () => {
+      if (!confirm('Uscire dalla clinica? Per rientrare servirà un nuovo invito.')) return;
+      const { error } = await VR.sb.from('clinic_members').delete().eq('clinic_id', ctx.clinicId).eq('user_id', ctx.session.user.id);
+      if (error) { VR.say(VR.$('#dzMsg'), VR.errorText(error), 'error'); return; }
+      localStorage.removeItem(VR.CLINIC_KEY); location.replace('./');
+    });
+    VR.$('#delClinic').addEventListener('click', async (ev) => {
+      const m = VR.$('#dzMsg');
+      const t = prompt(`Per eliminare definitivamente "${clinic.name}" e tutti i suoi dati, scrivi il nome della clinica esattamente com'è:`);
+      if (t === null) return;
+      if (t.trim() !== clinic.name.trim()) { VR.say(m, 'Il nome non corrisponde: la clinica non è stata eliminata.', 'error'); return; }
+      const b = ev.currentTarget; b.disabled = true; VR.say(m, 'Eliminazione in corso…', 'info');
+      try {
+        // file della clinica (documenti e immagini)
+        const docs = await VR.fetchAll(() => VR.sb.from('documents').select('storage_path').eq('clinic_id', ctx.clinicId).order('id'));
+        const paths = docs.map((d) => d.storage_path);
+        for (let i = 0; i < paths.length; i += 100) await VR.sb.storage.from('pet-files').remove(paths.slice(i, i + 100));
+        const { data: assets } = await VR.sb.storage.from('clinic-assets').list(ctx.clinicId, { limit: 1000 });
+        if (assets?.length) await VR.sb.storage.from('clinic-assets').remove(assets.map((a) => `${ctx.clinicId}/${a.name}`));
+        const { error } = await VR.sb.rpc('delete_my_clinic', { p_clinic: ctx.clinicId });
+        if (error) throw error;
+        localStorage.removeItem(VR.CLINIC_KEY); location.replace('./');
+      } catch (e) { VR.say(m, VR.errorText(e), 'error'); b.disabled = false; }
+    });
+
+    const COL = { logo: 'logo_path', stamp: 'stamp_path' };
+    const renderAsset = async (kind) => {
+      const path = clinic[COL[kind]];
+      const box = VR.$('#' + kind + 'Box');
+      const url = path ? await VR.fileUrl(path, 'clinic-assets') : null;
+      box.innerHTML = url ? `<img src="${VR.esc(url)}" alt="">` : '<span class="muted">Nessuna immagine</span>';
+      const rm = document.querySelector(`[data-remove="${kind}"]`);
+      (path && isAdmin ? VR.show : VR.hide)(rm);
+    };
+    renderAsset('logo'); renderAsset('stamp');
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      VR.hide(msg2);
+      const v = VR.formValues(form);
+      if (!v.name) { VR.say(msg2, 'Il nome della clinica è obbligatorio.', 'error'); return; }
+      const btn = VR.$('#save'); btn.disabled = true;
+      const { error } = await VR.sb.from('clinics').update(v).eq('id', ctx.clinicId);
+      btn.disabled = false;
+      if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
+      Object.assign(clinic, v);
+      VR.say(msg2, 'Impostazioni salvate.', 'ok');
+    });
+
+    VR.$('#images').addEventListener('change', async (ev) => {
+      const input = ev.target.closest('input[type=file]'); if (!input) return;
+      const file = input.files[0]; input.value = '';
+      if (!file) return;
+      const kind = input.dataset.kind;
+      VR.hide(msg3);
+      try {
+        const isPng = file.type === 'image/png';
+        const blob = await VR.resizeImage(file, 1000, 0.9, isPng ? 'image/png' : 'image/jpeg');
+        const path = `${ctx.clinicId}/${kind}-${Date.now()}.${isPng ? 'png' : 'jpg'}`;
+        const up = await VR.sb.storage.from('clinic-assets').upload(path, blob, { contentType: isPng ? 'image/png' : 'image/jpeg' });
+        if (up.error) throw up.error;
+        const old = clinic[COL[kind]];
+        const { error } = await VR.sb.from('clinics').update({ [COL[kind]]: path }).eq('id', ctx.clinicId);
+        if (error) throw error;
+        clinic[COL[kind]] = path;
+        if (old) VR.sb.storage.from('clinic-assets').remove([old]);
+        renderAsset(kind);
+      } catch (e) { VR.say(msg3, 'Immagine non caricata: ' + VR.errorText(e), 'error'); }
+    });
+
+    VR.$('#images').addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-remove]'); if (!b) return;
+      const kind = b.dataset.remove;
+      if (!confirm('Rimuovere questa immagine dai referti?')) return;
+      const old = clinic[COL[kind]];
+      const { error } = await VR.sb.from('clinics').update({ [COL[kind]]: null }).eq('id', ctx.clinicId);
+      if (error) { VR.say(msg3, VR.errorText(error), 'error'); return; }
+      clinic[COL[kind]] = null;
+      if (old) VR.sb.storage.from('clinic-assets').remove([old]);
+      renderAsset(kind);
+    });
+  })();
+  </script>
+</body>
+</html>
