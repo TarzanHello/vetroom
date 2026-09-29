@@ -1,0 +1,1300 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#033860" />
+
+  <title>Vetroom – Gestionale veterinario gratuito | La stanza digitale</title>
+  <meta name="description" content="Gestionale veterinario gratuito in cloud: cartella clinica, anagrafiche, agenda e PDF. In sviluppo il profilo sanitario del pet owner‑first, con consenso." />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <link rel="canonical" href="https://vetroom.it/" />
+
+  <!-- Favicons (mantieni i tuoi file) -->
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+  <!-- Open Graph -->
+  <meta property="og:locale" content="it_IT" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Vetroom – Gestionale veterinario gratuito in cloud" />
+  <meta property="og:description" content="Gestionale veterinario gratuito: cartella clinica, agenda, documenti e anagrafiche. In sviluppo il profilo sanitario del pet owner‑first." />
+  <meta property="og:url" content="https://vetroom.it/" />
+  <meta property="og:image" content="https://vetroom.it/assets/og-vetroom.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Vetroom – Gestionale veterinario gratuito in cloud" />
+  <meta name="twitter:description" content="Gestionale veterinario gratuito: cartella clinica, agenda, documenti e anagrafiche. In sviluppo il profilo sanitario del pet owner‑first." />
+  <meta name="twitter:image" content="https://vetroom.it/assets/og-vetroom.png" />
+
+  <!-- Preload logo -->
+  <link rel="preload" as="image" href="/app/img/logo-bianco.png" />
+
+  <style>
+    :root{
+      /* Palette richiesta */
+      --teal: #34AEA7;
+      --blue: #36A4E6;
+      --lav: #D4C5E2;
+      --coral: #FF5E5B;
+      --navy: #033860;
+
+      /* Neutri */
+      --bg: #ffffff;
+      --ink: var(--navy);
+      --muted: rgba(3,56,96,.72);
+      --muted2: rgba(3,56,96,.58);
+      --border: rgba(3,56,96,.12);
+      --shadow: 0 18px 60px rgba(3,56,96,.12);
+
+      --radius: 18px;
+      --radius2: 26px;
+      --max: 1120px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    html{scroll-behavior:smooth}
+    @media (prefers-reduced-motion: reduce){
+      html{scroll-behavior:auto}
+      *{transition:none !important; animation:none !important}
+    }
+
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      color: var(--ink);
+      line-height: 1.55;
+      background:
+        radial-gradient(1100px 680px at 12% 0%, rgba(54,164,230,.16), transparent 60%),
+        radial-gradient(900px 560px at 92% 10%, rgba(52,174,167,.14), transparent 60%),
+        radial-gradient(860px 520px at 60% 18%, rgba(212,197,226,.22), transparent 62%),
+        linear-gradient(180deg, #fff, #fff);
+    }
+
+    a{color:inherit; text-decoration:none}
+    a:hover{text-decoration:underline}
+
+    .container{max-width:var(--max); margin:0 auto; padding:0 20px}
+
+    .sr-only{
+      position:absolute !important;
+      width:1px; height:1px;
+      padding:0; margin:-1px;
+      overflow:hidden; clip:rect(0,0,0,0);
+      white-space:nowrap; border:0;
+    }
+
+    :focus-visible{
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(54,164,230,.20);
+      border-radius: 10px;
+    }
+
+    /* Header */
+    .site-header{
+      position: sticky;
+      top:0;
+      z-index: 50;
+      backdrop-filter: blur(10px);
+      background: rgba(255,255,255,.86);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-inner{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      padding: 12px 0;
+    }
+
+    /* ✅ FIX LOGO: crop intelligente per rimuovere lo spazio bianco */
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width: 180px;
+    }
+    .brand-logo{
+      width: 178px;
+      height: 42px;
+      border-radius: 12px;
+      overflow: hidden;
+      display:block;
+    }
+    .brand-logo img{
+      width: 100%;
+      height: 100%;
+      object-fit: cover;       /* taglia lo spazio vuoto */
+      object-position: center; /* centra il contenuto del logo */
+      display:block;
+    }
+
+    .nav{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content:flex-end;
+    }
+    .nav a{
+      font-weight: 850;
+      font-size: 14px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      color: rgba(3,56,96,.92);
+    }
+    .nav a:hover{ background: rgba(54,164,230,.10); text-decoration:none; }
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      padding: 12px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.78);
+      color: var(--ink);
+      font-weight: 950;
+      font-size: 14px;
+      cursor:pointer;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+      user-select:none;
+      white-space:nowrap;
+      appearance:none;
+      font-family: inherit;
+    }
+    .btn:hover{
+      transform: translateY(-1px);
+      background: rgba(255,255,255,.95);
+      border-color: rgba(3,56,96,.20);
+      text-decoration:none;
+    }
+    .btn.primary{
+      border: 0;
+      background: var(--navy);
+      color: #fff;
+      box-shadow: 0 16px 46px rgba(3,56,96,.20);
+    }
+    .btn.primary:hover{ box-shadow: 0 18px 54px rgba(3,56,96,.28); }
+
+    .btn.soft{
+      border-color: rgba(52,174,167,.35);
+      background: rgba(52,174,167,.10);
+    }
+    .btn.small{ padding: 10px 14px; border-radius: 12px; }
+
+    .nav-toggle{
+      display:none;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      color: var(--ink);
+      cursor:pointer;
+    }
+
+    /* Hero */
+    .hero{ padding: 72px 0 34px; }
+    .hero-grid{
+      display:grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap: 34px;
+      align-items:center;
+    }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(3,56,96,.12);
+      background: rgba(212,197,226,.26);
+      font-weight: 950;
+      font-size: 13px;
+      color: rgba(3,56,96,.88);
+    }
+    .badge .dot{
+      width:10px; height:10px; border-radius:50%;
+      background: var(--coral);
+      box-shadow: 0 0 0 5px rgba(255,94,91,.14);
+    }
+
+    h1{
+      margin: 16px 0 10px;
+      font-size: clamp(30px, 3.2vw, 48px);
+      line-height: 1.07;
+      letter-spacing: -0.7px;
+    }
+    .lead{
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 17px;
+      max-width: 64ch;
+    }
+    .lead strong{ color: rgba(3,56,96,.92); }
+
+    .cta-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 12px;
+      align-items:center;
+      margin-top: 16px;
+    }
+
+    .pills{
+      margin-top: 14px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.82);
+      color: rgba(3,56,96,.84);
+      font-weight: 950;
+      font-size: 12px;
+    }
+    .pill .k{
+      width:9px;height:9px;border-radius:50%;
+      background: var(--teal);
+      box-shadow: 0 0 0 4px rgba(52,174,167,.14);
+    }
+
+    .mini{
+      margin-top: 12px;
+      color: var(--muted2);
+      font-size: 13px;
+    }
+    .mini a{font-weight: 950; border-bottom: 1px solid rgba(3,56,96,.22); text-decoration:none}
+    .mini a:hover{border-bottom-color: rgba(3,56,96,.45)}
+
+    /* Preview card */
+    .preview{
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(255,255,255,.36);
+      border-radius: var(--radius2);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      position: relative;
+    }
+    .preview::before{
+      content:"";
+      position:absolute;
+      inset:-120px -120px auto auto;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle at 30% 30%, rgba(54,164,230,.22), transparent 60%);
+      transform: rotate(18deg);
+      pointer-events:none;
+    }
+    .preview-top{
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(3,56,96,.10);
+      background: linear-gradient(135deg, rgba(52,174,167,.14), rgba(212,197,226,.18));
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .dots{display:flex; gap:6px}
+    .dot-ui{width:10px;height:10px;border-radius:50%}
+    .dot-ui:nth-child(1){background: rgba(255,94,91,.72)}
+    .dot-ui:nth-child(2){background: rgba(54,164,230,.60)}
+    .dot-ui:nth-child(3){background: rgba(52,174,167,.60)}
+    .preview-top .title{
+      font-weight: 950;
+      font-size: 13px;
+      color: rgba(3,56,96,.88);
+      text-align:right;
+    }
+    .preview-body{padding: 16px}
+    .row{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding: 12px 12px;
+      border: 1px solid rgba(3,56,96,.10);
+      background: rgba(255,255,255,.86);
+      border-radius: 14px;
+    }
+    .row + .row{margin-top:10px}
+    .chip{
+      display:inline-flex; align-items:center; gap:8px;
+      font-weight: 950;
+      font-size: 12px;
+      color: rgba(3,56,96,.86);
+    }
+    .chip b{
+      width:10px;height:10px;border-radius:50%;
+      display:inline-block;
+      background: var(--blue);
+      box-shadow: 0 0 0 4px rgba(54,164,230,.12);
+    }
+    .meta{
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 850;
+      white-space: nowrap;
+      text-align:right;
+    }
+    .preview-note{
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    /* Sections */
+    main{ background: linear-gradient(180deg, rgba(255,255,255,0), rgba(54,164,230,.05)); }
+    section{ scroll-margin-top: 90px; }
+
+    .section{ padding: 54px 0; }
+    .section h2{
+      margin:0 0 12px;
+      font-size: 28px;
+      letter-spacing:-.3px;
+    }
+    .section p{
+      margin:0 0 18px;
+      color: var(--muted);
+      max-width: 78ch;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 18px;
+    }
+    .card{
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(255,255,255,.34);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 12px 40px rgba(3,56,96,.10);
+      min-height: 150px;
+    }
+    .card h3{
+      margin: 10px 0 6px;
+      font-size: 16px;
+      letter-spacing:-.2px;
+    }
+    .card p{margin:0; color: var(--muted); font-size: 14px; line-height:1.5}
+
+    .icon{
+      width: 40px; height: 40px;
+      border-radius: 14px;
+      border: 1px solid rgba(3,56,96,.10);
+      background: linear-gradient(135deg, rgba(212,197,226,.34), rgba(52,174,167,.12));
+      display:grid; place-items:center;
+    }
+    .icon svg{ width:22px; height:22px; }
+
+    .two-col{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items:start;
+      margin-top: 14px;
+    }
+    .panel{
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(255,255,255,.34);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 12px 40px rgba(3,56,96,.10);
+    }
+    .panel h3{margin:0 0 8px; font-size:16px; letter-spacing:-.2px}
+    .bullets{margin:0; padding-left:18px; color: var(--muted)}
+    .bullets li{margin:8px 0}
+
+    .callout{
+      margin-top: 18px;
+      border-radius: var(--radius2);
+      border: 1px solid rgba(3,56,96,.12);
+      background: rgba(52,174,167,.10);
+      padding: 22px;
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 18px;
+      align-items:center;
+    }
+    .callout h3{margin:0 0 6px; font-size: 20px; letter-spacing:-.2px}
+    .callout p{margin:0; color: var(--muted)}
+    .callout .actions{display:flex; justify-content:flex-end; flex-wrap:wrap; gap:10px}
+
+    /* FAQ (conversion) */
+    #faq .faq-list{ display:grid; gap:12px; margin-top:16px; }
+    #faq details{
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(255,255,255,.34);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      box-shadow: 0 10px 34px rgba(3,56,96,.08);
+    }
+    #faq summary{
+      cursor:pointer;
+      list-style:none;
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:14px;
+      font-weight: 950;
+      color: rgba(3,56,96,.92);
+    }
+    #faq summary::-webkit-details-marker{display:none}
+    #faq .cta-hint{
+      flex:0 0 auto;
+      font-size:12px;
+      font-weight: 950;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(3,56,96,.12);
+      background: rgba(54,164,230,.10);
+      color: rgba(3,56,96,.86);
+      white-space: nowrap;
+    }
+    #faq .faq-a{
+      margin-top: 10px;
+      color: rgba(3,56,96,.72);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    #faq .faq-a p{margin:10px 0 0}
+    #faq .faq-a p:first-child{margin-top:0}
+    #faq .faq-a a{
+      font-weight: 950;
+      text-decoration:none;
+      border-bottom: 1px solid rgba(3,56,96,.22);
+    }
+    #faq .faq-a a:hover{border-bottom-color: rgba(3,56,96,.45)}
+    #faq .faq-cta{
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(3,56,96,.10);
+      color: rgba(3,56,96,.78);
+    }
+
+    /* Modal */
+    .modal{position:fixed; inset:0; display:none; z-index:100; overflow-y:auto; -webkit-overflow-scrolling:touch;}
+    .modal.open{display:block}
+    .modal-backdrop{position:absolute; inset:0; background: rgba(3,56,96,.58); backdrop-filter: blur(6px);}
+    .modal-card{
+      position:relative;
+      max-width: 720px;
+      margin: 8vh auto 0;
+      max-height: calc(100vh - 24px);
+      display:flex;
+      flex-direction: column;
+      background: rgba(255,255,255,.97);
+      border: 1px solid rgba(255,255,255,.36);
+      border-radius: 22px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.30);
+      overflow:hidden;
+    }
+    .modal-head{
+      display:flex; justify-content:space-between; align-items:center;
+      padding: 18px;
+      border-bottom: 1px solid rgba(3,56,96,.10);
+      background: linear-gradient(135deg, rgba(255,94,91,.16), rgba(54,164,230,.12));
+    }
+    .modal-head h3{margin:0; font-size:18px; letter-spacing:-.2px}
+    .icon-btn{
+      border: 1px solid rgba(3,56,96,.14);
+      background: rgba(255,255,255,.72);
+      border-radius: 14px;
+      padding: 10px 12px;
+      cursor:pointer;
+      font-weight: 950;
+      color: var(--ink);
+      line-height:1;
+    }
+    .modal-body{padding:18px; overflow-y:auto; -webkit-overflow-scrolling:touch; flex:1;}
+
+    .form-grid{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
+    .field{display:grid; gap:6px}
+    .field.full{grid-column: 1 / -1}
+    label{font-weight: 950; font-size:13px}
+    input, textarea{
+      font: inherit;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(3,56,96,.14);
+      background: rgba(255,255,255,.92);
+      outline:none;
+    }
+    textarea{resize:vertical; min-height:110px}
+    input:focus, textarea:focus{
+      border-color: rgba(54,164,230,.55);
+      box-shadow: 0 0 0 4px rgba(54,164,230,.18);
+    }
+    .hp{position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden}
+
+    .consent{display:flex; align-items:flex-start; gap:10px; margin-top:12px}
+    .consent input{margin-top:2px}
+    .consent p{margin:0; color: rgba(3,56,96,.78); font-size:13px; line-height:1.45}
+    .consent a{font-weight: 950}
+
+    .form-actions{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px}
+    .status{margin-top:10px; font-size:13px; font-weight: 950}
+    .status.ok{color:#0b7a35}
+    .status.err{color:#b42318}
+
+    /* Footer */
+    footer{
+      padding: 42px 0;
+      border-top: 1px solid var(--border);
+      background: rgba(212,197,226,.18);
+    }
+    .footer-grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 18px;
+      align-items:start;
+    }
+    .fine{color: var(--muted); font-size:13px}
+    .footer-links{display:flex; gap:12px; flex-wrap:wrap; justify-content:flex-end}
+    .footer-links a{
+      font-weight: 900;
+      font-size: 13px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.78);
+      text-decoration:none;
+    }
+    .footer-links a:hover{background: rgba(255,255,255,.95)}
+
+    /* Cookie banner */
+    .cookie-banner{position:fixed; left:16px; right:16px; bottom:16px; z-index:120; display:none}
+    .cookie-banner.open{display:block}
+    .cookie-card{
+      max-width: 980px; margin:0 auto;
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: 0 22px 60px rgba(0,0,0,.35);
+      display:flex; gap:12px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap;
+    }
+    .cookie-card p{
+      margin:0;
+      color: rgba(3,56,96,.92);
+      font-size:13px;
+      line-height:1.45;
+      flex: 1 1 420px;
+    }
+    .cookie-actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .cookie-actions .btn{padding:10px 12px; border-radius:14px}
+    .cookie-link{font-weight: 950; text-decoration:none; border-bottom:1px solid rgba(3,56,96,.22)}
+    .cookie-link:hover{border-bottom-color: rgba(3,56,96,.45)}
+
+    .cookie-pref{position:fixed; inset:0; z-index:130; display:none; overflow-y:auto; -webkit-overflow-scrolling:touch}
+    .cookie-pref.open{display:block}
+    .cookie-pref .cookie-backdrop{position:absolute; inset:0; background: rgba(3,56,96,.58); backdrop-filter: blur(6px)}
+    .cookie-pref .cookie-modal{
+      position:relative;
+      max-width: 760px;
+      margin: 8vh auto 0;
+      background: rgba(255,255,255,.98);
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 22px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.35);
+      overflow:hidden;
+    }
+    .cookie-pref .head{
+      display:flex; justify-content:space-between; align-items:center;
+      padding: 16px;
+      border-bottom: 1px solid rgba(3,56,96,.10);
+      background: linear-gradient(135deg, rgba(255,94,91,.16), rgba(54,164,230,.12));
+    }
+    .cookie-pref .body{padding:16px}
+    .cookie-opt{
+      display:flex; gap:10px; align-items:flex-start;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(3,56,96,.12);
+      background: rgba(255,255,255,.88);
+    }
+    .cookie-opt + .cookie-opt{margin-top:10px}
+    .cookie-opt h4{margin:0 0 4px; font-size:14px}
+    .cookie-opt p{margin:0; font-size:13px; color: rgba(3,56,96,.82)}
+    .cookie-pref .footer{padding:16px; display:flex; gap:10px; flex-wrap:wrap}
+
+    /* Responsive */
+    @media (max-width: 920px){
+      .hero-grid{grid-template-columns: 1fr}
+      .grid{grid-template-columns: 1fr}
+      .two-col{grid-template-columns: 1fr}
+      .callout{grid-template-columns: 1fr}
+      .callout .actions{justify-content:flex-start}
+      .footer-grid{grid-template-columns: 1fr}
+      .footer-links{justify-content:flex-start}
+    }
+    @media (max-width: 760px){
+      .brand-logo{width: 150px; height: 38px}
+      .nav{
+        position:absolute;
+        top: 62px;
+        right:20px; left:20px;
+        display:none;
+        flex-direction:column;
+        padding:14px;
+        border-radius:18px;
+        border:1px solid var(--border);
+        background: rgba(255,255,255,.96);
+      }
+      .nav a{width:100%}
+      .nav.open{display:flex}
+      .nav-toggle{display:inline-flex}
+      .modal-card{margin: 10vh 14px 0}
+      .form-grid{grid-template-columns: 1fr}
+    }
+  
+    /* =====================================================
+       GRAFICA COERENTE CON L'APP VETROOM
+       (solo aspetto: testi, titoli e struttura invariati)
+       ===================================================== */
+    :root{
+      --teal:#0f766e; --teal2:#115e59; --tealsoft:#f0fdfa; --blue:#0f766e;
+      --orange:#f97316; --orangesoft:#ffedd5; --lav:#ffedd5; --coral:#f97316;
+      --navy:#0f172a; --ink:#111827; --muted:#4b5563; --muted2:#6b7280;
+      --border:#e5e7eb; --shadow:0 1px 3px rgba(15,23,42,.08);
+      --radius:14px; --radius2:18px;
+    }
+    body{
+      color:var(--ink);
+      background:
+        radial-gradient(900px 520px at 85% -5%, rgba(15,118,110,.10), transparent 60%),
+        radial-gradient(700px 420px at 0% 10%, rgba(249,115,22,.06), transparent 60%),
+        #f3f4f6;
+    }
+    :focus-visible{ box-shadow:0 0 0 4px rgba(15,118,110,.28); }
+
+    /* Intestazione verde petrolio, come nel gestionale */
+    .site-header{ background:var(--teal); border-bottom:0; backdrop-filter:none; box-shadow:0 2px 10px rgba(15,23,42,.12); }
+    .brand-logo{ width:auto; height:34px; border-radius:0; overflow:visible; }
+    .brand-logo img{ width:auto; height:34px; object-fit:contain; }
+    .nav a{ color:#ecfeff; font-weight:700; }
+    .nav a:hover{ background:rgba(255,255,255,.12); }
+    .nav a.btn.primary{ background:#ecfeff; color:var(--teal); box-shadow:none; }
+    .nav a.btn.primary:hover{ background:#fff; }
+    .nav-toggle{ color:#ecfeff; border-color:rgba(236,254,255,.45); }
+
+    /* Pulsanti come nell'app */
+    .btn{ border-radius:14px; min-height:46px; font-weight:700; border:1px solid var(--border); background:#fff; color:var(--ink); }
+    .btn.primary{ background:var(--teal); color:#ecfeff; border:0; box-shadow:0 8px 22px rgba(15,118,110,.25); }
+    .btn.primary:hover{ background:var(--teal2); text-decoration:none; }
+    .btn.soft{ background:var(--tealsoft); border-color:#99f6e4; color:var(--teal2); }
+    .btn:hover{ text-decoration:none; }
+
+    /* Hero */
+    h1{ color:var(--navy); }
+    .lead{ color:var(--muted); }
+    .lead strong{ color:var(--ink); }
+    .badge{ background:var(--orangesoft); border-color:#fed7aa; color:#9a3412; font-weight:700; }
+    .badge .dot{ background:var(--orange); box-shadow:0 0 0 4px rgba(249,115,22,.18); }
+    .pill{ background:#fff; border:1px solid var(--border); color:var(--ink); box-shadow:var(--shadow); }
+    .pill .k{ background:var(--teal); }
+    .mini a{ color:var(--teal); font-weight:700; }
+
+    /* Anteprima: schermate reali dell'app */
+    .preview{ background:transparent; border:0; box-shadow:none; padding:0; overflow:visible; }
+    .preview::before, .preview::after{ display:none !important; }
+    .hero{ overflow-x:clip; }
+    .preview .title{ text-align:center; font-weight:800; color:var(--teal2); font-size:13px; letter-spacing:.04em; text-transform:uppercase; margin-bottom:12px; }
+    .phones{ display:flex; justify-content:center; align-items:flex-start; padding:4px 0 8px; }
+    .phone{ margin:0; width:54%; max-width:250px; border:7px solid var(--navy); border-radius:30px; overflow:hidden; background:#fff;
+            box-shadow:0 24px 50px rgba(15,23,42,.22); aspect-ratio:520/1066; }
+    .phone img{ display:block; width:100%; height:100%; object-fit:cover; object-position:top; }
+    .phone-a{ transform:rotate(-3deg); z-index:2; }
+    .phone-b{ margin-left:-12%; margin-top:42px; transform:rotate(4deg); z-index:1; }
+    .preview-note{ text-align:center; color:var(--muted); margin:14px auto 0; max-width:420px; }
+
+    /* Sezioni, schede e riquadri come nell'app */
+    .section h2{ color:var(--navy); }
+    .section p{ color:var(--muted); }
+    .card, .panel, details{ background:#fff; border:1px solid transparent; box-shadow:var(--shadow); border-radius:var(--radius); }
+    .card:hover{ border-color:#99f6e4; }
+    .card h3, .panel h3{ color:var(--navy); }
+    .icon{ width:64px; height:64px; border-radius:16px; background:#fff; border:1px solid var(--border); display:grid; place-items:center; box-shadow:var(--shadow); }
+    .icon img{ width:52px; height:52px; object-fit:contain; }
+    .bullets li::marker{ color:var(--teal); }
+    .callout{ background:#fff; border:1px solid var(--border); border-left:5px solid var(--teal); box-shadow:var(--shadow); border-radius:var(--radius); }
+    summary{ color:var(--navy); }
+    details[open]{ border-color:#99f6e4; }
+    .faq-a{ color:var(--muted); }
+    .cta-hint{ background:var(--orangesoft); color:#9a3412; }
+
+    /* Piè di pagina scuro, come la barra laterale del gestionale */
+    footer, .footer{ background:var(--navy); color:#cbd5e1; }
+    footer a, .footer a{ color:#e5e7eb; }
+    footer .fine, .footer .fine{ color:#94a3b8; }
+
+    @media (max-width: 920px){
+      .phone{ width:46%; }
+    }
+    @media (max-width: 760px){
+      .nav{ background:var(--teal); border-color:rgba(255,255,255,.18); box-shadow:0 18px 40px rgba(15,23,42,.25); }
+      .brand-logo, .brand-logo img{ height:30px; width:auto; }
+      .phone{ width:48%; border-width:6px; border-radius:24px; }
+    }
+  
+    /* Piè di pagina */
+    .site-footer{ background:var(--navy); color:#cbd5e1; padding:44px 0 22px; margin-top:30px; }
+    .site-footer .footer-grid{ display:grid; grid-template-columns:1.4fr .8fr .8fr; gap:28px; align-items:start; }
+    .footer-brand img{ height:34px; width:auto; display:block; }
+    .footer-claim{ color:#94a3b8; margin:14px 0 16px; max-width:420px; font-size:14px; line-height:1.6; }
+    .footer-cta{ min-height:42px; }
+    .footer-col{ display:flex; flex-direction:column; gap:8px; }
+    .footer-col h4{ margin:0 0 6px; color:#fff; font-size:13px; text-transform:uppercase; letter-spacing:.08em; }
+    .footer-col a, .footer-linkbtn{ color:#e5e7eb; font-size:14px; padding:2px 0; background:none; border:0; text-align:left; font:inherit; cursor:pointer; }
+    .footer-col a:hover, .footer-linkbtn:hover{ color:#99f6e4; text-decoration:underline; }
+    .footer-bottom{ margin-top:30px; padding-top:16px; border-top:1px solid rgba(255,255,255,.12); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:13px; color:#94a3b8; }
+    .footer-bottom a{ color:#cbd5e1; }
+    @media (max-width: 760px){ .site-footer .footer-grid{ grid-template-columns:1fr 1fr; } .site-footer .fine{ grid-column:1 / -1; } }
+  </style>
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "name": "Vetroom",
+      "url": "https://vetroom.it/",
+      "logo": "https://vetroom.it/assets/logo-vetroom.png",
+      "email": "info@vetroom.it"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Vetroom",
+      "operatingSystem": "Web",
+      "applicationCategory": "BusinessApplication",
+      "url": "https://vetroom.it/",
+      "description": "Gestionale veterinario gratuito in cloud per cartella clinica, agenda, documenti e anagrafiche.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR",
+        "category": "Free"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "È davvero un gestionale veterinario gratuito?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sì: Vetroom è un gestionale veterinario gratuito per i professionisti. Ti registri con il tuo account Google e inizi subito, senza approvazioni né costi."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Cos’è il profilo sanitario del pet owner-first?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "È una storia sanitaria digitale che segue l’animale nel tempo. Il proprietario possiede il profilo e può condividere l’accesso con i veterinari quando serve, per garantire continuità clinica."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Quanto tempo serve per partire con Vetroom nel mio studio?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Puoi partire dal browser con le funzioni essenziali (cartella clinica, anagrafiche, agenda). Se arrivi da un altro gestionale, puoi iniziare da ciò che ti serve per essere operativo e poi organizzare il resto in modo guidato."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "La cartella clinica è pensata per lavorare veloce ma restare leggibile nel tempo?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sì: il focus è uno storico chiaro di visite, note e terapie, con informazioni ritrovabili in pochi secondi durante la visita e una lettura pulita anche a distanza di mesi."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Posso stampare o condividere un PDF dopo la visita?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sì: l’esportazione/stampa in PDF è pensata per riepiloghi chiari al proprietario, con un formato ordinato e leggibile."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="container">
+      <div class="header-inner">
+        <a class="brand" href="#top" aria-label="Vai all'inizio">
+          <span class="brand-logo" aria-hidden="true">
+            <img src="/app/img/logo-bianco.png" alt="Vetroom" width="504" height="132" />
+          </span>
+          <span class="sr-only">Vetroom</span>
+        </a>
+
+        <nav class="nav" id="nav" aria-label="Navigazione principale">
+          <a href="#cosa-fa">Cosa fa</a>
+          <a href="#profilo-pet">Profilo pet</a>
+          <a href="#per-chi">Per chi</a>
+          <a href="#faq">FAQ</a>
+          <a href="#contatti">Contatti</a>
+          <a class="btn small primary" href="/app/">Accedi</a>
+        </nav>
+
+        <button class="nav-toggle" type="button" aria-controls="nav" aria-expanded="false" aria-label="Apri menu">
+          ☰
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="container">
+        <div class="hero-grid">
+          <div>
+            <div class="badge"><span class="dot" aria-hidden="true"></span>Gestionale veterinario gratuito • Cloud • Dal browser</div>
+
+            <h1>Gestionale veterinario gratuito in cloud: tutto lo studio in ordine.</h1>
+
+                        <p class="lead">
+              <strong>Vetroom</strong> è un <strong>gestionale veterinario gratuito</strong> in cloud pensato per la pratica quotidiana:
+              <strong>cartella clinica</strong>, anagrafiche, <strong>agenda</strong> e documenti nello stesso posto.
+              In più stiamo costruendo il <strong>profilo sanitario del pet</strong> <em>owner‑first</em>: la storia clinica segue l’animale e si condivide solo con consenso.
+            </p>
+
+<div class="cta-row">
+              <a class="btn primary" href="/app/">Inizia gratis</a>
+              <a class="btn soft" href="#cosa-fa">Vedi cosa fa</a>
+              <a class="btn" href="/app/">Accedi</a>
+            </div>
+
+            <div class="pills" aria-label="Punti chiave">
+              <span class="pill"><span class="k" aria-hidden="true"></span>Gratuito per veterinari</span>
+              <span class="pill"><span class="k" aria-hidden="true"></span>Niente installazioni</span>
+              <span class="pill"><span class="k" aria-hidden="true"></span>Ricerca veloce</span>
+              <span class="pill"><span class="k" aria-hidden="true"></span>Owner‑first in arrivo</span>
+            </div>
+
+            <p class="mini">
+              Vuoi parlarne al volo? <a href="mailto:info@vetroom.it">info@vetroom.it</a>
+            </p>
+          </div>
+
+          <aside class="preview" aria-label="Anteprima del gestionale veterinario Vetroom">
+            <div class="title">Cartella clinica • Agenda • Documenti</div>
+            <div class="phones">
+              <figure class="phone phone-a">
+                <img src="/assets/app-agenda.webp" width="520" height="1066" alt="Vetroom, gestionale veterinario gratuito: agenda degli appuntamenti della clinica su smartphone" fetchpriority="high">
+              </figure>
+              <figure class="phone phone-b">
+                <img src="/assets/app-libretto.webp" width="520" height="1066" alt="Libretto sanitario digitale del pet nell'app Vetroom per i proprietari" loading="lazy">
+              </figure>
+            </div>
+            <p class="preview-note">
+                L’idea è semplice: apri il browser, cerchi il paziente, trovi tutto subito.
+                Senza schermate inutili.
+              </p>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="cosa-fa">
+      <div class="container">
+        <h2>Cosa fa Vetroom, il gestionale veterinario gratuito</h2>
+        <p>
+          Vetroom nasce come <strong>gestionale veterinario gratuito</strong>: poche cose fondamentali (fatte bene) per lavorare con più calma.
+          La stessa filosofia guida anche la prossima evoluzione: un <strong>profilo sanitario del pet</strong> <em>owner‑first</em>, per dare continuità alla storia clinica nel tempo.
+        </p>
+
+        <div class="grid" role="list">
+          <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/add_visit.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Cartella clinica</h3>
+            <p>Visite, note, terapie e storico: pensati per essere scritti velocemente e riletti senza fatica.</p>
+          </div>
+
+          <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/owner.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Anagrafiche chiare</h3>
+            <p>Proprietari e pazienti collegati, contatti e info utili a portata di mano (senza caos).</p>
+          </div>
+
+          <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/agenda.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Agenda appuntamenti</h3>
+            <p>Vista pulita della giornata e gestione appuntamenti: meno incastri, meno “strumenti paralleli”.</p>
+          </div>
+
+          <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/upload_visit_attachment.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Documenti e PDF</h3>
+            <p>Quando serve consegnare un riepilogo, meglio farlo in modo chiaro: stampa/esportazione pulita.</p>
+          </div>
+
+          <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/scan_code.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Affidabilità prima di tutto</h3>
+            <p>Un gestionale deve essere coerente: accessi, dati e operatività devono restare sotto controllo.</p>
+          </div>
+
+          <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/team.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Team (quando serve)</h3>
+            <p>Se siete più persone in studio, avere un flusso unico fa la differenza più di qualsiasi “feature”.</p>
+          </div>
+        </div>
+
+        <div class="callout">
+          <div>
+            <h3>Vuoi capire se è adatto al tuo flusso?</h3>
+            <p>
+              Il modo più semplice è provarlo: entri con Google, crei lo spazio della tua clinica
+              e lo metti alla prova sul vostro flusso reale.
+            </p>
+          </div>
+          <div class="actions">
+            <a class="btn primary" href="/app/">Inizia gratis</a>
+            <a class="btn" href="/app/">Accedi</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+        <section class="section" id="profilo-pet">
+      <div class="container">
+        <h2>Il profilo sanitario del pet: continuità clinica, owner‑first</h2>
+        <p>
+          Oggi Vetroom ti aiuta come <strong>software veterinario gratuito</strong> per acquisire e organizzare i dati in studio.
+          La prossima fase porta un cambiamento di prospettiva: una <strong>cartella clinica del pet</strong> che segue l’animale nel tempo,
+          con il <strong>proprietario</strong> al centro.
+        </p>
+
+        <div class="grid" role="list">
+          <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/owner_pets.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Owner al centro</h3>
+            <p>Il proprietario gestisce il profilo del pet e decide con chi condividere la storia clinica. Tu lavori con dati più completi, senza “caccia al documento”.</p>
+          </div>
+
+          <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/owner_vets.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Condivisione con consenso</h3>
+            <p>Accesso e condivisione sono basati su consenso: il veterinario lavora, il proprietario decide. Più fiducia, meno frizioni.</p>
+          </div>
+
+          <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/upload_document.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Documenti chiari, export semplice</h3>
+            <p>PDF ordinati e dati esportabili: meno richieste post-visita e nessun lock‑in. La continuità clinica non deve dipendere da un singolo studio.</p>
+          </div>
+        </div>
+
+        <div class="callout" style="margin-top:22px;">
+          <div>
+            <h3>Vuoi contribuire alla fase owner‑first?</h3>
+            <p>
+              Se ti interessa una cartella clinica che resti chiara e condivisibile nel tempo, <a href="mailto:info@vetroom.it">scrivici</a> e raccontaci come gestisci oggi la consegna dei documenti ai proprietari.
+            </p>
+          </div>
+          <div class="actions">
+            <a class="btn primary" href="/app/">Inizia gratis</a>
+            <a class="btn" href="mailto:info@vetroom.it">Scrivici</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+<section class="section" id="per-chi">
+      <div class="container">
+        <h2>Per chi è Vetroom</h2>
+        <p>
+          Per ambulatori, cliniche e liberi professionisti che cercano un <strong>gestionale veterinario gratuito</strong> e pulito:
+          pochi passaggi, informazioni chiare, meno caos operativo — e una base pronta per il profilo sanitario del pet <em>owner‑first</em>.
+        </p>
+
+        <div class="two-col">
+          <div class="panel">
+            <h3>Ti torna utile se…</h3>
+            <ul class="bullets">
+              <li>vuoi trovare un paziente in pochi secondi</li>
+              <li>vuoi una cartella clinica che si capisca anche dopo mesi</li>
+              <li>vuoi un’agenda ordinata (senza strumenti sparsi)</li>
+              <li>preferisci un gestionale veterinario gratuito senza fronzoli</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>…e vuoi ottenere questo risultato</h3>
+            <ul class="bullets">
+              <li>meno tempo perso a cercare informazioni</li>
+              <li>meno “dettagli importanti” che si perdono</li>
+              <li>più coerenza tra sala visita e reception</li>
+              <li>una base stabile su cui crescere (anche verso l’owner‑first)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="container">
+        <h2>FAQ</h2>
+        <p>
+          Qui trovi le domande più comuni. Se vuoi andare dritto al punto:
+          <a href="/app/">registrati gratis</a> e prova Vetroom nel tuo studio, oppure <a href="mailto:info@vetroom.it">scrivici</a>.
+        </p>
+
+        <div class="faq-list">
+
+          <details>
+            <summary>
+              <span>È davvero un gestionale veterinario gratuito?</span>
+              <span class="cta-hint" aria-hidden="true">Sì</span>
+            </summary>
+            <div class="faq-a">
+              <p>
+                Sì: Vetroom è un <strong>gestionale veterinario gratuito</strong> per i professionisti. Ti registri con il tuo account Google e inizi subito: nessuna approvazione, nessun documento da caricare.
+              </p>
+              <p>
+                In futuro potranno esistere servizi opzionali dedicati ai proprietari (profilo sanitario del pet e condivisione con consenso), ma l’operatività veterinaria resta pensata per essere semplice e sostenibile.
+              </p>
+            </div>
+          </details>
+
+          <details>
+            <summary>
+              <span>Cos’è il “profilo sanitario del pet” owner‑first?</span>
+              <span class="cta-hint" aria-hidden="true">Scoprilo</span>
+            </summary>
+            <div class="faq-a">
+              <p>
+                È l’evoluzione naturale della cartella clinica: una storia sanitaria digitale che segue l’animale nel tempo.
+                Il <strong>proprietario</strong> possiede il profilo e può condividere l’accesso con i veterinari quando serve.
+              </p>
+              <p>
+                Per te significa meno informazioni perse, meno documenti sparsi e più continuità clinica — soprattutto quando un paziente cambia città o struttura.
+              </p>
+            </div>
+          </details>
+
+
+          <details>
+            <summary>
+              <span>Quanto tempo serve per partire davvero (senza perdere giornate)?</span>
+              <span class="cta-hint" aria-hidden="true">Provalo</span>
+            </summary>
+            <div class="faq-a">
+              <p>
+                Se il tuo obiettivo è “mettere ordine”, partire può essere sorprendentemente rapido:
+                attiviamo l’account e inizi a usare il gestionale dal browser, con le parti essenziali
+                (cartella clinica, anagrafiche, agenda).
+              </p>
+              <p>
+                Se arrivi da un altro gestionale (o da strumenti sparsi), la cosa che facciamo spesso è semplice:
+                non importare “tutto subito”, ma partire da ciò che ti serve per essere operativo.
+                Il resto si organizza in modo guidato, senza trasformare l’avvio in un progetto infinito.
+              </p>
+              <p class="faq-cta">
+                Vuoi capire che strada è più adatta al tuo caso? <a href="mailto:info@vetroom.it">Scrivici</a> quante postazioni siete e come gestite oggi visite e appuntamenti.
+              </p>
+            </div>
+          </details>
+
+          <details>
+            <summary>
+              <span>La cartella clinica è veloce da compilare, ma resta leggibile nel tempo?</span>
+              <span class="cta-hint" aria-hidden="true">Vedi un esempio</span>
+            </summary>
+            <div class="faq-a">
+              <p>
+                È esattamente il punto: scrivere veloce oggi, capire tutto tra mesi.
+                Vetroom punta a uno storico pulito, con una lettura immediata di visite, note e terapie.
+              </p>
+              <p>
+                Quando una cartella clinica è “troppo ricca”, finisce per essere confusa.
+                Qui l’obiettivo è l’opposto: togliere rumore, mantenere la visita fluida e le informazioni ritrovabili.
+              </p>
+              <p class="faq-cta">
+                Se vuoi, <a href="mailto:info@vetroom.it?subject=Cartella%20clinica">scrivici</a> con oggetto “cartella clinica”: ti mandiamo un esempio concreto di compilazione e output.
+              </p>
+            </div>
+          </details>
+
+          <details>
+            <summary>
+              <span>Agenda: posso gestire appuntamenti senza finire con tre calendari diversi?</span>
+              <span class="cta-hint" aria-hidden="true">Scopri come</span>
+            </summary>
+            <div class="faq-a">
+              <p>
+                L’agenda funziona davvero quando sta nello stesso posto in cui trovi il paziente.
+                Se oggi ti capita di avere appuntamenti in un calendario, dettagli altrove e note “volanti”,
+                è normale che la giornata si frammenti.
+              </p>
+              <p>
+                Vetroom nasce per ridurre questa frammentazione: meno passaggi e meno “strumenti paralleli”,
+                così anche chi collabora con te trova le informazioni senza rincorrerle.
+              </p>
+              <p class="faq-cta">
+                Vuoi vedere se regge il vostro flusso reale (urgenze, controlli, turni)? <a href="mailto:info@vetroom.it">Scrivici</a> descrivendo una giornata tipo.
+              </p>
+            </div>
+          </details>
+
+          <details>
+            <summary>
+              <span>Dopo la visita posso stampare o condividere un PDF ordinato per il proprietario?</span>
+              <span class="cta-hint" aria-hidden="true">Attivalo</span>
+            </summary>
+            <div class="faq-a">
+              <p>
+                Sì, perché nella pratica serve: riepilogo visita, indicazioni, terapie, controllo successivo.
+                Un PDF chiaro non è un “extra”, è parte della comunicazione con il cliente.
+              </p>
+              <p>
+                Quando il documento è ordinato, riduce fraintendimenti e messaggi ripetuti dopo la visita.
+                È uno di quei dettagli che fanno guadagnare tempo a tutta la struttura.
+              </p>
+              <p class="faq-cta">
+                Vuoi verificare l’output? <a href="mailto:info@vetroom.it?subject=PDF%20visita">Scrivici</a> con oggetto “PDF visita”: ti mandiamo un esempio di come appare.
+              </p>
+            </div>
+          </details>
+
+          <details>
+            <summary>
+              <span>Come funziona l’accesso?</span>
+              <span class="cta-hint" aria-hidden="true">Google</span>
+            </summary>
+            <div class="faq-a">
+              <p>
+                Entri con il tuo account Google e scegli se sei un veterinario o un proprietario. Il veterinario crea lo spazio della sua clinica
+                e può invitare colleghi e segreteria; il proprietario collega il proprio animale alla clinica con un codice.
+              </p>
+              <p>
+                Nessuna approvazione e nessun documento da caricare. Stiamo aprendo le funzioni del nuovo gestionale una alla volta:
+                chi si registra ora le trova nel proprio spazio appena sono pronte.
+              </p>
+              <p class="faq-cta">
+                Ti va di iniziare adesso? <a href="/app/">Registrati gratis</a>.
+              </p>
+            </div>
+          </details>
+
+        </div>
+
+        <div class="callout" style="margin-top:22px;">
+          <div>
+            <h3>Hai un dubbio specifico?</h3>
+            <p>
+              Se ci dici com’è fatto lo studio e cosa vuoi migliorare, ti rispondiamo con indicazioni pratiche
+              (e non con una risposta “standard”).
+            </p>
+          </div>
+          <div class="actions">
+            <a class="btn primary" href="/app/">Inizia gratis</a>
+            <a class="btn" href="mailto:info@vetroom.it">Scrivici</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="contatti">
+      <div class="container">
+        <div class="callout">
+          <div>
+            <h3>Contatti</h3>
+            <p>
+              Email: <a href="mailto:info@vetroom.it"><strong>info@vetroom.it</strong></a><br/>
+              Per iniziare non serve scriverci: clicca “Inizia gratis” ed entri con Google.
+            </p>
+          </div>
+          <div class="actions">
+            <a class="btn" href="/app/">Accedi</a>
+            <a class="btn primary" href="/app/">Inizia gratis</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="fine">
+          <a href="#top" class="footer-brand" aria-label="Vetroom"><img src="/app/img/logo-bianco.png" alt="Vetroom" width="504" height="132" loading="lazy" /></a>
+          <p class="footer-claim">Un gestionale veterinario gratuito in cloud pensato per lavorare con più calma, più ordine e più continuità clinica.</p>
+          <a class="btn primary footer-cta" href="/app/">Login</a>
+        </div>
+
+        <nav class="footer-col" aria-label="Sezioni">
+          <h4>Vetroom</h4>
+          <a href="#cosa-fa">Cosa fa</a>
+          <a href="#profilo-pet">Profilo pet</a>
+          <a href="#per-chi">Per chi</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+
+        <div class="footer-col">
+          <h4>Contatti</h4>
+          <a href="mailto:info@vetroom.it">info@vetroom.it</a>
+          <a href="#contatti">Contatti</a>
+          <a href="/privacy.html">Privacy</a>
+          <a href="/privacy.html#cookie">Cookie</a>
+          <a href="/termini.html">Termini di servizio</a>
+          <button type="button" class="footer-linkbtn" onclick="window.vetroomCookieNotice && window.vetroomCookieNotice()">Avviso cookie</button>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© <span id="year">2026</span> Vetroom è un servizio di AF&amp;B S.r.l.s. · Via Mario Ugo Guattari 48, 00173 Roma (RM) · P.IVA 13698751008 · REA RM-1466364 · Capitale sociale € 2.700,00 i.v.</span>
+        <span><a href="/privacy.html">Informativa privacy</a> · <a href="/privacy.html#cookie">Cookie</a> · <a href="/termini.html">Termini</a></span>
+      </div>
+    </div>
+  </footer>
+  <script src="/assets/cookie-notice.js" defer></script>
+
+  <script>
+    // Mobile nav
+    const toggle = document.querySelector('.nav-toggle');
+    const nav = document.getElementById('nav');
+    if (toggle && nav) {
+      toggle.addEventListener('click', () => {
+        const isOpen = nav.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(isOpen));
+      });
+      nav.querySelectorAll('a').forEach(a => {
+        a.addEventListener('click', () => {
+          nav.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        });
+      });
+    }
+
+    // Year
+    const y = document.getElementById('year');
+    if (y) y.textContent = new Date().getFullYear();
+
+  </script>
+
+</body>
+</html>
