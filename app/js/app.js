@@ -45,6 +45,37 @@
     return m || 'Qualcosa non ha funzionato. Riprova.';
   };
 
+  // ---------- Monitoraggio errori ----------
+  // Ogni errore mostrato all'utente (e ogni errore imprevisto del codice) viene registrato
+  // per l'amministratore della piattaforma. Nessun servizio esterno: finisce nel database Vetroom.
+  VR.VERSION = '2026-10-01c';
+  const IGNORE = /Failed to fetch|NetworkError|Load failed|network error|JWT|not authenticated|Accesso richiesto|AbortError|ResizeObserver loop|Area riservata|earlier share has not yet completed|Share canceled|^(redirect|noclinic|suspended)$/i;
+  const sent = new Set();
+  VR.reportError = (e, where) => {
+    try {
+      if (!VR.sb) return;
+      const m = String((e && (e.message || e.error_description || e.msg)) || e || '').trim().slice(0, 500);
+      if (!m || m === '[object Object]' || IGNORE.test(m)) return;
+      const key = location.pathname + '|' + m;
+      if (sent.has(key) || sent.size >= 20) return;
+      sent.add(key);
+      const det = [e && e.code ? 'codice ' + e.code : '', e && e.details, e && e.hint, where,
+        e && e.stack ? String(e.stack).slice(0, 1200) : ''].filter(Boolean).join('\n');
+      VR.sb.rpc('log_client_error', {
+        p_page: location.pathname, p_message: m, p_detail: det || null,
+        p_user_agent: navigator.userAgent, p_app_version: VR.VERSION
+      }).then(() => {}, () => {});
+    } catch { /* il monitoraggio non deve mai disturbare l'app */ }
+  };
+  const errorTextBase = VR.errorText;
+  VR.errorText = (e) => { VR.reportError(e); return errorTextBase(e); };
+  window.addEventListener('error', (ev) => {
+    // solo errori del nostro codice (non estensioni del browser o script esterni)
+    if (!ev.filename || !ev.filename.startsWith(location.origin)) return;
+    VR.reportError(ev.error || ev.message, ev.filename.replace(location.origin, '') + ':' + ev.lineno);
+  });
+  window.addEventListener('unhandledrejection', (ev) => VR.reportError(ev.reason, 'errore non gestito'));
+
   // Supabase restituisce al massimo 1000 righe per richiesta: questa funzione le prende tutte, a blocchi
   VR.fetchAll = async (build, pageSize = 1000) => {
     const out = [];
@@ -127,7 +158,12 @@
   };
 
   VR.signOut = async () => {
-    try { sessionStorage.removeItem('vetroom_is_platform'); await VR.sb.auth.signOut(); } finally { VR.go('index.html'); }
+    try {
+      // Su un computer condiviso non devono restare dati clinici: via le bozze delle visite salvate sul dispositivo
+      Object.keys(localStorage).filter((k) => k.startsWith('vetroom_bozza_')).forEach((k) => localStorage.removeItem(k));
+      sessionStorage.clear();
+      await VR.sb.auth.signOut();
+    } finally { VR.go('index.html'); }
   };
 
   // App installabile (service worker)

@@ -12,15 +12,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-01c">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js"></script>
-  <script src="../js/app.js"></script>
-  <script src="../js/i18n.js"></script>
-  <script src="../js/layout.js"></script>
-  <script src="../js/clinica.js"></script>
-  <script src="../js/documenti.js"></script>
-  <script src="../js/promemoria.js"></script>
+  <script src="../js/config.js?v=2026-10-01c"></script>
+  <script src="../js/app.js?v=2026-10-01c"></script>
+  <script src="../js/i18n.js?v=2026-10-01c"></script>
+  <script src="../js/layout.js?v=2026-10-01c"></script>
+  <script src="../js/clinica.js?v=2026-10-01c"></script>
+  <script src="../js/documenti.js?v=2026-10-01c"></script>
+  <script src="../js/promemoria.js?v=2026-10-01c"></script>
 </head>
 <body data-shell="clinic" data-nav="animali">
 
@@ -37,6 +37,8 @@
         </div>
       </div>
 
+      <section class="panel pet-summary" id="summary" hidden></section>
+
       <section class="panel" id="pickOwner" hidden>
         <h2>Di chi è l'animale?</h2>
         <input type="search" id="ownerSearch" placeholder="Cerca il proprietario per cognome, nome o telefono" autocomplete="off">
@@ -44,6 +46,31 @@
         <p class="hint-small">Non è ancora registrato? <a href="cliente.html?nuovo=1&amp;poi=animale">Crea prima il proprietario</a>: subito dopo potrai aggiungere l'animale.</p>
       </section>
 
+      <section class="panel" id="visitsPanel" hidden>
+        <div class="page-head" style="margin-bottom:1rem">
+          <h2 style="margin:0">Visite</h2>
+        </div>
+        <ul class="rows" id="visits" hidden></ul>
+        <p class="muted" id="noVisits" hidden style="margin:0">Nessuna visita registrata.</p>
+      </section>
+
+      <section class="panel" id="remPanel" hidden>
+        <h2>Promemoria e richiami</h2>
+        <div id="rem"></div>
+      </section>
+
+      <section class="panel" id="weightPanel" hidden>
+        <h2>Andamento del peso</h2>
+        <div id="weight"></div>
+      </section>
+
+      <section class="panel" id="docsPanel" hidden>
+        <h2>Documenti</h2>
+        <div id="docs"></div>
+      </section>
+
+      <details class="edit-box" id="editBox">
+        <summary id="editSummary">Modifica i dati dell'animale</summary>
       <section class="panel" id="photoPanel" hidden>
         <div class="photo-box">
           <div id="photo"></div>
@@ -83,33 +110,7 @@
         </div>
         <div id="msg2" hidden></div>
       </form>
-
-      <section class="panel" id="visitsPanel" hidden style="margin-top:1.25rem">
-        <div class="page-head" style="margin-bottom:1rem">
-          <h2 style="margin:0">Visite</h2>
-          <div class="actions-bar">
-            <a class="btn btn-ghost btn-small" id="newAppt" href="#">Nuovo appuntamento</a>
-            <a class="btn btn-primary btn-small" id="newVisit" href="#" hidden>Nuova visita</a>
-          </div>
-        </div>
-        <ul class="rows" id="visits" hidden></ul>
-        <p class="muted" id="noVisits" hidden style="margin:0">Nessuna visita registrata.</p>
-      </section>
-
-      <section class="panel" id="remPanel" hidden>
-        <h2>Promemoria e richiami</h2>
-        <div id="rem"></div>
-      </section>
-
-      <section class="panel" id="weightPanel" hidden>
-        <h2>Andamento del peso</h2>
-        <div id="weight"></div>
-      </section>
-
-      <section class="panel" id="docsPanel" hidden>
-        <h2>Documenti</h2>
-        <div id="docs"></div>
-      </section>
+      </details>
     </div>
   </main>
 
@@ -135,6 +136,50 @@
     };
     VR.$('#birth_date').addEventListener('change', showAge);
 
+    // ---------- Riepilogo in alto: tutto quello che serve a colpo d'occhio ----------
+    let owner = null;
+    const renderSummary = async () => {
+      if (!pet) return;
+      const url = await VR.fileUrl(pet.photo_path).catch(() => null);
+      const facts = [pet.species, pet.breed, pet.sex && pet.sex !== 'U' ? VR.SEX[pet.sex] : '', VR.age(pet.birth_date),
+        pet.neuter_status === 'yes' ? 'sterilizzato/a' : pet.neuter_status === 'no' ? 'non sterilizzato/a' : '',
+        pet.weight_kg ? String(pet.weight_kg).replace('.', ',') + ' kg' : ''].filter(Boolean);
+      const phone = owner?.phone;
+      VR.$('#summary').innerHTML = `
+        <div class="pet-sum">
+          ${VR.avatarHtml(pet, url, 'pet-sum-photo')}
+          <div class="pet-sum-main">
+            <div class="pet-sum-facts">${VR.esc(facts.join(' · ') || 'Dati da completare')}</div>
+            ${pet.microchip ? `<div class="pet-sum-line">Microchip <b class="notranslate">${VR.esc(pet.microchip)}</b></div>` : ''}
+            ${owner ? `<div class="pet-sum-line">Proprietario: <a href="cliente.html?id=${encodeURIComponent(clientId)}"><b>${VR.esc(VR.clientName(owner))}</b></a>${phone ? ` · <a href="tel:${VR.esc(phone.replace(/\s/g, ''))}">${VR.esc(phone)}</a>` : ''}${pet.owner_user_id ? ' · iscritto a Vetroom' : ''}</div>` : ''}
+          </div>
+        </div>
+        ${pet.notes ? `<div class="pet-alert"><b>Da sapere:</b> ${VR.esc(pet.notes)}</div>` : ''}
+        <div class="actions-bar pet-sum-acts">
+          ${ctx.isVet ? `<a class="btn btn-primary" href="visita.html?animale=${pet.id}">${VR.icon('add_visit')}Nuova visita</a>` : ''}
+          <a class="btn btn-ghost" href="agenda.html?animale=${pet.id}">${VR.icon('appointment')}Appuntamento</a>
+          ${phone && VR.waPhone(phone) ? `<a class="btn btn-ghost" target="_blank" rel="noopener" href="${VR.esc(VR.waLink(phone, ''))}">WhatsApp</a>` : ''}
+          <a class="btn btn-ghost" href="#remPanel">Richiami</a>
+          ${pet.owner_user_id || owner?.owner_user_id ? '<button class="btn btn-ghost" type="button" data-msg>💬 Messaggio</button><span class="ff-badge" title="Il proprietario vede il libretto, riceve i promemoria e può prenotare online">📱 Usa FurrFinder</span>'
+            : owner ? '<button class="btn btn-ghost ff-invite-btn" type="button" data-ffinvite>📱 Invita su FurrFinder</button>' : ''}
+        </div>`;
+      VR.show(VR.$('#summary'));
+      if (owner) VR.hide(VR.$('#ownerLine')); // il proprietario è già nel riepilogo
+    };
+
+    VR.$('#summary').addEventListener('click', async (ev) => {
+      if (ev.target.closest('[data-msg]')) {
+        const uid = pet.owner_user_id || owner?.owner_user_id;
+        if (!uid) return;
+        const { data: conv, error } = await VR.sb.rpc('msg_open_with_owner', { p_owner: uid, p_clinic: ctx.clinicId });
+        if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+        location.href = 'messaggi.html?c=' + encodeURIComponent(conv);
+        return;
+      }
+      if (!ev.target.closest('[data-ffinvite]') || !owner) return;
+      VR.ff.openInvite({ client: { ...owner, id: clientId }, petNames: [pet.name], clinicName: ctx.clinic.name || '' });
+    });
+
     const renderPhoto = async () => {
       const url = await VR.fileUrl(pet?.photo_path);
       VR.$('#photo').innerHTML = VR.avatarHtml(pet || { name: VR.$('#name').value }, url, 'photo');
@@ -147,7 +192,7 @@
       pet = data;
       // Cliente di riferimento in questa clinica
       const { data: acc } = await VR.sb.from('pet_access')
-        .select('client_id, clients(first_name, last_name, phone, email)')
+        .select('client_id, clients(first_name, last_name, phone, email, owner_user_id)')
         .eq('pet_id', id).eq('clinic_id', ctx.clinicId).maybeSingle();
       clientId = acc?.client_id || null;
       if (acc?.clients) VR.$('#ownerLine').textContent = 'Proprietario: ' + VR.clientName(acc.clients);
@@ -161,14 +206,14 @@
       showAge();
       VR.$('#title').textContent = pet.name;
       document.title = pet.name + ' – Vetroom';
+      owner = acc?.clients || null;
+      renderSummary();
       VR.$('#save').textContent = 'Salva modifiche';
       VR.show(VR.$('#photoPanel')); renderPhoto();
       if (ctx.isVet) VR.show(VR.$('#visitsPanel'));
       if (!pet.owner_user_id) VR.show(VR.$('#del'));
 
       // Visite di questa clinica
-      VR.$('#newAppt').href = 'agenda.html?animale=' + pet.id;
-      if (ctx.isVet) { VR.$('#newVisit').href = 'visita.html?animale=' + pet.id; VR.show(VR.$('#newVisit')); }
       const { data: visits } = await VR.sb.from('visits')
         .select('id, visit_date, visit_kind, title, diagnosis, form_data')
         .eq('pet_id', pet.id).eq('clinic_id', ctx.clinicId)
@@ -227,6 +272,7 @@
     }
 
     if (clientId) VR.$('#back').href = 'cliente.html?id=' + encodeURIComponent(clientId);
+    if (!id) { VR.$('#editBox').open = true; VR.$('#editBox').classList.add('is-new'); }
     VR.hide(loading);
     VR.show(VR.$('#page'));
     if (!id && clientId) VR.$('#name').focus();
@@ -248,6 +294,7 @@
         pet = { ...pet, ...v };
         VR.$('#title').textContent = v.name;
         VR.say(msg2, 'Modifiche salvate.', 'ok');
+        renderSummary();
       } else {
         const { data, error } = await VR.sb.from('pets')
           .insert({ ...v, created_by_clinic_id: ctx.clinicId }).select('id').single();
@@ -276,7 +323,7 @@
         if (e2) throw e2;
         pet.photo_path = path;
         if (old) VR.sb.storage.from('pet-files').remove([old]); // pulizia, senza attendere
-        await renderPhoto();
+        await renderPhoto(); renderSummary();
       } catch (e) {
         VR.say(msg2, 'Foto non caricata: ' + VR.errorText(e), 'error');
         renderPhoto();

@@ -12,18 +12,18 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-01c">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js"></script>
-  <script src="../js/app.js"></script>
-  <script src="../js/i18n.js"></script>
-  <script src="../js/layout.js"></script>
-  <script src="../js/clinica.js"></script>
-  <script src="../js/documenti.js"></script>
-  <script src="../js/moduli.js"></script>
-  <script src="../js/promemoria.js"></script>
+  <script src="../js/config.js?v=2026-10-01c"></script>
+  <script src="../js/app.js?v=2026-10-01c"></script>
+  <script src="../js/i18n.js?v=2026-10-01c"></script>
+  <script src="../js/layout.js?v=2026-10-01c"></script>
+  <script src="../js/clinica.js?v=2026-10-01c"></script>
+  <script src="../js/documenti.js?v=2026-10-01c"></script>
+  <script src="../js/moduli.js?v=2026-10-01c"></script>
+  <script src="../js/promemoria.js?v=2026-10-01c"></script>
   <script src="../vendor/jspdf-2.5.2.min.js"></script>
-  <script src="../js/pdf.js"></script>
+  <script src="../js/pdf.js?v=2026-10-01c"></script>
 </head>
 <body data-shell="clinic" data-nav="animali">
 
@@ -37,6 +37,8 @@
         <div>
           <h1 id="title">Nuova visita</h1>
           <p class="muted" id="petLine" style="margin:0"></p>
+        <div class="pet-alert" id="petAlert" hidden></div>
+        <p class="ref-line" id="visitRef" hidden><span class="muted">Numero</span> <b class="notranslate" id="visitRefCode"></b></p>
         </div>
       </div>
 
@@ -58,6 +60,14 @@
             <div class="s12"><label for="notes">Anamnesi ed esame clinico</label><textarea data-dictate id="notes" name="notes" rows="5"></textarea></div>
             <div class="s12"><label for="diagnosis">Diagnosi</label><textarea data-dictate id="diagnosis" name="diagnosis" rows="3"></textarea></div>
             <div class="s12"><label for="therapy">Terapia e indicazioni</label><textarea data-dictate id="therapy" name="therapy" rows="4"></textarea></div>
+            <div class="s12" id="recallBox"><label for="recallIn">Prossimo richiamo o controllo</label>
+              <div class="recall-row">
+                <select id="recallIn"><option value="">Nessuno</option><option value="14">Tra 2 settimane</option><option value="30">Tra 1 mese</option><option value="90">Tra 3 mesi</option><option value="180">Tra 6 mesi</option><option value="365">Tra 1 anno</option><option value="date">Scegli la data…</option></select>
+                <input type="date" id="recallDate" aria-label="Data del richiamo" hidden>
+                <input type="text" id="recallTitle" aria-label="Descrizione del richiamo" placeholder="Es. Richiamo vaccino" hidden>
+              </div>
+              <p class="hint-small" id="recallHint" style="margin:4px 0 0">Lo ritrovi tra i richiami in scadenza, con il messaggio WhatsApp per il proprietario già pronto.</p>
+            </div>
           </div>
           <p style="margin:1.25rem 0 0"><label class="check"><input type="checkbox" name="visible_to_owner" id="visible_to_owner" checked> Visibile al proprietario, se è iscritto a Vetroom</label></p>
         </section>
@@ -67,12 +77,13 @@
             <h2 style="margin:0">Scheda</h2>
             <select id="formSel" aria-label="Modulo della visita" style="width:auto;min-width:240px"></select>
           </div>
-          <p class="hint-small" id="modHint" style="margin:0">Scegli un modulo per aggiungere campi specifici (parametri vitali, esame oculare…). Puoi crearli in <a href="moduli.html">Opzioni → Moduli di visita</a>.</p>
+          <p class="hint-small" id="modHint" style="margin:0">Aggiungi una scheda con campi specifici: ci sono già quelle pronte (vaccinazione, visita clinica, certificato, consenso). Puoi crearne di tue in <a href="moduli.html">Opzioni → Moduli di visita</a>.</p>
           <div id="modFields"></div>
         </section>
 
         <div class="actions-bar sticky-actions" id="actions">
           <button class="btn btn-primary" type="submit" id="save">Salva visita</button>
+          <button class="btn btn-ghost" type="button" id="saveClose" hidden>Salva e chiudi con referto</button>
           <span class="spacer"></span>
           <button class="btn btn-danger" type="button" id="del" hidden>Elimina visita</button>
         </div>
@@ -90,9 +101,10 @@
           <button class="btn btn-ghost btn-small" type="button" id="pdfDraft">Scarica bozza</button>
           <button class="btn btn-primary btn-small" type="button" id="pdfFinalize" hidden>Chiudi con referto definitivo</button>
           <button class="btn btn-primary btn-small" type="button" id="pdfOpen" hidden>Apri referto</button>
-          <button class="btn btn-ghost btn-small" type="button" id="pdfShare" hidden>Condividi</button>
+          <button class="btn btn-ghost btn-small" type="button" id="pdfShare" hidden>Invia al proprietario</button>
         </div>
         <div id="pdfMsg" hidden></div>
+        <div class="next-box" id="nextBox" hidden></div>
       </section>
 
       <section class="panel" id="docsPanel" hidden>
@@ -126,11 +138,17 @@
     }
     if (!petId) { VR.hide(loading); VR.say(msg, 'Apri prima la scheda dell\'animale.', 'info'); return; }
 
-    const { data: pet } = await VR.sb.from('pets').select('id, name, species, breed, birth_date, weight_kg').eq('id', petId).maybeSingle();
+    const refLabel = (v, report) => {
+      if (!v || !v.ref_code) return '';
+      const from = !!v.ref_from_appointment;
+      return (report ? (from ? 'RVP-' : 'RV-') : (from ? 'VP-' : 'V-')) + v.ref_code;
+    };
+    const { data: pet } = await VR.sb.from('pets').select('id, name, species, breed, birth_date, weight_kg, notes').eq('id', petId).maybeSingle();
     const { data: acc } = await VR.sb.from('pet_access').select('client_id').eq('pet_id', petId).eq('clinic_id', ctx.clinicId).maybeSingle();
 
     if (pet) {
       VR.$('#petLine').textContent = [pet.name, VR.petSubtitle(pet)].filter(Boolean).join(' · ');
+      if (pet.notes) { VR.$('#petAlert').innerHTML = '<b>Da sapere:</b> ' + VR.esc(pet.notes); VR.show(VR.$('#petAlert')); }
       VR.$('#back').href = 'animale.html?id=' + pet.id;
     } else if (!visit) {
       VR.hide(loading); VR.say(msg, 'Non hai più accesso a questo animale.', 'error'); return;
@@ -160,32 +178,58 @@
     let currentDocTitle = fd0.doc_title || null;
     const sel = VR.$('#formSel');
     const hasSnap = currentFields && !(visit?.form_id && modules.some((m) => m.id === visit.form_id));
+    // Schede pronte all'uso: funzionano subito, senza doverle creare in Opzioni
+    const myNames = new Set(modules.map((m) => (m.name || '').trim().toLowerCase()));
+    const readyTpl = Object.entries(VR.MODULE_TEMPLATES || {}).filter(([k, t]) => k !== 'vuoto' && !myNames.has(t.name.toLowerCase()));
     sel.innerHTML = '<option value="">Nessuna scheda aggiuntiva</option>' +
-      modules.map((m) => `<option value="${m.id}">${VR.esc(m.name)}</option>`).join('') +
+      (modules.length ? `<optgroup label="Le schede della clinica">${modules.map((m) => `<option value="${m.id}">${VR.esc(m.name)}</option>`).join('')}</optgroup>` : '') +
+      (readyTpl.length ? `<optgroup label="Schede pronte">${readyTpl.map(([k, t]) => `<option value="tpl:${k}">${VR.esc(t.name)}</option>`).join('')}</optgroup>` : '') +
       (hasSnap ? `<option value="__snap">${VR.esc(currentName || 'Scheda')} (versione salvata)</option>` : '');
     sel.value = currentFields ? (hasSnap ? '__snap' : visit.form_id) : '';
     const renderMod = (values) => {
+      const hasRecall = !!(currentFields || []).some((f) => f.type === 'date' && (f.key === 'vaccino_richiamo' || /richiam|prossim/i.test(f.label || '')));
+      const rb = VR.$('#recallBox');
+      if (rb && ctx.isVet && !visit?.finalized_at) {
+        rb.hidden = hasRecall;
+        if (hasRecall) { const ri = VR.$('#recallIn'); if (ri && ri.value) { ri.value = ''; ri.dispatchEvent(new Event('change')); } }
+      }
       if (!currentFields) { VR.$('#modFields').innerHTML = ''; VR.show(VR.$('#modHint')); return; }
       VR.hide(VR.$('#modHint'));
       VR.renderModuleFields(VR.$('#modFields'), currentFields, values || {}, !ctx.isVet);
       if (ctx.isVet) VR.enableDictation(VR.$('#modFields'));
     };
     renderMod(fd0.values);
+    const applySel = () => {
+      const m = modules.find((x) => x.id === sel.value);
+      const t = sel.value.startsWith('tpl:') ? VR.MODULE_TEMPLATES[sel.value.slice(4)] : null;
+      if (m) {
+        currentFields = JSON.parse(JSON.stringify(m.definition?.fields || []));
+        currentName = m.name; currentBg = m.definition?.bg_path || null; currentDocTitle = m.definition?.doc_title || null;
+      } else if (t) {
+        currentFields = t.fields(); currentName = t.name; currentBg = null; currentDocTitle = t.doc_title || null;
+      } else { currentFields = null; currentName = null; currentBg = null; currentDocTitle = null; }
+    };
+    // Vaccinazione: la scheda del vaccino (nome, lotto, scadenza, richiamo) si apre da sola
+    const autoPickForKind = () => {
+      if (visit || sel.value || !ctx.isVet) return;
+      if (!/vaccin/i.test(VR.$('#visit_kind').value)) return;
+      const own = modules.find((m) => /vaccin/i.test(m.name || ''));
+      const val = own ? own.id : (readyTpl.some(([k]) => k === 'vaccinazione') ? 'tpl:vaccinazione' : '');
+      if (!val) return;
+      sel.value = val; applySel(); sel.dataset.prev = sel.value; renderMod({});
+    };
+    VR.$('#visit_kind').addEventListener('change', autoPickForKind);
     sel.addEventListener('change', () => {
       const filled = currentFields && Object.keys(VR.readModuleFields(VR.$('#modFields'))).length;
       if (filled && !confirm('Cambiando scheda perderai i valori compilati in quella attuale. Continuare?')) {
         sel.value = currentFields ? (sel.dataset.prev || '') : ''; return;
       }
-      const m = modules.find((x) => x.id === sel.value);
-      currentFields = m ? JSON.parse(JSON.stringify(m.definition?.fields || [])) : null;
-      currentName = m ? m.name : null;
-      currentBg = m ? (m.definition?.bg_path || null) : null;
-      currentDocTitle = m ? (m.definition?.doc_title || null) : null;
+      applySel();
       sel.dataset.prev = sel.value;
       renderMod({});
     });
     sel.dataset.prev = sel.value;
-    if (!visit && !modules.length) VR.hide(VR.$('#modPanel'));
+    autoPickForKind();
 
     // Segreteria: sola lettura
     if (!ctx.isVet) {
@@ -197,6 +241,11 @@
 
     VR.hide(loading);
     VR.show(VR.$('#page'));
+    if (visit && visit.ref_code) {
+      VR.$('#visitRefCode').textContent = refLabel(visit) + (visit.finalized_at ? ' · referto ' + refLabel(visit, true) : '');
+      VR.show(VR.$('#visitRef'));
+    }
+    if (VR.param('richiamo')) VR.say(msg, 'Visita salvata. Il richiamo è stato aggiunto: lo trovi nella dashboard tra i richiami in scadenza.', 'ok');
 
     // ---------- Bozza salvata automaticamente sul dispositivo ----------
     const DKEY = 'vetroom_bozza_' + (id || ('nuova_' + petId));
@@ -284,7 +333,8 @@
         VR.show(VR.$('#finalBox'));
         VR.$('#finalInfo').textContent = ` il ${new Date(visit.finalized_at).toLocaleString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}. Non è più modificabile.`;
         VR.hide(VR.$('#pdfHint')); VR.hide(VR.$('#pdfDraft')); VR.hide(VR.$('#pdfFinalize'));
-        if (finalDoc) { VR.show(VR.$('#pdfOpen')); VR.show(VR.$('#pdfShare')); }
+        if (finalDoc) { VR.show(VR.$('#pdfOpen')); VR.show(VR.$('#pdfShare')); VR.$('#pdfOpen').className = 'btn btn-ghost btn-small'; VR.$('#pdfShare').className = 'btn btn-primary btn-small'; }
+        VR.hide(VR.$('#saveClose'));
         // blocca il modulo della visita (resta modificabile solo la visibilità al proprietario)
         [...form.elements].forEach((el) => { if (el.id !== 'visible_to_owner' && el.id !== 'save') el.disabled = true; });
         VR.$('#formSel').disabled = true;
@@ -292,6 +342,8 @@
         VR.$('#modFields').querySelectorAll('input, select, textarea').forEach((el) => el.disabled = true);
         VR.hide(VR.$('#del'));
         VR.$('#save').textContent = 'Salva visibilità';
+        VR.$('#save').className = 'btn btn-ghost';
+        VR.hide(VR.$('#recallBox'));
       };
 
       if (visit.finalized_at) await showFinal();
@@ -305,7 +357,7 @@
       });
 
       VR.$('#pdfFinalize').addEventListener('click', async () => {
-        if (dirty && !confirm('Hai modifiche non salvate: il referto userebbe la versione salvata. Continuare comunque?')) return;
+        if (dirty) { const ok = await saveVisit(); if (ok !== true) return; }
         if (!confirm('Chiudere la visita con il referto definitivo?\n\nDopo non potrai più modificarla né eliminarla.')) return;
         const b = VR.$('#pdfFinalize'); VR.hide(pdfMsg); busy(b, true, 'Chiusura in corso…');
         try {
@@ -329,9 +381,34 @@
           visit.finalized_at = now;
           await showFinal();
           if (docs) docs.reload();
-          VR.say(pdfMsg, visit.visible_to_owner ? 'Visita chiusa. Il proprietario trova il referto nel suo libretto FurrFinder.' : 'Visita chiusa. Il referto è nei documenti della clinica.', 'ok');
+          VR.say(pdfMsg, (visit.visible_to_owner ? 'Visita chiusa. Il proprietario trova il referto nel suo libretto FurrFinder.' : 'Visita chiusa. Il referto è nei documenti della clinica.') + ' Ora puoi inviarlo al proprietario con il pulsante qui sopra.', 'ok');
+          VR.$('#pdfPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          showNext();
         } catch (e) { VR.say(pdfMsg, 'Referto non creato: ' + VR.errorText(e), 'error'); busy(b, false, 'Chiudi con referto definitivo'); }
       });
+
+      // Visita chiusa: chi è il prossimo? (così si passa al paziente successivo senza tornare indietro)
+      const showNext = async () => {
+        const from = new Date(Date.now() - 20 * 60000), end = new Date(); end.setHours(23, 59, 59, 999);
+        const { data } = await VR.sb.from('appointments').select('id, starts_at, type, status, pet_id, pets(id, name), clients(first_name, last_name)')
+          .eq('clinic_id', ctx.clinicId).in('status', ['confirmed', 'requested'])
+          .gte('starts_at', from.toISOString()).lte('starts_at', end.toISOString()).order('starts_at').limit(10);
+        const nx = (data || []).find((a) => a.pets && a.pet_id !== petId && a.id !== VR.param('apt'));
+        const box = VR.$('#nextBox');
+        box.innerHTML = nx
+          ? `<div><span class="muted">Prossimo paziente</span><br><strong>${new Date(nx.starts_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} · ${VR.esc(nx.pets.name)}</strong> <span class="muted">${VR.esc([nx.clients ? VR.clientName(nx.clients) : '', nx.type].filter(Boolean).join(' · '))}</span></div>
+             <div class="actions-bar"><a class="btn btn-primary btn-small" href="visita.html?animale=${nx.pets.id}&apt=${nx.id}&tipo=${encodeURIComponent(nx.type || '')}">Inizia visita</a><a class="btn btn-ghost btn-small" href="./">Torna a Oggi</a></div>`
+          : `<div><span class="muted">Nessun altro appuntamento per oggi.</span></div><div class="actions-bar"><a class="btn btn-ghost btn-small" href="./">Torna a Oggi</a></div>`;
+        VR.show(box);
+        // Momento perfetto per invitare il proprietario su FurrFinder: il referto è appena pronto
+        const cid = visit?.client_id || acc?.client_id;
+        if (!cid || !VR.ff) return;
+        const { data: cl } = await VR.sb.from('clients').select('id, first_name, last_name, phone, email, owner_user_id').eq('id', cid).maybeSingle();
+        if (!cl || cl.owner_user_id) return;
+        box.insertAdjacentHTML('afterend', `<div class="ff-nudge" id="ffNudge"><span>📱 <b>${VR.esc(VR.clientName(cl))}</b> non usa ancora FurrFinder: con l'invito trova questo referto sul telefono e riceve da solo i prossimi richiami.</span>
+          <button class="btn btn-ghost btn-small" type="button" id="ffNudgeBtn">Invita su FurrFinder</button></div>`);
+        VR.$('#ffNudgeBtn').addEventListener('click', () => VR.ff.openInvite({ client: cl, petNames: [pet?.name].filter(Boolean), clinicName: ctx.clinic.name || '' }));
+      };
 
       VR.$('#pdfOpen').addEventListener('click', async () => {
         const w = window.open('', '_blank');
@@ -339,8 +416,16 @@
         if (url && w) w.location = url; else { if (w) w.close(); VR.say(pdfMsg, 'Impossibile aprire il referto.', 'error'); }
       });
 
-      VR.$('#pdfShare').addEventListener('click', async () => {
+      // Preparare il PDF richiede qualche secondo: senza un segno di attesa si preme due volte
+      // e il telefono rifiuta la seconda condivisione. Il pulsante si blocca finché non ha finito.
+      let sharing = false;
+      VR.$('#pdfShare').addEventListener('click', async (ev) => {
+        if (sharing) return;
+        sharing = true;
+        const btn = ev.currentTarget, label = btn.textContent;
+        btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.textContent = 'Preparo il referto…';
         VR.hide(pdfMsg);
+        const done = () => { sharing = false; btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = label; };
         const client = await loadClient();
         const text = `Referto della visita di ${pet?.name || ''} del ${new Date(visit.visit_date + 'T00:00:00').toLocaleDateString('it-IT')}.` +
           (client?.owner_user_id || visit.visible_to_owner ? ' Lo trovi anche nel libretto FurrFinder: ' + new URL('proprietario/', VR.root).href : '');
@@ -349,57 +434,103 @@
           const blob = await (await fetch(url)).blob();
           const file = new File([blob], finalDoc.original_name || 'referto.pdf', { type: 'application/pdf' });
           if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            btn.textContent = 'Scegli dove inviarlo…';
             await navigator.share({ files: [file], title: finalDoc.title || 'Referto', text });
+            done();
             return;
           }
           // Computer: scarica il file e prepara l'email al proprietario
           const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 60000);
           if (client?.email) {
             location.href = `mailto:${encodeURIComponent(client.email)}?subject=${encodeURIComponent('Referto di ' + (pet?.name || 'visita'))}&body=${encodeURIComponent(text + '\n\nIn allegato il referto in PDF.')}`;
             VR.say(pdfMsg, 'Ho scaricato il PDF e aperto una email al proprietario: allega il file appena scaricato.', 'info');
           } else {
             VR.say(pdfMsg, 'PDF scaricato. Il proprietario non ha un\'email in anagrafica: puoi inviarlo da WhatsApp o dalla tua posta.', 'info');
           }
-        } catch (e) { if (e.name !== 'AbortError') VR.say(pdfMsg, 'Condivisione non riuscita: ' + VR.errorText(e), 'error'); }
+          done();
+        } catch (e) {
+          done();
+          // L'utente ha chiuso il menu di condivisione, oppure ne era già aperto uno: non è un errore
+          if (e.name === 'AbortError' || e.name === 'InvalidStateError' || /earlier share/i.test(e.message || '')) return;
+          if (e.name === 'NotAllowedError') { VR.say(pdfMsg, 'Il telefono non ha aperto la condivisione. Riprova, oppure usa "Apri referto" e condividilo da lì.', 'info'); return; }
+          VR.say(pdfMsg, 'Condivisione non riuscita: ' + VR.errorText(e), 'error');
+        }
       });
     }
 
+    // ---------- Prossimo richiamo: un tocco e diventa un promemoria ----------
+    const rIn = VR.$('#recallIn'), rDate = VR.$('#recallDate'), rTitle = VR.$('#recallTitle');
+    if (!ctx.isVet) VR.hide(VR.$('#recallBox'));
+    const autoTitle = () => {
+      const k = VR.$('#visit_kind').value;
+      return /vaccin/i.test(k) ? 'Richiamo vaccinale' : /chirurg/i.test(k) ? 'Controllo post-operatorio' : 'Controllo';
+    };
+    let lastAuto = '';
+    rIn.addEventListener('change', () => {
+      rDate.hidden = rIn.value !== 'date';
+      rTitle.hidden = !rIn.value;
+      if (rIn.value && (!rTitle.value || rTitle.value === lastAuto)) { lastAuto = autoTitle(); rTitle.value = lastAuto; }
+      if (rIn.value === 'date') rDate.focus();
+    });
+    VR.$('#visit_kind').addEventListener('change', () => { if (rIn.value && rTitle.value === lastAuto) { lastAuto = autoTitle(); rTitle.value = lastAuto; } });
+    const recallDue = () => {
+      if (!rIn.value) return null;
+      if (rIn.value === 'date') return rDate.value || null;
+      const base = new Date((VR.$('#visit_date').value || new Date().toLocaleDateString('sv-SE')) + 'T12:00:00');
+      base.setDate(base.getDate() + Number(rIn.value));
+      return base.toLocaleDateString('sv-SE');
+    };
+    const saveRecall = async (clientIdForRecall) => {
+      const due = recallDue();
+      if (!due) return null;
+      const title = rTitle.value.trim() || autoTitle();
+      const { error } = await VR.sb.from('reminders').insert({
+        clinic_id: ctx.clinicId, pet_id: petId, client_id: clientIdForRecall || null, title, due_date: due,
+        kind: /vaccin/i.test(title) ? 'vaccino' : 'controllo', created_by: ctx.session.user.id
+      });
+      if (error) return error;
+      rIn.value = ''; rDate.value = ''; rTitle.value = ''; rDate.hidden = true; rTitle.hidden = true;
+      return 'ok';
+    };
+
     // Salvataggio
-    form.addEventListener('submit', async (ev) => {
-      ev.preventDefault();
+    let closeAfterSave = false;
+    const saveVisit = async () => {
       VR.hide(msg2);
       // Visita chiusa: si può cambiare solo la visibilità al proprietario
       if (visit?.finalized_at) {
         const vis = VR.$('#visible_to_owner').checked;
         const { error } = await VR.sb.from('visits').update({ visible_to_owner: vis }).eq('id', id);
-        if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
+        if (error) { VR.say(msg2, VR.errorText(error), 'error'); return false; }
         await VR.sb.from('documents').update({ visible_to_owner: vis }).eq('visit_id', id).eq('doc_role', 'visit_pdf_final');
         visit.visible_to_owner = vis; dirty = false;
         VR.say(msg2, vis ? 'Ora il proprietario vede visita e referto.' : 'Visita e referto non sono più visibili al proprietario.', 'ok');
-        return;
+        return true;
       }
       const v = VR.formValues(form);
-      if (!v.visit_date) { VR.say(msg2, 'Inserisci la data della visita.', 'error'); return; }
+      if (!v.visit_date) { VR.say(msg2, 'Inserisci la data della visita.', 'error'); return false; }
       const wRaw = VR.$('#weight').value.trim().replace(',', '.');
       const weight = wRaw === '' ? null : Number(wRaw);
-      if (weight !== null && (isNaN(weight) || weight < 0)) { VR.say(msg2, 'Il peso non è valido.', 'error'); return; }
+      if (weight !== null && (isNaN(weight) || weight < 0)) { VR.say(msg2, 'Il peso non è valido.', 'error'); return false; }
       v.form_data = { ...(visit?.form_data || {}), weight_kg: weight,
         fields: currentFields, form_name: currentName, bg_path: currentFields ? currentBg : null,
         doc_title: currentFields ? currentDocTitle : null,
         values: currentFields ? VR.readModuleFields(VR.$('#modFields')) : {} };
       v.form_id = modules.some((m) => m.id === sel.value) ? sel.value : null;
 
+      if (rIn.value === 'date' && !rDate.value) { VR.say(msg2, 'Scegli la data del prossimo richiamo, oppure seleziona "Nessuno".', 'error'); return false; }
       const btn = VR.$('#save'); btn.disabled = true;
       let newId = id;
       if (id) {
         const { error } = await VR.sb.from('visits').update(v).eq('id', id);
-        if (error) { btn.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return; }
+        if (error) { btn.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return false; }
       } else {
         const { data, error } = await VR.sb.from('visits').insert({
           ...v, clinic_id: ctx.clinicId, pet_id: petId, client_id: acc?.client_id || null,
           created_by: ctx.session.user.id
         }).select('id').single();
-        if (error) { btn.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return; }
+        if (error) { btn.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return false; }
         newId = data.id;
         // Visita nata da un appuntamento: l'appuntamento diventa "svolto"
         const apt = VR.param('apt');
@@ -418,12 +549,30 @@
           await VR.sb.from('pets').update({ weight_kg: weight }).eq('id', petId);
         }
       }
+      const rec = await saveRecall(visit?.client_id || acc?.client_id);
       dirty = false; clearDraft();
-      if (!id) { location.replace('visita.html?id=' + newId); return; }
+      if (!id) {
+        if (rec && rec !== 'ok') alert('Visita salvata, ma il richiamo non è stato creato: ' + VR.errorText(rec) + '\nPuoi aggiungerlo dalla scheda dell\'animale.');
+        location.replace('visita.html?id=' + newId + (rec === 'ok' ? '&richiamo=1' : '') + (closeAfterSave ? '&chiudi=1' : '')); return 'redirect';
+      }
       btn.disabled = false;
       visit = { ...visit, ...v };
-      VR.say(msg2, 'Modifiche salvate.', 'ok');
+      if (rec && rec !== 'ok') VR.say(msg2, 'Visita salvata, ma il richiamo non è stato creato: ' + VR.errorText(rec), 'error');
+      else VR.say(msg2, rec === 'ok' ? 'Modifiche salvate e richiamo aggiunto.' : 'Modifiche salvate.', 'ok');
+      return true;
+    };
+    form.addEventListener('submit', async (ev) => { ev.preventDefault(); await saveVisit(); });
+
+    // Un solo gesto per finire: salva, crea il referto definitivo e proponi l'invio al proprietario
+    if (ctx.isVet && pet && !visit?.finalized_at) VR.show(VR.$('#saveClose'));
+    VR.$('#saveClose').addEventListener('click', async () => {
+      if (visit) { VR.$('#pdfFinalize').click(); return; }
+      closeAfterSave = true;
+      try { await saveVisit(); } finally { closeAfterSave = false; }
     });
+    if (VR.param('chiudi') && visit && !visit.finalized_at && ctx.isVet && pet) {
+      setTimeout(() => { VR.$('#pdfPanel').scrollIntoView({ block: 'center' }); VR.$('#pdfFinalize').click(); }, 400);
+    }
 
     VR.$('#del').addEventListener('click', async () => {
       if (!confirm('Eliminare questa visita? Gli allegati restano nei documenti dell\'animale.')) return;

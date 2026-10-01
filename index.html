@@ -761,6 +761,11 @@
     .footer-bottom{ margin-top:30px; padding-top:16px; border-top:1px solid rgba(255,255,255,.12); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:13px; color:#94a3b8; }
     .footer-bottom a{ color:#cbd5e1; }
     @media (max-width: 760px){ .site-footer .footer-grid{ grid-template-columns:1fr 1fr; } .site-footer .fine{ grid-column:1 / -1; } }
+    /* Sezione guida: schede cliccabili con lo stesso aspetto delle altre */
+    a.guide-card{ display:block; color:inherit; text-decoration:none; transition: transform .12s ease, box-shadow .12s ease; }
+    a.guide-card:hover{ text-decoration:none; transform: translateY(-2px); box-shadow: 0 16px 44px rgba(15,23,42,.12); }
+    a.guide-card h3{ color: var(--teal2, #115e59); }
+    .guide-more{ margin: 18px 0 0 !important; }
   </style>
 
   <!-- Structured Data -->
@@ -854,6 +859,7 @@
           <a href="#cosa-fa">Cosa fa</a>
           <a href="#profilo-pet">Profilo pet</a>
           <a href="#per-chi">Per chi</a>
+          <a href="/guida/">Guida</a>
           <a href="#faq">FAQ</a>
           <a href="#contatti">Contatti</a>
           <a class="btn small primary" href="/app/">Accedi</a>
@@ -1055,6 +1061,49 @@
       </div>
     </section>
 
+    <section class="section" id="guida">
+      <div class="container">
+        <h2>Guida pratica a Vetroom</h2>
+        <p>
+          Articoli brevi, con i passaggi e le schermate dell’app, per le cose che fai ogni giorno in ambulatorio.
+        </p>
+
+        <div class="grid" role="list">
+          <a class="card guide-card" role="listitem" href="/guida/referto-veterinario-pdf.html">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/upload_document.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Referto veterinario in PDF</h3>
+            <p>Dalla visita al referto con la tua intestazione, inviato al proprietario in un gesto.</p>
+          </a>
+          <a class="card guide-card" role="listitem" href="/guida/agenda-veterinaria-online.html">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/agenda.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Agenda veterinaria online</h3>
+            <p>Giorno, settimana e mese, una colonna per veterinario, appuntamenti da spostare trascinandoli.</p>
+          </a>
+          <a class="card guide-card" role="listitem" href="/guida/richiami-vaccinali-promemoria.html">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/appointment.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Richiami vaccinali automatici</h3>
+            <p>Fissi il richiamo durante la visita: il promemoria al cliente parte da solo.</p>
+          </a>
+          <a class="card guide-card" role="listitem" href="/guida/moduli-visita-consenso-certificato.html">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/update_visit.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Consenso informato e certificato di buona salute</h3>
+            <p>Moduli pronti da usare nella visita, senza configurare nulla.</p>
+          </a>
+          <a class="card guide-card" role="listitem" href="/guida/importare-clienti-da-excel.html">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/create_owner.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Importare i clienti da Excel</h3>
+            <p>Porti in Vetroom l’archivio del vecchio gestionale in pochi minuti.</p>
+          </a>
+          <a class="card guide-card" role="listitem" href="/guida/furrfinder-app-clienti.html">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/owner_pets.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>FurrFinder, l’app per i tuoi clienti</h3>
+            <p>Tornano da soli, chiamano di meno e prenotano da soli.</p>
+          </a>
+        </div>
+        <p class="guide-more"><a class="btn soft" href="/guida/">Tutti gli articoli della guida</a></p>
+      </div>
+    </section>
+
     <section class="section" id="faq">
       <div class="container">
         <h2>FAQ</h2>
@@ -1251,6 +1300,7 @@
           <a href="#cosa-fa">Cosa fa</a>
           <a href="#profilo-pet">Profilo pet</a>
           <a href="#per-chi">Per chi</a>
+          <a href="/guida/">Guida</a>
           <a href="#faq">FAQ</a>
         </nav>
 

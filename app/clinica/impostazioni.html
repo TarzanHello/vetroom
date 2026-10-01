@@ -12,15 +12,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-01c">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js"></script>
-  <script src="../js/app.js"></script>
-  <script src="../js/i18n.js"></script>
-  <script src="../js/layout.js"></script>
-  <script src="../js/clinica.js"></script>
+  <script src="../js/config.js?v=2026-10-01c"></script>
+  <script src="../js/app.js?v=2026-10-01c"></script>
+  <script src="../js/i18n.js?v=2026-10-01c"></script>
+  <script src="../js/layout.js?v=2026-10-01c"></script>
+  <script src="../js/clinica.js?v=2026-10-01c"></script>
   <script src="../vendor/jspdf-2.5.2.min.js"></script>
-  <script src="../js/pdf.js"></script>
+  <script src="../js/pdf.js?v=2026-10-01c"></script>
 </head>
 <body data-shell="clinic" data-nav="impostazioni">
 
@@ -121,7 +121,17 @@
     </section>
 
     <section class="panel" id="images" hidden>
+      <div class="id-box" id="idBox" hidden>
+        <div>
+          <span class="id-label" id="codeLabel">Codice dello studio</span>
+          <strong class="id-code notranslate" id="clinicCode">—</strong>
+        </div>
+        <p class="hint-small" style="margin:0" id="codeHint">Identifica lo studio. Tienilo a portata di mano se scrivi all'assistenza Vetroom: ci permette di trovarti subito. Non è il codice che dai ai clienti per collegarsi.</p>
+        <button class="btn btn-ghost btn-small" type="button" id="copyClinicCode">Copia</button>
+      </div>
+
       <h2>Logo e timbro</h2>
+      <p class="hint-small" style="margin-top:0">Il logo compare in cima ai referti PDF e sul <a href="furrfinder.html">poster FurrFinder</a> con il QR da stampare per la vetrina e la sala d'attesa.</p>
       <p class="muted">Meglio un'immagine PNG con sfondo trasparente. Il timbro compare accanto alla firma.</p>
       <div class="grid">
         <div>
@@ -273,6 +283,26 @@
       (path && isAdmin ? VR.show : VR.hide)(rm);
     };
     renderAsset('logo'); renderAsset('stamp');
+
+    // Codice identificativo della clinica
+    VR.sb.rpc('my_codes').then(({ data }) => {
+      if (!data) return;
+      const here = (data.clinics || []).find((c) => c.id === ctx.clinicId) || {};
+      // Il codice dello studio è quello del suo amministratore. Chi non è l'amministratore
+      // vede il proprio codice personale: lo segue anche se un domani cambia struttura.
+      const mine = data.code, studio = here.code;
+      const show = here.is_mine ? studio : (mine || studio);
+      if (!show) return;
+      VR.$('#clinicCode').textContent = show;
+      if (!here.is_mine && mine) {
+        VR.$('#codeLabel').textContent = 'Il tuo codice professionale';
+        VR.$('#codeHint').innerHTML = `È il tuo codice personale: resta lo stesso anche se un domani cambi studio.${studio ? ` Lo studio è identificato dal codice del suo amministratore, <b class="notranslate">${VR.esc(studio)}</b>.` : ''} Servono all'assistenza Vetroom per trovarti subito. Non sono il codice che dai ai clienti per collegarsi.`;
+      }
+      VR.show(VR.$('#idBox'));
+      VR.$('#copyClinicCode').addEventListener('click', async (ev) => {
+        try { await navigator.clipboard.writeText(show); ev.target.textContent = 'Copiato!'; setTimeout(() => { ev.target.textContent = 'Copia'; }, 1500); } catch { /* niente */ }
+      });
+    }).catch(() => {});
 
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();

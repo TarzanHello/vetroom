@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>FurrFinder – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-01c">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../vendor/jspdf-2.5.2.min.js"></script>
+  <script src="../vendor/qrcode-generator.js"></script>
+  <script src="../js/config.js?v=2026-10-01c"></script>
+  <script src="../js/app.js?v=2026-10-01c"></script>
+  <script src="../js/i18n.js?v=2026-10-01c"></script>
+  <script src="../js/layout.js?v=2026-10-01c"></script>
+  <script src="../js/clinica.js?v=2026-10-01c"></script>
+  <script src="../js/pdf.js?v=2026-10-01c"></script>
+</head>
+<body data-shell="clinic" data-nav="furrfinder">
+
+  <main class="wrap">
+    <div class="page-head">
+      <div>
+        <h1>FurrFinder</h1>
+        <p class="muted" style="margin:0">La stanza digitale del tuo studio: l'app gratuita con cui i tuoi clienti entrano in Vetroom.</p>
+      </div>
+      <button class="btn btn-ghost btn-small" type="button" id="replay">▶ Presentazione</button>
+    </div>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <section class="panel ff-why">
+        <h2>Perché conviene alla tua clinica</h2>
+        <p class="hint-small" style="margin-top:0">Vetroom lavora già per te. Quando i tuoi clienti usano FurrFinder, lavora anche con loro:</p>
+        <div class="ff-cards">
+          <div class="ff-card">
+            <img src="../img/icons/appointment.png" alt="">
+            <strong>Torna da solo</strong>
+            <p>Il promemoria del richiamo gli arriva senza che nessuno debba scrivergli. E i richiami sono visite.</p>
+          </div>
+          <div class="ff-card">
+            <img src="../img/icons/owner.png" alt="">
+            <strong>Chiama di meno</strong>
+            <p>Referti e vaccini li trova nel libretto, senza telefonare in clinica.</p>
+          </div>
+          <div class="ff-card">
+            <img src="../img/icons/agenda.png" alt="">
+            <strong>Prenota da solo</strong>
+            <p>Sceglie un orario tra le tue fasce libere. Tu confermi con un tocco.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="progress">
+        <h2>A che punto è la tua stanza digitale</h2>
+        <div id="progressBody"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Come portare i clienti su FurrFinder</h2>
+        <div class="ff-ways">
+          <div class="ff-way">
+            <span class="ff-num">1</span>
+            <div>
+              <strong>Il poster per la sala d'attesa e la vetrina</strong>
+              <p class="hint-small" id="posterHint">Un foglio A4 con il QR del tuo studio: il cliente lo inquadra e il suo animale è collegato a te.</p>
+              <button class="btn btn-primary btn-small" type="button" id="poster">Scarica il poster (PDF)</button>
+            </div>
+          </div>
+          <div class="ff-way">
+            <span class="ff-num">2</span>
+            <div>
+              <strong>L'invito personale, su WhatsApp</strong>
+              <p class="hint-small">Il cliente apre il link, entra con Google e trova il libretto del suo animale <b>già compilato</b> con le tue visite. Il momento migliore: quando chiudi una visita o fissi un appuntamento. Il pulsante "Invita su FurrFinder" c'è nella scheda di ogni proprietario e animale, e qui sotto.</p>
+            </div>
+          </div>
+          <div class="ff-way">
+            <span class="ff-num">3</span>
+            <div>
+              <strong>Il codice del tuo studio</strong>
+              <p class="hint-small">Chi ha già FurrFinder può collegarsi inserendo questo codice.</p>
+              <div class="actions-bar"><span class="ff-code notranslate" id="code"></span><button class="btn btn-ghost btn-small" type="button" id="copyLink">Copia il link</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <p class="hint-small" style="margin:0 0 12px">Vuoi approfondire? Leggi la <a href="/guida/furrfinder-app-clienti.html" target="_blank" rel="noopener">guida a FurrFinder per le cliniche</a>.</p>
+
+      <section class="panel">
+        <div class="page-head" style="margin-bottom:8px">
+          <div>
+            <h2 style="margin:0">Clienti da invitare</h2>
+            <p class="hint-small" style="margin:4px 0 0">Prima chi ha un telefono per WhatsApp. Chi apre il link sparisce da questo elenco.</p>
+          </div>
+          <input type="search" id="q" class="search" placeholder="Cerca un cliente" style="max-width:260px">
+        </div>
+        <ul class="ff-list" id="list"></ul>
+        <p class="muted" id="none" hidden style="margin:0">Tutti i tuoi clienti usano già FurrFinder. 🎉</p>
+        <button class="btn btn-ghost btn-small" type="button" id="more" hidden>Mostra altri</button>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      VR.hide(loading); if (e.message !== 'redirect') VR.say(msg, VR.errorText(e), 'error'); return;
+    }
+    const n = (x) => Number(x || 0).toLocaleString('it-IT');
+
+    const [statsRes, clinicRes, clientsRes] = await Promise.all([
+      VR.sb.rpc('clinic_furrfinder_stats', { p_clinic: ctx.clinicId }),
+      VR.sb.from('clinics').select('*').eq('id', ctx.clinicId).single(),
+      VR.fetchAll(() => VR.sb.from('clients')
+        .select('id, first_name, last_name, phone, email, owner_user_id, pet_access(status, pets(name, deleted_at))')
+        .eq('clinic_id', ctx.clinicId).order('last_name', { ascending: true, nullsFirst: false }).order('id')).then((d) => ({ data: d }), (e) => ({ error: e }))
+    ]);
+    VR.hide(loading);
+    if (clientsRes.error) { VR.say(msg, VR.errorText(clientsRes.error), 'error'); return; }
+    VR.show(VR.$('#page'));
+    const clinic = clinicRes.data || { ...ctx.clinic, id: ctx.clinicId };
+
+    // ---------- Progressi ----------
+    const s = statsRes.data;
+    const pb = VR.$('#progressBody');
+    if (statsRes.error || !s) {
+      pb.innerHTML = '<p class="muted" style="margin:0">I numeri della stanza digitale saranno disponibili a breve.</p>';
+    } else {
+      const tot = Number(s.clients_total) || 0, app = Number(s.clients_app) || 0;
+      const pct = tot ? Math.round(app / tot * 100) : 0;
+      const sent = Number(s.sent_reminders) + Number(s.sent_appointments) + Number(s.sent_reports);
+      pb.innerHTML = `
+        <div class="ff-progress">
+          <div class="ff-big"><b>${n(app)}</b> <span>su ${n(tot)} clienti usano FurrFinder</span></div>
+          <div class="ff-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.max(pct, app ? 3 : 0)}%"></i></div>
+          <p class="hint-small" style="margin:.4rem 0 0">${n(s.pets_app)} animali su ${n(s.pets_total)} hanno il libretto sul telefono del proprietario · ${n(s.owners_push)} ${Number(s.owners_push) === 1 ? 'proprietario riceve' : 'proprietari ricevono'} le notifiche${Number(s.invites_open) ? ` · ${n(s.invites_open)} ${Number(s.invites_open) === 1 ? 'invito in attesa' : 'inviti in attesa'}` : ''}</p>
+        </div>
+        <div class="ff-month">
+          ${sent
+            ? `<strong>Questo mese FurrFinder ha avvisato i tuoi clienti ${n(sent)} ${sent === 1 ? 'volta' : 'volte'} al posto tuo:</strong>
+               <span>${[[s.sent_reminders, 'richiamo', 'richiami'], [s.sent_appointments, 'appuntamento', 'appuntamenti'], [s.sent_reports, 'referto', 'referti']].map(([v, one, many]) => `${n(v)} ${Number(v) === 1 ? one : many}`).join(' · ')}</span>`
+            : `<strong>Qui vedrai il lavoro che FurrFinder fa al posto tuo.</strong>
+               <span>Richiami ricordati, appuntamenti confermati, referti consegnati: appena i tuoi clienti attivano le notifiche.</span>`}
+        </div>`;
+    }
+
+    // ---------- Poster, codice ----------
+    const code = clinic.affiliation_code || ctx.clinic.affiliation_code || '';
+    VR.$('#code').textContent = code;
+    if (!clinic.logo_path) VR.$('#posterHint').innerHTML += ' <b>Consiglio:</b> carica il logo in <a href="impostazioni.html">Opzioni</a>: comparirà in cima al poster.';
+    else VR.$('#posterHint').innerHTML += ' In cima c\'è il logo del tuo studio.';
+    VR.$('#poster').addEventListener('click', async (ev) => {
+      const b = ev.currentTarget; b.disabled = true; const t = b.textContent; b.textContent = 'Preparo il PDF…';
+      try { await VR.ff.poster({ ...clinic, affiliation_code: code }); }
+      catch (e) { VR.say(msg, VR.errorText(e), 'error'); }
+      b.disabled = false; b.textContent = t;
+    });
+    VR.$('#copyLink').addEventListener('click', async (ev) => {
+      const link = new URL('?codice=' + encodeURIComponent(code), VR.root).href;
+      try { await navigator.clipboard.writeText(link); ev.target.textContent = 'Copiato!'; setTimeout(() => { ev.target.textContent = 'Copia il link'; }, 1500); }
+      catch { prompt('Copia questo link:', link); }
+    });
+
+    // ---------- Clienti da invitare ----------
+    const clients = (clientsRes.data || []).filter((c) => !c.owner_user_id).map((c) => ({
+      ...c,
+      petNames: (c.pet_access || []).filter((a) => a.status === 'active' && a.pets && !a.pets.deleted_at).map((a) => a.pets.name),
+      wa: !!(c.phone && VR.waPhone(c.phone))
+    })).sort((a, b) => (b.wa - a.wa) || (b.petNames.length > 0) - (a.petNames.length > 0));
+    let limit = 20;
+    const render = () => {
+      const t = VR.$('#q').value.toLowerCase().trim();
+      const rows = clients.filter((c) => !t || [VR.clientName(c), c.phone, c.email, ...c.petNames].join(' ').toLowerCase().includes(t));
+      VR.$('#list').innerHTML = rows.slice(0, limit).map((c) => `
+        <li>
+          <div class="main"><strong>${VR.esc(VR.clientName(c))}</strong>
+            <span>${VR.esc([c.petNames.join(', '), c.phone || (c.email ? c.email : 'nessun contatto')].filter(Boolean).join(' · '))}</span></div>
+          <button class="btn ${c.wa ? 'btn-primary' : 'btn-ghost'} btn-small" type="button" data-inv="${c.id}">Invita</button>
+        </li>`).join('');
+      (rows.length > limit ? VR.show : VR.hide)(VR.$('#more'));
+      (clients.length ? VR.hide : VR.show)(VR.$('#none'));
+    };
+    VR.$('#q').addEventListener('input', () => { limit = 20; render(); });
+    VR.$('#more').addEventListener('click', () => { limit += 30; render(); });
+    VR.$('#list').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-inv]'); if (!b) return;
+      const c = clients.find((x) => x.id === b.dataset.inv);
+      if (c) VR.ff.openInvite({ client: c, petNames: c.petNames, clinicName: ctx.clinic.name || '' });
+    });
+    render();
+
+    // ---------- Presentazione a colpo d'occhio (finché non si spunta "Non mostrare più") ----------
+    const INTRO = [
+      { icon: 'img/icons/owner_home.png', tint: '#E0F2FE', kicker: 'FurrFinder', title: 'La stanza digitale del tuo studio', text: 'L\'app gratuita dei tuoi clienti, collegata a Vetroom.' },
+      { icon: 'img/icons/appointment.png', tint: '#E6F4F1', kicker: '1', title: 'Torna da solo', text: 'Il promemoria del richiamo gli arriva senza che nessuno scriva. E i richiami sono visite.' },
+      { icon: 'img/icons/upload_document.png', tint: '#FFF4DB', kicker: '2', title: 'Chiama di meno', text: 'Referti e vaccini li trova nel suo libretto.' },
+      { icon: 'img/icons/create_appointment.png', tint: '#EDE9FE', kicker: '3', title: 'Prenota da solo', text: 'Sceglie un orario libero, tu confermi con un tocco.' },
+      { icon: 'img/icons/scan_code.png', tint: '#FFEDD5', kicker: 'Come si parte', title: 'Poster e un messaggio', text: 'Il QR in sala d\'attesa e un invito su WhatsApp. Al resto pensa FurrFinder.',
+        cta: 'Scarica il poster', action: () => VR.$('#poster').click() }
+    ];
+    VR.intro({ key: 'furrfinder', slides: INTRO });
+    VR.$('#replay').addEventListener('click', () => VR.intro({ key: 'furrfinder', slides: INTRO, force: true }));
+  })();
+  </script>
+</body>
+</html>

@@ -12,20 +12,20 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-01c">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js"></script>
-  <script src="../js/app.js"></script>
-  <script src="../js/i18n.js"></script>
-  <script src="../js/layout.js"></script>
-  <script src="../js/clinica.js"></script>
+  <script src="../js/config.js?v=2026-10-01c"></script>
+  <script src="../js/app.js?v=2026-10-01c"></script>
+  <script src="../js/i18n.js?v=2026-10-01c"></script>
+  <script src="../js/layout.js?v=2026-10-01c"></script>
+  <script src="../js/clinica.js?v=2026-10-01c"></script>
 </head>
-<body data-shell="clinic" data-nav="piattaforma">
+<body data-shell="platform" data-nav="panoramica">
   <main class="wrap wrap-wide">
     <div class="page-head">
       <div>
-        <h1>Piattaforma Vetroom</h1>
-        <p class="muted" style="margin:0">Visibile solo agli amministratori della piattaforma.</p>
+        <h1>Pannello amministratore</h1>
+        <p class="muted" style="margin:0">Tutta la piattaforma Vetroom in una pagina. <span id="updated"></span></p>
       </div>
       <button class="btn btn-ghost btn-small" type="button" id="reload">Aggiorna</button>
     </div>
@@ -34,39 +34,107 @@
     <div id="msg" hidden></div>
 
     <div id="page" hidden>
+      <div class="find-bar">
+        <input type="search" id="findQ" placeholder="Cerca un codice (CL-… / UT-…), un numero di prenotazione, un nome o un'email" aria-label="Cerca">
+        <div class="find-res" id="findRes" hidden></div>
+      </div>
+
+      <div id="news" class="notice notice-ok" hidden></div>
+
+      <h2 class="sec-title" id="panoramica">Panoramica</h2>
       <div class="stat-grid" id="stats"></div>
 
       <section class="panel">
         <div class="page-head" style="margin-bottom:6px">
-          <h2 style="margin:0">Crescita (ultime 12 settimane)</h2>
-          <div class="seg seg-big" role="group" aria-label="Serie">
-            <button type="button" data-s="users" aria-pressed="true">Iscritti</button>
-            <button type="button" data-s="clinics" aria-pressed="false">Cliniche</button>
-            <button type="button" data-s="visits" aria-pressed="false">Visite</button>
-            <button type="button" data-s="appointments" aria-pressed="false">Appuntamenti</button>
+          <h2 style="margin:0" id="chartTitle">Crescita</h2>
+          <div class="plat-segs">
+            <div class="seg seg-big" role="group" aria-label="Periodo">
+              <button type="button" data-p="days" aria-pressed="true">Ultimi 30 giorni</button>
+              <button type="button" data-p="weeks" aria-pressed="false">Ultime 12 settimane</button>
+            </div>
+            <div class="seg seg-big" role="group" aria-label="Serie">
+              <button type="button" data-s="users" aria-pressed="true">Iscritti</button>
+              <button type="button" data-s="clinics" aria-pressed="false">Cliniche</button>
+              <button type="button" data-s="visits" aria-pressed="false">Visite</button>
+              <button type="button" data-s="appointments" aria-pressed="false">Appuntamenti</button>
+            </div>
           </div>
         </div>
         <div id="chart" class="chart"></div>
+        <p class="muted" id="chartNote" style="margin:8px 0 0;font-size:13px"></p>
       </section>
 
       <section class="panel">
         <div class="page-head" style="margin-bottom:8px">
-          <h2 style="margin:0">Cliniche</h2>
-          <input type="search" id="q" class="search" placeholder="Cerca per nome o email" style="max-width:280px">
+          <h2 style="margin:0" id="cliniche">Cliniche</h2>
+          <input type="search" id="q" class="search" placeholder="Cerca per nome, email o codice" style="max-width:280px">
         </div>
+        <div class="funnel" id="funnel"></div>
         <div class="table-wrap">
           <table class="vtable" id="clinics">
-            <thead><tr><th>Clinica</th><th>Amministratore</th><th class="num">Team</th><th class="num">Proprietari</th><th class="num">Animali</th><th class="num">Visite</th><th class="num">Appunt.</th><th>Iscritta</th><th>Ultima attività</th><th>Stato</th><th></th></tr></thead>
+            <thead><tr><th>Clinica</th><th>A che punto è</th><th class="num" title="Proprietari che usano l'app FurrFinder collegati a questa clinica">Clienti in app</th><th class="num">Proprietari</th><th class="num">Animali</th><th class="num">Visite</th><th class="num">Appunt.</th><th>Iscritta</th><th>Ultima attività</th><th>Stato</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
+        <p class="hint-small" style="margin:.6rem 0 0"><b>A che punto è:</b> <span class="pill st-empty">Vuota</span> nessun cliente inserito · <span class="pill st-started">Avviata</span> ha clienti ma nessuna visita · <span class="pill st-active">Attiva</span> registra visite · <span class="pill st-room">Stanza digitale</span> almeno un cliente usa FurrFinder. Il pulsante <b>Scrivi</b> prepara un'email adatta alla fase.</p>
       </section>
 
       <section class="panel">
-        <h2>Ultimi iscritti</h2>
+        <div class="page-head" style="margin-bottom:8px">
+          <h2 style="margin:0" id="iscritti">Iscritti</h2>
+          <input type="search" id="uq" class="search" placeholder="Cerca per nome, email, clinica o codice" style="max-width:280px">
+        </div>
+        <div class="seg seg-big user-filter" role="group" aria-label="Filtra iscritti" id="ufilter"></div>
         <div class="table-wrap">
           <table class="vtable" id="users">
-            <thead><tr><th>Email</th><th>Nome</th><th>Ruolo</th><th>Iscritto il</th><th>Ultimo accesso</th></tr></thead>
+            <thead><tr><th>Persona</th><th>Come usa Vetroom</th><th>Iscritto il</th><th>Ultimo accesso</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="hint-small" id="usersNote" hidden style="margin:.6rem 0 0"></p>
+      </section>
+
+      <section class="panel">
+        <div class="page-head" style="margin-bottom:8px">
+          <div>
+            <h2 style="margin:0" id="messaggi">Messaggi <span class="count-badge" id="convCount"></span></h2>
+            <p class="muted" style="margin:4px 0 0;font-size:13px">Tutte le conversazioni della piattaforma. Ogni volta che ne apri una, l'accesso viene registrato: è la garanzia che rende corretto il tuo ruolo di responsabile del trattamento.</p>
+          </div>
+          <input type="search" id="cq" class="search" placeholder="Cerca clinica, nome o email" style="max-width:260px">
+        </div>
+        <div id="convMsg" hidden></div>
+        <div class="table-wrap">
+          <table class="vtable" id="convs">
+            <thead><tr><th>Conversazione</th><th>Ultimo messaggio</th><th class="num">Messaggi</th><th>Quando</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <details style="margin-top:12px">
+          <summary class="hint-small">Registro delle mie letture</summary>
+          <div class="table-wrap" style="margin-top:8px">
+            <table class="vtable" id="accessLog"><thead><tr><th>Quando</th><th>Chi</th><th>Conversazione</th></tr></thead><tbody></tbody></table>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel" id="accountPanel">
+        <h2 id="account">Il mio account</h2>
+        <p class="hint-small" style="margin-top:0">Questo account è l'amministratore della piattaforma. Per tenerlo pulito non dovrebbe far parte di nessuna clinica: così non si mescolano i dati di prova con quelli veri.</p>
+        <div id="myClinics"></div>
+      </section>
+
+      <section class="panel">
+        <div class="page-head" style="margin-bottom:8px">
+          <div>
+            <h2 style="margin:0" id="errori">Errori dell'app</h2>
+            <p class="muted" style="margin:4px 0 0;font-size:13px">Gli errori mostrati agli utenti vengono registrati qui, così puoi accorgertene prima che te li segnalino. Si cancellano da soli dopo 90 giorni.</p>
+          </div>
+          <button class="btn btn-ghost btn-small" type="button" id="clearErr" hidden>Svuota elenco</button>
+        </div>
+        <div id="errMsg" hidden></div>
+        <div class="table-wrap">
+          <table class="vtable" id="errors">
+            <thead><tr><th>Ultima volta</th><th class="num">Volte</th><th>Pagina</th><th>Errore</th><th>Utente</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -81,20 +149,39 @@
     let session;
     try { session = await VR.requireSession(); } catch { return; }
     VR.$('#who').textContent = session.user.email;
-    VR.$('#shellClinic').textContent = 'Piattaforma';
-    VR.$('#shellRole').textContent = 'Amministratore Vetroom';
+    VR.$('#shellClinic').textContent = 'Pannello amministratore';
+    VR.$('#shellRole').textContent = 'Vetroom';
     const isPlat = await VR.checkPlatformAdmin();
     document.querySelectorAll('[data-admin-only]').forEach((x) => x.removeAttribute('hidden'));
     if (!isPlat) { VR.hide(loading); VR.say(msg, 'Area riservata agli amministratori della piattaforma.', 'error'); return; }
 
     const n = (x) => Number(x || 0).toLocaleString('it-IT');
     const d = (x) => x ? new Date(x).toLocaleDateString('it-IT') : '—';
+    const dt = (x) => x ? new Date(x).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+    const hm = (x) => new Date(x).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const short = (x) => new Date(x).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+    // Le date "solo giorno" (es. 2026-09-28) vanno lette come giorno locale, non UTC
+    const day = (s) => { const [y, m, dd] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, dd); };
     const ago = (x) => {
       if (!x) return '—';
-      const days = Math.floor((Date.now() - new Date(x)) / 864e5);
-      return days <= 0 ? 'oggi' : days === 1 ? 'ieri' : days < 30 ? `${days} giorni fa` : d(x);
+      const t = new Date(x), now = new Date();
+      const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 864e5);
+      return days <= 0 ? 'oggi, ' + hm(t) : days === 1 ? 'ieri, ' + hm(t) : days < 30 ? `${days} giorni fa` : d(x);
     };
-    let growth = [], series = 'users', clinics = [];
+    const notFound = (e) => e && (e.code === 'PGRST202' || /Could not find the function|does not exist/i.test(e.message || ''));
+
+    // Novità dall'ultima visita al pannello
+    const SEEN_KEY = 'vetroom_plat_seen';
+    const seenAt = localStorage.getItem(SEEN_KEY);
+    const isNew = (x) => seenAt && x && new Date(x) > new Date(seenAt);
+
+    let myClinics = new Set();
+    try {
+      const { data } = await VR.sb.from('clinic_members').select('clinic_id').eq('user_id', session.user.id);
+      myClinics = new Set((data || []).map((r) => r.clinic_id));
+    } catch { /* non importante */ }
+
+    let daily = [], weekly = [], period = 'days', series = 'users', clinics = [], hasDaily = true;
 
     const LABELS = [
       ['utenti', 'Iscritti totali'], ['nuovi_utenti_30gg', 'Nuovi iscritti (30 gg)'], ['staff', 'Veterinari e segreterie'], ['proprietari', 'Proprietari iscritti'],
@@ -102,38 +189,109 @@
       ['clienti', 'Proprietari in anagrafica'], ['animali', 'Animali'], ['visite', 'Visite'], ['referti_definitivi', 'Referti definitivi'],
       ['appuntamenti', 'Appuntamenti'], ['prenotazioni_online', 'Prenotazioni online'], ['documenti', 'Documenti']
     ];
+    const SERIES_NAME = { users: 'iscritti', clinics: 'cliniche', visits: 'visite', appointments: 'appuntamenti' };
 
     const renderChart = () => {
+      if (!hasDaily) period = 'weeks';
       document.querySelectorAll('[data-s]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.s === series));
-      const vals = growth.map((g) => Number(g[series] || 0));
-      const max = Math.max(1, ...vals);
-      VR.$('#chart').innerHTML = `<div class="bars">${growth.map((g, i) => `
-        <div class="bar-col" title="Settimana del ${d(g.week_start)}: ${vals[i]}">
-          <span class="bar-val">${vals[i] || ''}</span>
-          <span class="bar" style="height:${Math.round(vals[i] / max * 100)}%"></span>
-          <span class="bar-lab">${new Date(g.week_start).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</span>
+      document.querySelectorAll('[data-p]').forEach((b) => { b.setAttribute('aria-pressed', b.dataset.p === period); if (b.dataset.p === 'days') b.hidden = !hasDaily; });
+      const rows = period === 'days'
+        ? daily.map((g, i) => {
+            const t = day(g.day), last = i === daily.length - 1;
+            return { v: Number(g[series] || 0), tip: t.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }),
+              lab: last ? 'oggi' : ((daily.length - 1 - i) % 5 === 0 ? short(t) : ''), now: last };
+          })
+        : weekly.map((g, i) => {
+            const a = day(g.week_start), b = new Date(a); b.setDate(b.getDate() + 6);
+            const last = i === weekly.length - 1;
+            return { v: Number(g[series] || 0), tip: `Settimana dal ${short(a)} al ${short(b)}`, lab: last ? 'questa sett.' : short(a), now: last };
+          });
+      const max = Math.max(1, ...rows.map((r) => r.v));
+      const tot = rows.reduce((s, r) => s + r.v, 0);
+      VR.$('#chartTitle').textContent = period === 'days' ? 'Crescita giorno per giorno' : 'Crescita settimana per settimana';
+      VR.$('#chart').innerHTML = `<div class="bars ${period === 'days' ? 'bars-dense' : ''}">${rows.map((r) => `
+        <div class="bar-col ${r.now ? 'is-now' : ''}" title="${r.tip}: ${r.v} ${SERIES_NAME[series]}">
+          <span class="bar-val">${r.v || ''}</span>
+          <span class="bar" style="height:${Math.round(r.v / max * 100)}%"></span>
+          <span class="bar-lab">${r.lab}</span>
         </div>`).join('')}</div>`;
+      VR.$('#chartNote').textContent = period === 'days'
+        ? `Totale ultimi 30 giorni: ${n(tot)} ${SERIES_NAME[series]}. L'ultima barra è oggi.`
+        : `Totale ultime 12 settimane: ${n(tot)} ${SERIES_NAME[series]}. Ogni barra è una settimana (da lunedì a domenica); l'ultima è quella in corso.`;
     };
     document.querySelectorAll('[data-s]').forEach((b) => b.addEventListener('click', () => { series = b.dataset.s; renderChart(); }));
+    document.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { period = b.dataset.p; renderChart(); }));
+
+    // ---------- A che punto è ogni clinica, ed email pronte per ogni fase ----------
+    let appStats = {}, hasAppStats = true;
+    const stageOf = (c) => {
+      const app = appStats[c.id]?.app_owners || 0;
+      if (Number(c.clients) === 0) return { k: 'empty', l: 'Vuota' };
+      if (Number(c.visits) === 0) return { k: 'started', l: 'Avviata' };
+      if (!app) return { k: 'active', l: 'Attiva' };
+      return { k: 'room', l: 'Stanza digitale' };
+    };
+    const firstName = (full) => String(full || '').trim().split(/\s+/)[0] || '';
+    const SIGN = '\n\nUn saluto,\nAureliano\nVetroom — www.vetroom.it';
+    const mail = (to, subject, body) => ({ to, subject, body });
+    const mailto = (m) => `mailto:${String(m.to).replace(/[?&#\s]/g, '')}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
+    const clinicMail = (c) => {
+      const st = stageOf(c).k, hi = `Buongiorno,\n\n`;
+      const T = {
+        empty: ['Benvenuti in Vetroom: vi aiuto a partire?', `${hi}grazie per aver creato "${c.name}" su Vetroom. Per partire in pochi minuti:\n\n- se avete già un elenco di clienti (Excel o altro gestionale), da Opzioni → Importa lo caricate in un colpo solo;\n- impostate gli orari di apertura, così l'agenda mostra le fasce libere;\n- dalla dashboard, "Nuovo paziente" registra proprietario e animale in 20 secondi.\n\nSe preferite, rispondete a questa email e vi aiuto io a importare i dati.`],
+        started: ['Come sta andando con Vetroom?', `${hi}vedo che avete iniziato a inserire i clienti su Vetroom: ottimo. Il passo successivo è la prima visita: dalla scheda dell'animale premete "Nuova visita", e alla fine "Salva e chiudi con referto" crea il PDF con la vostra intestazione.\n\nC'è qualcosa che vi manca o che non funziona come vi aspettate? Mi farebbe piacere saperlo.`],
+        active: ['Il passo che trasforma Vetroom nella stanza digitale del vostro studio', `${hi}Vetroom sta già lavorando per voi. Il salto di qualità arriva quando anche i vostri clienti entrano da FurrFinder, l'app gratuita per i proprietari:\n\n- vedono referti e vaccini senza chiamarvi;\n- prenotano online nelle vostre fasce libere;\n- ricevono da soli i promemoria di richiami e appuntamenti.\n\nPer invitarli: stampate il QR dalla dashboard ("Codice e QR per i proprietari") e mettetelo in sala d'attesa, oppure mandate il link ai clienti su WhatsApp. Se volete, vi preparo io il messaggio.`],
+        room: ['Grazie per usare Vetroom', `${hi}i vostri clienti stanno già usando FurrFinder: la vostra stanza digitale è attiva. Vi chiedo un minuto: cosa vi piace di più e cosa migliorereste? Ogni risposta la leggo personalmente.`]
+      };
+      const [sub, body] = T[st];
+      return mail(c.admin_email || '', sub, body + SIGN);
+    };
+    const userMail = (u) => {
+      const who = firstName(u.full_name);
+      const hi = who ? `Ciao ${who},\n\n` : 'Ciao,\n\n';
+      if (!u.is_staff && !u.is_owner) return mail(u.email, 'Serve una mano con Vetroom?', `${hi}ho visto che hai fatto l'accesso a Vetroom ma non hai ancora scelto come usarlo.\n\n- Se lavori in una clinica veterinaria: entra di nuovo da www.vetroom.it/app/ e scegli "Lavoro in una clinica". In un minuto hai il gestionale pronto, gratis.\n- Se hai un animale: scegli "Ho un animale" per il libretto sanitario digitale FurrFinder.\n\nSe qualcosa non è chiaro, rispondi pure a questa email.` + SIGN);
+      if (u.is_staff) return mail(u.email, 'Benvenuto in Vetroom', `${hi}benvenuto in Vetroom! Se ti serve una mano per importare i clienti o per impostare l'agenda, rispondi a questa email: ti aiuto volentieri.` + SIGN);
+      return mail(u.email, 'Benvenuto su FurrFinder', `${hi}benvenuto su FurrFinder! Due consigli per sfruttarlo al meglio:\n\n- se il tuo veterinario usa Vetroom, collega il tuo animale con il codice della clinica (Impostazioni → Cliniche);\n- attiva le notifiche: ti avvisiamo noi di richiami e appuntamenti.` + SIGN);
+    };
+
+    const renderFunnel = () => {
+      const act = clinics.filter((c) => c.status !== 'suspended');
+      const k = (fn) => act.filter(fn).length;
+      const steps = [
+        ['Registrate', act.length],
+        ['Con clienti', k((c) => Number(c.clients) > 0)],
+        ['Con visite', k((c) => Number(c.visits) > 0)],
+        ['Clienti su FurrFinder', hasAppStats ? k((c) => (appStats[c.id]?.app_owners || 0) > 0) : '–']
+      ];
+      VR.$('#funnel').innerHTML = steps.map(([l, v], i) => `<div class="funnel-step"><b>${v}</b><span>${l}</span></div>${i < steps.length - 1 ? '<span class="funnel-arrow" aria-hidden="true">→</span>' : ''}`).join('');
+    };
 
     const renderClinics = () => {
       const t = VR.$('#q').value.toLowerCase().trim();
-      const rows = clinics.filter((c) => !t || (c.name + ' ' + (c.admin_email || '')).toLowerCase().includes(t));
-      VR.$('#clinics tbody').innerHTML = rows.map((c) => `
-        <tr class="${c.status === 'suspended' ? 'is-suspended' : ''}">
-          <td><strong>${VR.esc(c.name)}</strong>${c.suspended_reason ? `<br><span class="muted" style="font-size:12px">${VR.esc(c.suspended_reason)}</span>` : ''}</td>
-          <td>${c.admin_email ? `<a href="mailto:${VR.esc(c.admin_email)}">${VR.esc(c.admin_email)}</a>` : '—'}</td>
-          <td class="num">${n(c.members)}</td><td class="num">${n(c.clients)}</td><td class="num">${n(c.pets)}</td>
+      const rows = clinics.filter((c) => !t || (c.name + ' ' + (c.admin_email || '') + ' ' + (codes.clinics[c.id] || '')).toLowerCase().includes(t));
+      VR.$('#clinics tbody').innerHTML = rows.map((c) => {
+        const mine = myClinics.has(c.id);
+        return `
+        <tr class="${c.status === 'suspended' ? 'is-suspended' : ''} ${isNew(c.created_at) ? 'is-new' : ''}">
+          <td><strong>${VR.esc(c.name)}</strong> ${codeChip(codes.clinics[c.id])}${isNew(c.created_at) ? ' <span class="pill pill-new">Nuova</span>' : ''}${mine ? ' <span class="pill">La tua</span>' : ''}
+            <br><span class="muted" style="font-size:12px">${VR.esc(c.admin_email || '')}${Number(c.members) > 1 ? ` · team di ${n(c.members)}` : ''}</span>
+            ${c.suspended_reason ? `<br><span class="muted" style="font-size:12px">${VR.esc(c.suspended_reason)}</span>` : ''}</td>
+          <td>${(() => { const st = stageOf(c); return `<span class="pill st-${st.k}">${st.l}</span>`; })()}</td>
+          <td class="num">${hasAppStats ? n(appStats[c.id]?.app_owners || 0) : '–'}${appStats[c.id]?.push_owners ? ` <span title="con notifiche attive">🔔${n(appStats[c.id].push_owners)}</span>` : ''}</td>
+          <td class="num">${n(c.clients)}</td><td class="num">${n(c.pets)}</td>
           <td class="num">${n(c.visits)}</td><td class="num">${n(c.appointments)}</td>
           <td>${d(c.created_at)}</td><td>${ago(c.last_activity)}</td>
           <td><span class="pill ${c.status === 'suspended' ? 'pill-bad' : 'pill-ok'}">${c.status === 'suspended' ? 'Sospesa' : 'Attiva'}</span></td>
           <td class="row-actions">
+            <button class="btn btn-ghost btn-small" type="button" data-card="clinic" data-id="${c.id}">Scheda</button>
+            ${c.admin_email ? `<button class="btn btn-ghost btn-small" type="button" data-write="clinic" data-id="${c.id}">${mailSentTo(c.admin_email) ? '✓ Scrivi' : 'Scrivi'}</button>` : ''}
             ${c.status === 'suspended'
               ? `<button class="btn btn-ghost btn-small" data-act="active" data-id="${c.id}">Riattiva</button>`
-              : `<button class="btn btn-danger btn-small" data-act="suspended" data-id="${c.id}" data-name="${VR.esc(c.name)}">Sospendi</button>`}
-            ${Number(c.clients) === 0 && Number(c.visits) === 0 ? `<button class="btn btn-ghost btn-small" data-act="delete" data-id="${c.id}" data-name="${VR.esc(c.name)}">Elimina</button>` : ''}
+              : mine ? '' : `<button class="btn btn-danger btn-small" data-act="suspended" data-id="${c.id}" data-name="${VR.esc(c.name)}">Sospendi</button>`}
+            ${Number(c.clients) === 0 && Number(c.visits) === 0 && !mine ? `<button class="btn btn-ghost btn-small" data-act="delete" data-id="${c.id}" data-name="${VR.esc(c.name)}">Elimina</button>` : ''}
           </td>
-        </tr>`).join('') || '<tr><td colspan="11" class="muted">Nessuna clinica.</td></tr>';
+        </tr>`; }).join('') || '<tr><td colspan="11" class="muted">Nessuna clinica.</td></tr>';
+      renderFunnel();
     };
     VR.$('#q').addEventListener('input', renderClinics);
 
@@ -156,25 +314,490 @@
       load();
     });
 
+    const renderErrors = (res) => {
+      const errMsg = VR.$('#errMsg'), body = VR.$('#errors tbody');
+      VR.hide(errMsg);
+      if (res.error) {
+        body.innerHTML = '';
+        VR.hide(VR.$('#clearErr'));
+        VR.say(errMsg, notFound(res.error) ? 'Il monitoraggio errori non è ancora attivo: esegui vetroom2_patch_09.sql su Supabase.' : VR.errorText(res.error), notFound(res.error) ? 'info' : 'error');
+        return;
+      }
+      const rows = res.data || [];
+      VR.$('#clearErr').hidden = rows.length === 0;
+      body.innerHTML = rows.map((e) => `
+        <tr class="${isNew(e.last_seen) ? 'is-new' : ''}">
+          <td style="white-space:nowrap">${ago(e.last_seen)}${isNew(e.last_seen) ? ' <span class="pill pill-new">Nuovo</span>' : ''}</td>
+          <td class="num">${n(e.hits)}</td>
+          <td class="notranslate" style="font-size:12px">${VR.esc((e.page || '').replace('/app/', ''))}</td>
+          <td class="notranslate"><details><summary>${VR.esc(e.message)}</summary><pre class="err-detail">${VR.esc([e.detail, e.user_agent, e.app_version ? 'versione app ' + e.app_version : ''].filter(Boolean).join('\n\n'))}</pre></details></td>
+          <td style="font-size:12px">${VR.esc(e.email || '—')}</td>
+        </tr>`).join('') || '<tr><td colspan="5" class="muted">Nessun errore registrato. 👍</td></tr>';
+    };
+    VR.$('#clearErr').addEventListener('click', async () => {
+      if (!confirm('Svuotare l\'elenco degli errori? Fallo dopo averli letti o sistemati.')) return;
+      const { error } = await VR.sb.rpc('platform_clear_errors');
+      if (error) { VR.say(VR.$('#errMsg'), VR.errorText(error), 'error'); return; }
+      load();
+    });
+
+    // ---------- Iscritti: filtri, ricerca, ruolo chiaro ----------
+    let users = [], ufilter = 'all', richUsers = true;
+    const kindOf = (u) => (!u.is_staff && !u.is_owner) ? 'half' : (u.is_staff ? 'clinic' : 'owner');
+    const roleCell = (u) => {
+      const lines = [];
+      if (u.is_staff) {
+        const cl = Array.isArray(u.clinics) ? u.clinics : [];
+        lines.push(cl.length
+          ? cl.map((c) => `<span class="pill st-active">${VR.esc(VR.ROLE?.[c.role] || c.role)}</span> ${VR.esc(c.name)}`).join('<br>')
+          : '<span class="pill">Clinica</span> <span class="muted">nessuna clinica attiva</span>');
+      }
+      if (u.is_owner) {
+        lines.push(`<span class="pill st-room">Proprietario</span> ${richUsers ? `${n(u.pets)} ${u.pets === 1 ? 'animale' : 'animali'}${u.push_devices ? ' · 🔔 notifiche attive' : ''}` : ''}`);
+      }
+      if (!lines.length) lines.push('<span class="pill st-half">Registrazione a metà</span><br><span class="muted" style="font-size:12px">Ha fatto l\'accesso ma non ha scelto se è una clinica o un proprietario</span>');
+      return lines.join('<br>');
+    };
+    const renderUsers = () => {
+      const t = VR.$('#uq').value.toLowerCase().trim();
+      const count = (k) => users.filter((u) => k === 'all' || kindOf(u) === k).length;
+      const F = [['all', 'Tutti'], ['clinic', 'Cliniche'], ['owner', 'Proprietari'], ['half', 'A metà']];
+      VR.$('#ufilter').innerHTML = F.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${ufilter === k}">${l} <span class="muted">${count(k)}</span></button>`).join('');
+      const rows = users.filter((u) => (ufilter === 'all' || kindOf(u) === ufilter) &&
+        (!t || [u.email, u.full_name, codes.users[u.id], ...(Array.isArray(u.clinics) ? u.clinics.map((c) => c.name) : [])].join(' ').toLowerCase().includes(t)));
+      VR.$('#users tbody').innerHTML = rows.map((u) => `
+        <tr class="${isNew(u.created_at) ? 'is-new' : ''} ${kindOf(u) === 'half' ? 'is-half' : ''}">
+          <td><strong>${VR.esc(u.full_name || '—')}</strong> ${codeChip(codes.users[u.id])}${isNew(u.created_at) ? ' <span class="pill pill-new">Nuovo</span>' : ''}<br><span class="muted" style="font-size:12px">${VR.esc(u.email || '')}</span></td>
+          <td>${roleCell(u)}</td>
+          <td>${dt(u.created_at)}</td><td>${ago(u.last_sign_in_at)}</td>
+          <td class="row-actions"><button class="btn btn-ghost btn-small" type="button" data-card="user" data-id="${u.id}">Scheda</button>${u.email ? `<button class="btn ${kindOf(u) === 'half' && !mailSentTo(u.email) ? 'btn-primary' : 'btn-ghost'} btn-small" type="button" data-write="user" data-id="${VR.esc(u.email)}">${mailSentTo(u.email) ? '✓ Scrivi' : 'Scrivi'}</button>` : ''}</td>
+        </tr>`).join('') || '<tr><td colspan="5" class="muted">Nessun iscritto con questi criteri.</td></tr>';
+    };
+    VR.$('#uq').addEventListener('input', renderUsers);
+    VR.$('#ufilter').addEventListener('click', (ev) => { const b = ev.target.closest('[data-f]'); if (!b) return; ufilter = b.dataset.f; renderUsers(); });
+
+    // ---------- Scrivere un'email dal pannello ----------
+    let mailReady = null, mailLog = [];
+    const mailSentTo = (email) => mailLog.find((m) => m.to_email === String(email || '').toLowerCase() && m.status === 'sent');
+    const dlg = (() => {
+      const d = document.createElement('dialog');
+      d.id = 'mailDlg'; d.className = 'dlg';
+      d.innerHTML = `
+        <form method="dialog" id="mailForm" novalidate>
+          <h2 style="margin-top:0">Scrivi</h2>
+          <p class="hint-small" id="mailFrom" style="margin-top:0"></p>
+          <div id="mailPrev" hidden></div>
+          <div class="grid">
+            <div class="s12"><label for="mTo">A</label><input type="email" id="mTo" required></div>
+            <div class="s12"><label for="mSubj">Oggetto</label><input type="text" id="mSubj" required></div>
+            <div class="s12"><label for="mBody">Messaggio</label><textarea id="mBody" rows="14"></textarea></div>
+          </div>
+          <div id="mailMsg" hidden></div>
+          <div class="actions-bar" style="margin-top:12px">
+            <button class="btn btn-primary" type="submit" id="mSend">Invia</button>
+            <button class="btn btn-ghost" type="button" id="mCopy">Copia testo</button>
+            <a class="btn btn-ghost" id="mMailto" href="#">Apri nel programma di posta</a>
+            <span class="spacer"></span>
+            <button class="btn btn-ghost" type="button" id="mClose">Chiudi</button>
+          </div>
+        </form>`;
+      document.body.appendChild(d);
+      d.querySelector('#mClose').addEventListener('click', () => d.close());
+      d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+      return d;
+    })();
+    const mailMsg = VR.$('#mailMsg');
+    const openMail = async (m) => {
+      VR.hide(mailMsg);
+      VR.$('#mTo').value = m.to || ''; VR.$('#mSubj').value = m.subject || ''; VR.$('#mBody').value = m.body || '';
+      VR.$('#mSend').disabled = false; VR.$('#mSend').textContent = 'Invia';
+      dlg._name = m.name || null;
+      const already = mailSentTo(m.to);
+      const prev = VR.$('#mailPrev');
+      if (already) { prev.className = 'notice notice-info'; prev.textContent = `Hai già scritto a questo indirizzo il ${dt(already.sent_at)}: "${already.subject}".`; VR.show(prev); } else VR.hide(prev);
+      if (mailReady === null) { const { data } = await VR.sb.rpc('platform_mail_ready'); mailReady = data || { ready: false }; }
+      const send = VR.$('#mSend'), mt = VR.$('#mMailto');
+      if (mailReady.ready) {
+        VR.show(send); VR.hide(mt);
+        VR.$('#mailFrom').textContent = `Parte da ${mailReady.name ? mailReady.name + ' <' + mailReady.from + '>' : mailReady.from}. Le risposte arrivano in quella casella.`;
+      } else {
+        VR.hide(send); VR.show(mt);
+        mt.href = mailto({ to: m.to, subject: m.subject, body: m.body });
+        VR.$('#mailFrom').innerHTML = 'L\'invio dal pannello non è ancora configurato: per ora copia il testo, oppure apri il programma di posta. Vedi le istruzioni della patch 14.';
+      }
+      if (!dlg.open) dlg.showModal();
+      VR.$('#mBody').addEventListener('input', () => { mt.href = mailto({ to: VR.$('#mTo').value, subject: VR.$('#mSubj').value, body: VR.$('#mBody').value }); }, { once: true });
+    };
+    VR.$('#mCopy').addEventListener('click', async (ev) => {
+      try { await navigator.clipboard.writeText(VR.$('#mBody').value); ev.target.textContent = 'Copiato!'; setTimeout(() => { ev.target.textContent = 'Copia testo'; }, 1500); }
+      catch { VR.$('#mBody').select(); }
+    });
+    VR.$('#mailForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      VR.hide(mailMsg);
+      const btn = VR.$('#mSend'); btn.disabled = true; btn.textContent = 'Invio in corso…';
+      const { data: id, error } = await VR.sb.rpc('platform_send_email', {
+        p_to: VR.$('#mTo').value.trim(), p_subject: VR.$('#mSubj').value.trim(), p_body: VR.$('#mBody').value,
+        p_to_name: dlg._name, p_kind: 'manual'
+      });
+      if (error) { btn.disabled = false; btn.textContent = 'Invia'; VR.say(mailMsg, VR.errorText(error), 'error'); return; }
+      // il server impiega un paio di secondi: controlliamo com'è andata
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, i < 3 ? 700 : 1500));
+        const { data: st } = await VR.sb.rpc('platform_mail_status', { p_id: id });
+        if (st && st.status === 'sent') {
+          VR.say(mailMsg, 'Email inviata.', 'ok');
+          btn.textContent = 'Inviata ✓';
+          loadMailLog().then(() => { renderUsers(); renderClinics(); });
+          setTimeout(() => dlg.close(), 1200);
+          return;
+        }
+        if (st && st.status === 'failed') {
+          btn.disabled = false; btn.textContent = 'Riprova';
+          VR.say(mailMsg, 'Non è partita: ' + VR.esc(st.error || 'errore sconosciuto') + '. Controlla i dati della casella (mail_configure) e riprova.', 'error');
+          return;
+        }
+      }
+      btn.disabled = false; btn.textContent = 'Invia';
+      VR.say(mailMsg, 'L\'email è in coda: parte da sola entro un minuto. Puoi chiudere questa finestra.', 'info');
+    });
+    const loadMailLog = async () => {
+      const { data, error } = await VR.sb.rpc('platform_mail_log', { p_limit: 300 });
+      mailLog = error ? [] : (data || []);
+    };
+    document.addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-write]'); if (!b) return;
+      if (b.dataset.write === 'clinic') {
+        const c = clinics.find((x) => x.id === b.dataset.id);
+        if (c) openMail({ ...clinicMail(c), name: c.name });
+      } else {
+        const u = users.find((x) => x.email === b.dataset.id);
+        if (!u) return;
+        // chi usa già l'app riceve un messaggio interno; agli altri si scrive per email
+        if (u.last_sign_in_at && (u.is_staff || u.is_owner)) {
+          const t = userMail(u);
+          const body = prompt(`Messaggio interno a ${u.full_name || u.email} (lo legge dentro Vetroom).\nLascia vuoto per scrivergli invece una email.`, t.body);
+          if (body === null) return;
+          if (body.trim()) {
+            const { error } = await VR.sb.rpc('platform_message_user', { p_user: u.id, p_body: body });
+            if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+            VR.say(msg, 'Messaggio inviato: lo trova in Vetroom, alla voce Messaggi.', 'ok');
+            loadConvs();
+            return;
+          }
+        }
+        openMail({ ...userMail(u), name: u.full_name });
+      }
+    });
+
+    // ---------- Messaggi della piattaforma ----------
+    let convs = [];
+    const roleName = { owner: 'proprietario', clinic: 'clinica', admin: 'Vetroom' };
+    const renderConvs = () => {
+      VR.$('#convCount').textContent = convs.length ? String(convs.length) : '';
+      VR.$('#convs tbody').innerHTML = convs.map((c) => `
+        <tr>
+          <td><strong>${VR.esc(c.kind === 'admin_user' ? 'Assistenza · ' + (c.owner_name || '') : (c.clinic_name || 'Clinica') + ' ⇄ ' + (c.owner_name || ''))}</strong>
+            <br><span class="muted" style="font-size:12px">${VR.esc(c.owner_email || '')}</span></td>
+          <td><span class="muted" style="font-size:12px">${c.last_sender_role ? VR.esc(roleName[c.last_sender_role] || '') + ': ' : ''}</span>${VR.esc(c.last_preview || '—')}</td>
+          <td class="num">${n(c.messages)}</td>
+          <td style="white-space:nowrap">${c.last_message_at ? ago(c.last_message_at) : '—'}</td>
+          <td class="row-actions"><button class="btn btn-ghost btn-small" type="button" data-conv="${c.id}">Apri</button></td>
+        </tr>`).join('') || '<tr><td colspan="5" class="muted">Nessuna conversazione.</td></tr>';
+    };
+    const loadConvs = async () => {
+      const q = VR.$('#cq').value.trim();
+      const { data, error } = await VR.sb.rpc('platform_conversations', { p_limit: 200, p_q: q || null });
+      if (error) {
+        VR.say(VR.$('#convMsg'), notFound(error) ? 'I messaggi interni non sono ancora attivi: esegui vetroom2_patch_15.sql su Supabase.' : VR.errorText(error), notFound(error) ? 'info' : 'error');
+        convs = []; renderConvs(); return;
+      }
+      VR.hide(VR.$('#convMsg'));
+      convs = data || []; renderConvs();
+    };
+    let cqTimer;
+    VR.$('#cq').addEventListener('input', () => { clearTimeout(cqTimer); cqTimer = setTimeout(loadConvs, 300); });
+
+    const convDlg = (() => {
+      const d = document.createElement('dialog');
+      d.className = 'dlg'; d.id = 'convDlg';
+      d.innerHTML = `<h2 style="margin-top:0" id="cdTitle">Conversazione</h2>
+        <p class="hint-small" id="cdNote" style="margin-top:0"></p>
+        <div class="msg-scroll" id="cdBody" style="max-height:52vh;border:1px solid var(--line);border-radius:12px"></div>
+        <div id="cdReplyBox" hidden>
+          <label for="cdReply" style="margin-top:10px">Rispondi come Vetroom</label>
+          <textarea id="cdReply" rows="3"></textarea>
+          <div class="actions-bar" style="margin-top:8px"><button class="btn btn-primary" type="button" id="cdSend">Invia</button></div>
+        </div>
+        <div id="cdMsg" hidden></div>
+        <div class="actions-bar" style="margin-top:12px"><span class="spacer"></span><button class="btn btn-ghost" type="button" id="cdClose">Chiudi</button></div>`;
+      document.body.appendChild(d);
+      d.querySelector('#cdClose').addEventListener('click', () => d.close());
+      d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+      return d;
+    })();
+    const openConv = async (c) => {
+      VR.hide(VR.$('#cdMsg'));
+      VR.$('#cdTitle').textContent = c.kind === 'admin_user' ? 'Assistenza · ' + (c.owner_name || '') : (c.clinic_name || 'Clinica') + ' ⇄ ' + (c.owner_name || '');
+      VR.$('#cdNote').textContent = c.kind === 'admin_user'
+        ? 'Conversazione di assistenza: qui puoi rispondere.'
+        : 'Conversazione fra clinica e proprietario: puoi leggerla, non scriverci. Questa apertura resta nel registro.';
+      (c.kind === 'admin_user' ? VR.show : VR.hide)(VR.$('#cdReplyBox'));
+      VR.$('#cdBody').innerHTML = '<p class="loader">Caricamento…</p>';
+      if (!convDlg.open) convDlg.showModal();
+      const { data, error } = await VR.sb.rpc('msg_thread', { p_conv: c.id, p_limit: 300 });
+      if (error) { VR.$('#cdBody').innerHTML = `<div class="notice notice-error">${VR.esc(VR.errorText(error))}</div>`; return; }
+      const msgs = (data || []).slice().reverse();
+      VR.$('#cdBody').innerHTML = msgs.map((m) => `
+        <div class="bubble ${m.sender_role === 'admin' ? 'mine' : 'theirs'} role-${m.sender_role}">
+          <span class="bubble-who">${VR.esc(m.sender_name || '')} · ${VR.esc(roleName[m.sender_role] || '')}</span>
+          <p>${VR.esc(m.body)}</p>
+          <span class="bubble-when">${dt(m.created_at)}</span>
+        </div>`).join('') || '<p class="muted">Nessun messaggio.</p>';
+      VR.$('#cdBody').scrollTop = VR.$('#cdBody').scrollHeight;
+      convDlg._conv = c;
+      loadAccessLog();
+    };
+    VR.$('#cdSend').addEventListener('click', async (ev) => {
+      const text = VR.$('#cdReply').value.trim();
+      if (!text) return;
+      ev.currentTarget.disabled = true;
+      const { error } = await VR.sb.rpc('msg_send', { p_conv: convDlg._conv.id, p_body: text });
+      ev.currentTarget.disabled = false;
+      if (error) { VR.say(VR.$('#cdMsg'), VR.errorText(error), 'error'); return; }
+      VR.$('#cdReply').value = '';
+      openConv(convDlg._conv); loadConvs();
+    });
+    VR.$('#convs').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-conv]'); if (!b) return;
+      const c = convs.find((x) => x.id === b.dataset.conv);
+      if (c) openConv(c);
+    });
+    const loadAccessLog = async () => {
+      const { data } = await VR.sb.rpc('platform_access_log', { p_limit: 50 });
+      VR.$('#accessLog tbody').innerHTML = (data || []).map((a) => `
+        <tr><td style="white-space:nowrap">${dt(a.at)}</td><td>${VR.esc(a.admin_email || '')}</td>
+        <td>${VR.esc([a.clinic_name, a.owner_email].filter(Boolean).join(' ⇄ ') || 'Assistenza')}</td></tr>`).join('')
+        || '<tr><td colspan="3" class="muted">Nessuna lettura registrata.</td></tr>';
+    };
+
+    // ---------- Scheda completa di una clinica o di un utente ----------
+    const cardDlg = (() => {
+      const d = document.createElement('dialog');
+      d.className = 'dlg card-dlg'; d.id = 'cardDlg';
+      d.innerHTML = `<div id="cardBody"></div>
+        <div class="actions-bar" style="margin-top:14px">
+          <button class="btn btn-primary" type="button" id="cardWrite">Scrivi un messaggio</button>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost" type="button" id="cardClose">Chiudi</button>
+        </div>`;
+      document.body.appendChild(d);
+      d.querySelector('#cardClose').addEventListener('click', () => d.close());
+      d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+      return d;
+    })();
+    const kv = (rows) => `<dl class="kv">${rows.filter((r) => r[1] !== undefined && r[1] !== null && r[1] !== '').map(([k, v]) => `<dt>${VR.esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`;
+    const numbers = (o) => `<div class="card-nums">${Object.entries(o || {}).map(([k, v]) => `<div><b>${n(v)}</b><span>${VR.esc({ clients: 'clienti', clients_app: 'su FurrFinder', pets: 'animali', visits: 'visite', visits_final: 'referti', appointments: 'appuntamenti', reminders_open: 'richiami aperti', invites_open: 'inviti aperti', invites_used: 'inviti usati' }[k] || k)}</span></div>`).join('')}</div>`;
+    const convList = (list) => (list || []).length
+      ? `<ul class="card-list">${list.map((c) => `<li><button type="button" data-openconv="${c.id}"><strong>${VR.esc(c.with)}</strong> <span class="muted">${n(c.messages)} messaggi${c.last_message_at ? ' · ' + ago(c.last_message_at) : ''}</span><br><span class="muted">${VR.esc(c.last_preview || '')}</span></button></li>`).join('')}</ul>`
+      : '<p class="muted">Nessuna conversazione.</p>';
+    const simpleList = (list, fmt) => (list || []).length ? `<ul class="card-list">${list.map((x) => `<li>${fmt(x)}</li>`).join('')}</ul>` : '<p class="muted">Niente da mostrare.</p>';
+
+    const openCard = async (kind, id) => {
+      VR.$('#cardBody').innerHTML = '<p class="loader">Caricamento…</p>';
+      if (!cardDlg.open) cardDlg.showModal();
+      const { data, error } = await VR.sb.rpc(kind === 'clinic' ? 'platform_clinic_card' : 'platform_user_card',
+        kind === 'clinic' ? { p_clinic: id } : { p_user: id });
+      if (error) {
+        VR.$('#cardBody').innerHTML = `<div class="notice notice-${notFound(error) ? 'info' : 'error'}">${VR.esc(notFound(error) ? 'Le schede complete non sono ancora attive: esegui vetroom2_patch_17.sql su Supabase.' : VR.errorText(error))}</div>`;
+        VR.hide(VR.$('#cardWrite')); return;
+      }
+      VR.show(VR.$('#cardWrite'));
+      cardDlg._target = { kind, id, data };
+      if (kind === 'clinic') {
+        const c = data.clinic || {};
+        VR.$('#cardWrite').textContent = 'Scrivi alla clinica';
+        VR.$('#cardBody').innerHTML = `
+          <h2 style="margin-top:0">${VR.esc(c.name || 'Clinica')} <span class="id-chip notranslate">${VR.esc(c.public_code || '')}</span></h2>
+          ${kv([['Stato', `<span class="pill ${c.status === 'suspended' ? 'pill-bad' : 'pill-ok'}">${c.status === 'suspended' ? 'Sospesa' : 'Attiva'}</span>`],
+                ['Iscritta il', c.created_at ? dt(c.created_at) : ''],
+                ['Ultima attività', data.last_activity ? ago(data.last_activity) : '—'],
+                ['Codice per i clienti', c.affiliation_code ? `<span class="notranslate">${VR.esc(c.affiliation_code)}</span>` : ''],
+                ['Indirizzo', VR.esc(c.header_address || '')], ['Telefono', VR.esc(c.header_phone || '')],
+                ['Termini accettati', c.terms_accepted_at ? dt(c.terms_accepted_at) : 'no']])}
+          <h3>Numeri</h3>${numbers(data.numbers)}
+          <h3>Team</h3>${simpleList(data.team, (m) => `<strong>${VR.esc(m.name || m.email)}</strong> <span class="muted">${VR.esc(VR.ROLE?.[m.role] || m.role)}${m.status !== 'active' ? ' · ' + VR.esc(m.status) : ''} · ${VR.esc(m.email)}${m.code ? ' · ' + VR.esc(m.code) : ''}${m.last_sign_in_at ? ' · ultimo accesso ' + ago(m.last_sign_in_at) : ''}</span>`)}
+          <h3>Conversazioni</h3>${convList(data.conversations)}
+          <h3>Email inviate</h3>${simpleList(data.emails, (e) => `${dt(e.at)} · ${VR.esc(e.subject)} <span class="muted">${VR.esc(e.status)}</span>`)}
+          <h3>Errori recenti</h3>${simpleList(data.errors, (e) => `${ago(e.at)} · <span class="notranslate">${VR.esc(e.page || '')}</span> — ${VR.esc(e.message)} ${e.hits > 1 ? '(' + n(e.hits) + ' volte)' : ''}`)}`;
+      } else {
+        const u = data.user || {};
+        VR.$('#cardWrite').textContent = 'Scrivi all\'utente';
+        VR.$('#cardBody').innerHTML = `
+          <h2 style="margin-top:0">${VR.esc(u.name || u.email || 'Utente')} <span class="id-chip notranslate">${VR.esc(u.code || '')}</span></h2>
+          ${kv([['Email', VR.esc(u.email || '')],
+                ['Ruolo', [u.is_staff ? 'Clinica' : '', u.is_owner ? 'Proprietario' : ''].filter(Boolean).join(' + ') || '<span class="pill st-half">Registrazione a metà</span>'],
+                ['Iscritto il', u.created_at ? dt(u.created_at) : ''],
+                ['Ultimo accesso', u.last_sign_in_at ? ago(u.last_sign_in_at) : 'mai'],
+                ['Notifiche', u.push_devices ? n(u.push_devices) + ' dispositivi' : 'non attive']])}
+          <h3>Cliniche</h3>${simpleList(data.clinics, (c) => `<strong>${VR.esc(c.name)}</strong> <span class="muted">${VR.esc(VR.ROLE?.[c.role] || c.role)}${c.status !== 'active' ? ' · ' + VR.esc(c.status) : ''} · ${VR.esc(c.code || '')}</span>`)}
+          <h3>Animali</h3>${simpleList(data.pets, (p) => `<strong>${VR.esc(p.name)}</strong> <span class="muted">${n(p.clinics)} cliniche collegate</span>`)}
+          <h3>Conversazioni</h3>${convList(data.conversations)}
+          <h3>Email inviate</h3>${simpleList(data.emails, (e) => `${dt(e.at)} · ${VR.esc(e.subject)} <span class="muted">${VR.esc(e.status)}</span>`)}
+          <h3>Errori recenti</h3>${simpleList(data.errors, (e) => `${ago(e.at)} · <span class="notranslate">${VR.esc(e.page || '')}</span> — ${VR.esc(e.message)} ${e.hits > 1 ? '(' + n(e.hits) + ' volte)' : ''}`)}`;
+      }
+    };
+    VR.$('#cardBody').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-openconv]'); if (!b) return;
+      const c = convs.find((x) => x.id === b.dataset.openconv);
+      cardDlg.close();
+      if (c) openConv(c); else VR.sb.rpc('platform_conversations', { p_limit: 300 }).then(({ data }) => {
+        const found = (data || []).find((x) => x.id === b.dataset.openconv); if (found) openConv(found);
+      });
+    });
+    VR.$('#cardWrite').addEventListener('click', async () => {
+      const t = cardDlg._target; if (!t) return;
+      const label = t.kind === 'clinic' ? (t.data.clinic || {}).name : ((t.data.user || {}).name || (t.data.user || {}).email);
+      const body = prompt(`Messaggio dell'assistenza a ${label}.\nLo riceve dentro Vetroom, come "Assistenza Vetroom".`, '');
+      if (body === null || !body.trim()) return;
+      const { error } = t.kind === 'clinic'
+        ? await VR.sb.rpc('platform_message_clinic', { p_clinic: t.id, p_body: body })
+        : await VR.sb.rpc('platform_message_user', { p_user: t.id, p_body: body });
+      if (error) { alert(VR.errorText(error)); return; }
+      cardDlg.close();
+      VR.say(msg, 'Messaggio inviato: lo trova in Vetroom alla voce Messaggi, come "Assistenza Vetroom".', 'ok');
+      loadConvs();
+    });
+    document.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-card]'); if (!b) return;
+      openCard(b.dataset.card, b.dataset.id);
+    });
+
+    // ---------- Ricerca per codice ----------
+    let findTimer;
+    VR.$('#findQ').addEventListener('input', () => {
+      clearTimeout(findTimer);
+      findTimer = setTimeout(async () => {
+        const q = VR.$('#findQ').value.trim();
+        const box = VR.$('#findRes');
+        if (q.length < 2) { VR.hide(box); return; }
+        const { data, error } = await VR.sb.rpc('platform_find', { p_q: q });
+        if (error) {
+          box.innerHTML = `<p class="muted" style="padding:8px 12px;margin:0">${VR.esc(notFound(error) ? 'Ricerca per codice non ancora attiva: esegui vetroom2_patch_17.sql su Supabase.' : VR.errorText(error))}</p>`;
+          VR.show(box); return;
+        }
+        box.innerHTML = (data || []).map((x) => (x.kind === 'clinic' || x.kind === 'user')
+          ? `<button type="button" data-card="${x.kind}" data-id="${x.id}">
+               <span class="id-chip notranslate">${VR.esc(x.code || '')}</span>
+               <strong>${VR.esc(x.name)}</strong> <span class="muted">${VR.esc(x.detail || '')}</span>
+             </button>`
+          : `<div class="find-ref"><strong>${VR.esc(x.name)}</strong> <span class="muted">${VR.esc(x.detail || '')}</span></div>`
+        ).join('') || '<p class="muted" style="padding:8px 12px;margin:0">Nessun risultato.</p>';
+        VR.show(box);
+      }, 300);
+    });
+    document.addEventListener('click', (ev) => { if (!ev.target.closest('.find-bar')) VR.hide(VR.$('#findRes')); });
+
+    // ---------- Codici identificativi negli elenchi ----------
+    let codes = { clinics: {}, users: {} };
+    const loadCodes = async () => {
+      const { data, error } = await VR.sb.rpc('platform_codes');
+      codes = error ? { clinics: {}, users: {} } : (data || { clinics: {}, users: {} });
+    };
+    const codeChip = (c) => (c ? `<span class="id-chip notranslate">${VR.esc(c)}</span>` : '');
+
+    // ---------- Il mio account: cliniche di cui faccio ancora parte ----------
+    const loadMyClinics = async () => {
+      const box = VR.$('#myClinics');
+      const { data, error } = await VR.sb.rpc('platform_my_clinics');
+      if (error) {
+        box.innerHTML = `<div class="notice notice-${notFound(error) ? 'info' : 'error'}">${VR.esc(notFound(error) ? 'Esegui vetroom2_patch_18.sql su Supabase per gestire da qui le cliniche collegate a questo account.' : VR.errorText(error))}</div>`;
+        return;
+      }
+      const rows = data || [];
+      if (!rows.length) {
+        box.innerHTML = '<p class="notice notice-ok" style="margin:0">✓ Questo account è solo amministratore della piattaforma: non fa parte di nessuna clinica.</p>';
+        return;
+      }
+      box.innerHTML = `<ul class="card-list">${rows.map((c) => `
+        <li>
+          <strong>${VR.esc(c.name)}</strong> ${codeChip(c.code)}
+          <span class="muted">${VR.esc(VR.ROLE?.[c.role] || c.role)} · ${n(c.clients)} clienti · ${n(c.visits)} visite</span>
+          <div class="actions-bar" style="margin-top:8px">
+            <button class="btn btn-ghost btn-small" type="button" data-leave="${c.clinic_id}">Esci dalla clinica</button>
+            <button class="btn btn-danger btn-small" type="button" data-delclinic="${c.clinic_id}" data-name="${VR.esc(c.name)}">Elimina la clinica</button>
+          </div>
+        </li>`).join('')}</ul>`;
+    };
+    VR.$('#myClinics').addEventListener('click', async (ev) => {
+      const l = ev.target.closest('[data-leave]'), d = ev.target.closest('[data-delclinic]');
+      if (l) {
+        if (!confirm('Uscire da questa clinica? I suoi dati restano alla clinica, tu smetti di farne parte.')) return;
+        const { data, error } = await VR.sb.rpc('platform_leave_clinic', { p_clinic: l.dataset.leave });
+        if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+        VR.say(msg, data || 'Fatto.', 'ok'); loadMyClinics(); load();
+        return;
+      }
+      if (!d) return;
+      const name = prompt(`ATTENZIONE: elimini la clinica "${d.dataset.name}" e TUTTI i suoi dati (clienti, animali, visite, referti). Non si può annullare.\n\nPer confermare scrivi il nome esatto della clinica:`, '');
+      if (name === null) return;
+      const { data, error } = await VR.sb.rpc('platform_delete_clinic', { p_clinic: d.dataset.delclinic, p_confirm_name: name });
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      VR.say(msg, data || 'Clinica eliminata.', 'ok'); loadMyClinics(); load();
+    });
+
+    let firstLoad = true;
     const load = async () => {
-      const [st, gr, cl, us] = await Promise.all([
-        VR.sb.rpc('platform_stats'), VR.sb.rpc('platform_growth', { p_weeks: 12 }),
-        VR.sb.rpc('platform_clinics'), VR.sb.rpc('platform_recent_users', { p_limit: 50 })
+      const [st, dy, gr, cl, us, er] = await Promise.all([
+        VR.sb.rpc('platform_stats'), VR.sb.rpc('platform_growth_daily', { p_days: 30 }), VR.sb.rpc('platform_growth', { p_weeks: 12 }),
+        VR.sb.rpc('platform_clinics'), VR.sb.rpc('platform_users', { p_limit: 1000 }), VR.sb.rpc('platform_errors', { p_limit: 100 })
       ]);
+      // Senza la patch 12 si usano i dati di prima
+      let usRes = us, apRes = { data: [] };
+      richUsers = !(us.error && notFound(us.error));
+      if (!richUsers) usRes = await VR.sb.rpc('platform_recent_users', { p_limit: 50 });
+      else apRes = await VR.sb.rpc('platform_clinic_app_stats');
+      hasAppStats = richUsers && !apRes.error;
+      appStats = Object.fromEntries((apRes.data || []).map((r) => [r.clinic_id, r]));
       VR.hide(loading);
-      const err = st.error || gr.error || cl.error || us.error;
+      const err = st.error || gr.error || cl.error || usRes.error || (dy.error && !notFound(dy.error) ? dy.error : null);
       if (err) { VR.say(msg, VR.errorText(err), 'error'); return; }
+      VR.hide(msg);
       const s = st.data || {};
       VR.$('#stats').innerHTML = LABELS.map(([k, l]) => `<div class="stat"><b>${n(s[k])}</b><span>${l}</span></div>`).join('');
-      growth = gr.data || []; renderChart();
-      clinics = cl.data || []; renderClinics();
-      VR.$('#users tbody').innerHTML = (us.data || []).map((u) => `
-        <tr><td>${VR.esc(u.email || '')}</td><td>${VR.esc(u.full_name || '')}</td>
-          <td>${[u.is_staff ? 'Clinica' : '', u.is_owner ? 'Proprietario' : ''].filter(Boolean).join(' + ') || '<span class="muted">non ancora scelto</span>'}</td>
-          <td>${d(u.created_at)}</td><td>${ago(u.last_sign_in_at)}</td></tr>`).join('');
+      hasDaily = !dy.error; daily = dy.data || []; weekly = gr.data || []; renderChart();
+      clinics = cl.data || [];
+      users = usRes.data || [];
+      await loadCodes();
+      loadConvs(); loadAccessLog(); loadMyClinics();
+      await loadMailLog();
+      renderClinics();
+      renderUsers();
+      const half = users.filter((u) => kindOf(u) === 'half').length;
+      const note = VR.$('#usersNote');
+      if (!richUsers) { note.textContent = 'Esegui vetroom2_patch_12.sql per vedere clinica, ruolo, animali e notifiche di ogni iscritto.'; VR.show(note); }
+      else if (half) { note.innerHTML = `<b>${half} ${half === 1 ? 'persona è rimasta' : 'persone sono rimaste'} a metà registrazione.</b> Il pulsante Scrivi prepara un'email che spiega come scegliere tra clinica e proprietario.`; VR.show(note); }
+      else VR.hide(note);
+      renderErrors(er);
+
+      if (firstLoad) {
+        firstLoad = false;
+        if (seenAt) {
+          const nc = clinics.filter((c) => isNew(c.created_at)).length;
+          const nu = users.filter((u) => isNew(u.created_at)).length;
+          const ne = er.error ? 0 : (er.data || []).filter((e) => isNew(e.last_seen)).length;
+          const parts = [nc ? `${nc} ${nc === 1 ? 'nuova clinica' : 'nuove cliniche'}` : '', nu ? `${nu} ${nu === 1 ? 'nuovo iscritto' : 'nuovi iscritti'}` : '', ne ? `${ne} ${ne === 1 ? 'nuovo errore' : 'nuovi errori'}` : ''].filter(Boolean);
+          const news = VR.$('#news');
+          if (parts.length) { news.textContent = `Dalla tua ultima visita (${dt(seenAt)}): ${parts.join(', ')}. Li trovi evidenziati qui sotto.`; VR.show(news); }
+        }
+        localStorage.setItem(SEEN_KEY, new Date().toISOString());
+      }
+      VR.$('#updated').textContent = `Dati aggiornati alle ${hm(new Date())} (si aggiornano da soli ogni minuto).`;
       VR.show(VR.$('#page'));
     };
     VR.$('#reload').addEventListener('click', load);
+    setInterval(() => { if (document.visibilityState === 'visible') load(); }, 60000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(); });
     load();
   })();
   </script>

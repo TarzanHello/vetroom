@@ -25,3 +25,27 @@ self.addEventListener('fetch', (e) => {
     }).catch(() => caches.match(req)));
   }
 });
+
+// ---------- Notifiche FurrFinder ----------
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'FurrFinder', {
+    body: d.body || '',
+    icon: '/app/img/furrfinder-192.png',
+    tag: d.tag || undefined,
+    renotify: !!d.tag,
+    data: { url: d.url || '/app/proprietario/' }
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  // si aprono solo pagine di Vetroom/FurrFinder
+  let url = new URL((e.notification.data && e.notification.data.url) || '/app/proprietario/', self.location.origin);
+  if (url.origin !== self.location.origin || !url.pathname.startsWith('/app/')) url = new URL('/app/proprietario/', self.location.origin);
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((ws) => {
+    const w = ws.find((x) => x.url.startsWith(self.location.origin + '/app/'));
+    if (w) return w.navigate(url.href).then((c) => (c || w).focus()).catch(() => self.clients.openWindow(url.href));
+    return self.clients.openWindow(url.href);
+  }));
+});

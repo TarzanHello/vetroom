@@ -12,13 +12,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-01c">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js"></script>
-  <script src="../js/app.js"></script>
-  <script src="../js/i18n.js"></script>
-  <script src="../js/layout.js"></script>
-  <script src="../js/clinica.js"></script>
+  <script src="../js/config.js?v=2026-10-01c"></script>
+  <script src="../js/app.js?v=2026-10-01c"></script>
+  <script src="../js/i18n.js?v=2026-10-01c"></script>
+  <script src="../js/layout.js?v=2026-10-01c"></script>
+  <script src="../js/clinica.js?v=2026-10-01c"></script>
 </head>
 <body data-shell="clinic" data-nav="agenda">
 
@@ -28,14 +28,16 @@
         <h1>Agenda</h1>
         <p class="muted" id="range" style="margin:0"></p>
       </div>
-      <div class="actions-bar">
+      <div class="actions-bar agenda-bar">
         <button class="btn btn-ghost btn-small" id="prev" type="button" aria-label="Periodo precedente">←</button>
         <button class="btn btn-ghost btn-small" id="today" type="button">Oggi</button>
-        <div class="seg seg-big" role="group" aria-label="Vista">
-          <button type="button" id="vWeek" aria-pressed="true">Settimana</button>
-          <button type="button" id="vMonth" aria-pressed="false">Mese</button>
-        </div>
         <button class="btn btn-ghost btn-small" id="next" type="button" aria-label="Periodo successivo">→</button>
+        <div class="seg seg-big" role="group" aria-label="Vista">
+          <button type="button" data-view="day" aria-pressed="false">Giorno</button>
+          <button type="button" data-view="week" aria-pressed="true">Settimana</button>
+          <button type="button" data-view="month" aria-pressed="false">Mese</button>
+        </div>
+        <select id="vetFilter" aria-label="Veterinario" hidden style="width:auto"></select>
         <a class="btn btn-ghost btn-small" href="orari.html">Orari</a>
         <button class="btn btn-primary btn-small" id="add" type="button">Nuovo appuntamento</button>
       </div>
@@ -46,8 +48,10 @@
     <p class="notice notice-info" id="noHours" hidden>Non hai ancora impostato gli orari di apertura: <a href="orari.html">impostali qui</a> per vedere le fasce aperte in agenda.</p>
 
     <div class="cal" id="cal"><p class="loader">Caricamento…</p></div>
-    <p class="hint-small">Clicca su uno spazio libero per creare un appuntamento a quell'ora.</p>
+    <p class="hint-small" id="calHint">Clicca su uno spazio libero per creare un appuntamento. Trascina un appuntamento per spostarlo, oppure il suo bordo inferiore per cambiarne la durata.</p>
   </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- Finestra appuntamento -->
   <dialog id="dlg" class="dlg">
@@ -67,18 +71,32 @@
             <button type="button" class="btn btn-ghost btn-small" id="petChange">Cambia</button>
           </div>
           <div id="petPicker">
-            <input type="search" id="petSearch" placeholder="Cerca per nome dell'animale o cognome del proprietario" autocomplete="off">
+            <input type="search" id="petSearch" placeholder="Cerca per nome dell'animale, cognome o telefono" autocomplete="off">
             <div class="picker-results" id="petResults"></div>
-            <p class="hint-small">Puoi anche lasciarlo vuoto e scrivere chi è nelle note (es. nuovo proprietario al telefono).</p>
+            <p class="hint-small" style="margin:.4rem 0 0">Non è ancora registrato? <button type="button" class="linklike" id="newPatBtn">Registra nuovo paziente</button> · oppure lascia vuoto e scrivi chi è nelle note.</p>
+          </div>
+          <div id="newPat" class="qp-box" hidden>
+            <div class="qp-grid">
+              <div><label for="npLast">Cognome del proprietario</label><input type="text" id="npLast" autocomplete="off"></div>
+              <div><label for="npPhone">Telefono</label><input type="tel" id="npPhone" inputmode="tel" autocomplete="off"></div>
+              <div><label for="npPet">Nome dell'animale</label><input type="text" id="npPet" autocomplete="off"></div>
+              <div><label for="npSpecies">Specie</label><select id="npSpecies"></select></div>
+            </div>
+            <p class="hint-small" style="margin:.5rem 0 0">Il paziente viene registrato quando salvi l'appuntamento. <button type="button" class="linklike" id="newPatCancel">Annulla, cerca tra i registrati</button></p>
           </div>
         </div>
 
-        <div><label for="apType">Tipo</label>
+        <div class="s4"><label for="apType">Tipo</label>
           <select id="apType"><option>Visita clinica</option><option>Controllo</option><option>Vaccinazione</option><option>Urgenza</option><option>Chirurgia</option><option>Esami diagnostici</option><option>Visita specialistica</option><option>Altro</option></select></div>
-        <div><label for="apStatus">Stato</label>
+        <div class="s4"><label for="apStatus">Stato</label>
           <select id="apStatus"><option value="confirmed">Confermato</option><option value="requested">Da confermare</option><option value="done">Svolto</option><option value="no_show">Non presentato</option><option value="cancelled">Annullato</option></select></div>
+        <div class="s4" id="vetBox" hidden><label for="apVet">Veterinario</label><select id="apVet"></select></div>
         <div class="s12"><label for="apNotes">Note interne</label><textarea id="apNotes" rows="3" placeholder="Visibili solo alla clinica"></textarea></div>
         <div class="s12" id="ownerNoteBox" hidden><label>Messaggio del proprietario</label><p id="ownerNote" class="readonly-note" style="margin:0"></p></div>
+        <div class="s12" id="refBox" hidden><label>Numero della prenotazione</label>
+          <p class="ref-line" style="margin:0"><b class="notranslate" id="refCode"></b>
+            <button type="button" class="btn btn-ghost btn-small" id="refCopy">Copia</button>
+            <span class="hint-small">Il proprietario lo vede nel suo libretto: serve a ritrovare la prenotazione.</span></p></div>
       </div>
       <div id="dlgMsg" hidden></div>
       <div class="actions-bar" style="margin-top:1.25rem">
@@ -108,34 +126,81 @@
     const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
     const mondayOf = (d) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const wd = (x.getDay() + 6) % 7; return addDays(x, -wd); };
     const toMin = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const minOf = (iso) => { const s = new Date(iso); return s.getHours() * 60 + s.getMinutes(); };
     const DAYNAME = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
     const STATUS = { confirmed: 'Confermato', requested: 'Da confermare', done: 'Svolto', no_show: 'Non presentato', cancelled: 'Annullato' };
     const PX_PER_MIN = 64 / 60;
+    const SNAP = 5;
+    const inactive = (a) => ['cancelled', 'no_show'].includes(a.status);
+    const when = (d) => d.toLocaleString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
     // ---------- Stato ----------
     let hours = [], appts = [], clientsCache = null;
     let anchor = new Date();
     const isNarrow = () => window.matchMedia('(max-width: 820px)').matches;
 
-    const { data: av } = await VR.sb.from('availabilities').select('*').eq('clinic_id', ctx.clinicId);
+    const [{ data: av }, { data: mem }, probe] = await Promise.all([
+      VR.sb.from('availabilities').select('*').eq('clinic_id', ctx.clinicId),
+      VR.sb.from('clinic_members').select('user_id, role, status').eq('clinic_id', ctx.clinicId),
+      VR.sb.from('appointments').select('assigned_to').eq('clinic_id', ctx.clinicId).limit(1)
+    ]);
     hours = av || [];
     if (!hours.length) VR.show(VR.$('#noHours'));
     const defaultSlot = hours[0]?.slot_minutes || 30;
+    // La colonna "veterinario assegnato" esiste solo dopo la patch 10: senza, l'agenda funziona come prima
+    const hasAssign = !probe.error;
 
-    let view = 'week'; // 'week' (giorno su telefono) oppure 'month'
+    // Veterinari della clinica (amministratori e veterinari)
+    let vets = [];
+    const vetRows = (mem || []).filter((m) => ['admin', 'vet'].includes(m.role) && m.status !== 'removed');
+    if (vetRows.length) {
+      const { data: profs } = await VR.sb.from('profiles').select('id, full_name, first_name, last_name, email').in('id', vetRows.map((m) => m.user_id));
+      const P = Object.fromEntries((Array.isArray(profs) ? profs : []).map((p) => [p.id, p]));
+      vets = vetRows.map((m) => {
+        const p = P[m.user_id] || {};
+        const name = p.full_name || [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || 'Veterinario';
+        const bare = name.replace(/^(dott\.?(ssa)?|dr\.?(ssa)?|prof\.?(ssa)?)\s+/i, '');
+        return { id: m.user_id, name, short: bare.split(/[\s@]+/)[0] || name,
+          initials: bare.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') };
+      }).sort((a, b) => (a.id === ctx.session.user.id ? -1 : b.id === ctx.session.user.id ? 1 : a.name.localeCompare(b.name)));
+    }
+    const multiVet = hasAssign && vets.length >= 2;
+    const vetName = (id) => vets.find((v) => v.id === id)?.name || '';
+    const vetInitials = (id) => vets.find((v) => v.id === id)?.initials || '';
+
+    // ---------- Vista e filtro (ricordati tra una visita e l'altra) ----------
+    const VKEY = 'vetroom_agenda_view', FKEY = 'vetroom_agenda_vet';
+    let view = localStorage.getItem(VKEY) || (isNarrow() ? 'day' : 'week');
+    let vetFilter = multiVet ? (localStorage.getItem(FKEY) || '') : '';
+    if (multiVet) {
+      const vf = VR.$('#vetFilter');
+      vf.innerHTML = '<option value="">Tutti i veterinari</option>' + vets.map((v) => `<option value="${v.id}">${VR.esc(v.name)}</option>`).join('') + '<option value="none">Da assegnare</option>';
+      vf.value = vetFilter;
+      vf.addEventListener('change', () => { vetFilter = vf.value; localStorage.setItem(FKEY, vetFilter); render(); });
+    }
+    const effectiveView = () => (view === 'week' && isNarrow() ? 'day' : view);
     const setView = (v) => {
-      view = v;
-      VR.$('#vWeek').setAttribute('aria-pressed', v === 'week');
-      VR.$('#vMonth').setAttribute('aria-pressed', v === 'month');
-      VR.$('#vWeek').textContent = isNarrow() ? 'Giorno' : 'Settimana';
+      view = v; localStorage.setItem(VKEY, v);
+      const ev = effectiveView();
+      document.querySelectorAll('[data-view]').forEach((b) => {
+        b.setAttribute('aria-pressed', b.dataset.view === ev);
+        if (b.dataset.view === 'week') b.hidden = isNarrow();
+      });
+      // nella vista Giorno con più veterinari ognuno ha la sua colonna: il filtro non serve
+      VR.$('#vetFilter').hidden = !multiVet || ev === 'day';
     };
     const period = () => {
-      if (view === 'month') {
+      const ev = effectiveView();
+      if (ev === 'month') {
         const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
         return { start: mondayOf(first), days: 42, month: anchor.getMonth() };
       }
-      if (isNarrow()) { const s = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate()); return { start: s, days: 1 }; }
+      if (ev === 'day') { const s = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate()); return { start: s, days: 1 }; }
       return { start: mondayOf(anchor), days: 7 };
+    };
+    const passFilter = (a) => {
+      if (!multiVet || !vetFilter || effectiveView() === 'day') return true;
+      return vetFilter === 'none' ? !a.assigned_to : a.assigned_to === vetFilter;
     };
 
     // ---------- Caricamento ----------
@@ -163,7 +228,7 @@
       if (!data || !data.length) { VR.hide(box); return; }
       box.className = 'notice notice-info';
       box.innerHTML = `<strong>${data.length === 1 ? '1 richiesta da confermare' : data.length + ' richieste da confermare'}:</strong> ` +
-        data.map((a) => `<a href="#" data-req="${a.id}">${new Date(a.starts_at).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${VR.esc(a.pets?.name || 'senza paziente')}</a>`).join(' · ');
+        data.map((a) => `<a href="#" data-req="${a.id}">${when(new Date(a.starts_at))} · ${VR.esc(a.pets?.name || 'senza paziente')}</a>`).join(' · ');
       box._data = data;
       VR.show(box);
     };
@@ -174,7 +239,6 @@
       if (ap) { anchor = new Date(ap.starts_at); load().then(() => openDialog(ap)); }
     });
 
-    // ---------- Disegno ----------
     // ---------- Vista mensile ----------
     const renderMonth = () => {
       const { start, month } = period();
@@ -186,12 +250,12 @@
         const d = addDays(start, i);
         const h = hours.find((x) => x.weekday === d.getDay());
         const openMin = h ? (toMin(h.end_time) - toMin(h.start_time)) + ((h.start_time2 && h.end_time2) ? toMin(h.end_time2) - toMin(h.start_time2) : 0) : 0;
-        const list = appts.filter((a) => ymd(new Date(a.starts_at)) === ymd(d) && !['cancelled', 'no_show'].includes(a.status));
+        const list = appts.filter((a) => ymd(new Date(a.starts_at)) === ymd(d) && !inactive(a) && passFilter(a));
         const busy = list.reduce((m, a) => m + a.duration_min, 0);
-        const load = !h ? 'closed' : busy === 0 ? 'free' : busy / openMin < 0.5 ? 'low' : busy / openMin < 0.85 ? 'mid' : 'full';
+        const lvl = !h ? 'closed' : busy === 0 ? 'free' : busy / openMin < 0.5 ? 'low' : busy / openMin < 0.85 ? 'mid' : 'full';
         const req = list.filter((a) => a.status === 'requested').length;
         cells.push(`
-          <button type="button" class="mcell ${d.getMonth() !== month ? 'is-out' : ''} ${ymd(d) === todayStr ? 'is-today' : ''} load-${load}" data-date="${ymd(d)}">
+          <button type="button" class="mcell ${d.getMonth() !== month ? 'is-out' : ''} ${ymd(d) === todayStr ? 'is-today' : ''} load-${lvl}" data-date="${ymd(d)}">
             <span class="mnum">${d.getDate()}</span>
             ${list.length ? `<span class="mcount">${list.length}${req ? ` <b title="da confermare">· ${req}!</b>` : ''}</span>` : ''}
             <span class="mlist">${list.slice(0, 3).map((a) => `<i>${hm(new Date(a.starts_at))} ${VR.esc(a.pets?.name || 'app.')}</i>`).join('')}${list.length > 3 ? `<i>+${list.length - 3} altri</i>` : ''}</span>
@@ -206,72 +270,146 @@
         <div class="mlegend"><span class="load-free">libero</span><span class="load-low">poco occupato</span><span class="load-mid">quasi pieno</span><span class="load-full">pieno</span><span class="load-closed">chiuso</span></div>`;
     };
 
+    // ---------- Appuntamenti sovrapposti: affiancati, non uno sopra l'altro ----------
+    const layoutLanes = (list) => {
+      const items = list.map((a) => ({ a, s: minOf(a.starts_at), e: minOf(a.starts_at) + a.duration_min }))
+        .sort((x, y) => x.s - y.s || y.e - x.e);
+      const out = []; let cluster = [], clusterEnd = -1;
+      const flush = () => {
+        const lanes = [];
+        cluster.forEach((it) => {
+          let i = lanes.findIndex((end) => end <= it.s);
+          if (i < 0) { i = lanes.length; lanes.push(0); }
+          lanes[i] = it.e; it.lane = i;
+        });
+        cluster.forEach((it) => { it.lanes = lanes.length; });
+        out.push(...cluster); cluster = []; clusterEnd = -1;
+      };
+      items.forEach((it) => {
+        if (cluster.length && it.s >= clusterEnd) flush();
+        cluster.push(it); clusterEnd = Math.max(clusterEnd, it.e);
+      });
+      if (cluster.length) flush();
+      return out;
+    };
+
+    const apptHtml = (it, from, showVet) => {
+      const a = it.a;
+      const who = a.pets?.name || (a.notes_internal || 'Appuntamento').split('\n')[0].slice(0, 40);
+      const owner = a.clients ? VR.clientName(a.clients) : '';
+      const s = new Date(a.starts_at);
+      const lanes = it.lanes || 1, lane = it.lane || 0;
+      const geo = inactive(a)
+        ? 'left:3px;right:3px;'
+        : `left:calc(${(lane / lanes) * 100}% + 2px);width:calc(${100 / lanes}% - 4px);`;
+      const vet = showVet && a.assigned_to && lanes < 2 ? `<i class="cal-vet" title="${VR.esc(vetName(a.assigned_to))}">${VR.esc(vetInitials(a.assigned_to))}</i>` : '';
+      const canMove = !['done'].includes(a.status);
+      return `<button type="button" class="cal-appt st-${a.status} ${canMove ? 'can-move' : ''}" data-id="${a.id}"
+                style="top:${(minOf(a.starts_at) - from) * PX_PER_MIN}px;height:${Math.max(22, a.duration_min * PX_PER_MIN - 2)}px;${geo}"
+                title="${VR.esc(hm(s) + ' ' + who + (owner ? ' – ' + owner : '') + ' · ' + (STATUS[a.status] || '') + (a.assigned_to ? ' · ' + vetName(a.assigned_to) : ''))}">
+                ${vet}<b>${hm(s)}</b> ${VR.esc(who)}${owner ? ` <span>· ${VR.esc(owner)}</span>` : ''}
+                <em>${VR.esc(a.type || '')}${a.status === 'requested' ? ' · da confermare' : ''}</em>
+                ${canMove ? '<span class="cal-resize" aria-hidden="true"></span>' : ''}
+              </button>`;
+    };
+
     const render = () => {
-      if (view === 'month') return renderMonth();
+      setView(view);
+      if (effectiveView() === 'month') return renderMonth();
       const { start, days } = period();
-      const end = addDays(start, days - 1);
+      const endDay = addDays(start, days - 1);
       VR.$('#range').textContent = days === 1
         ? start.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-        : `${start.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })} – ${end.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+        : `${start.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })} – ${endDay.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}`;
 
       // Intervallo orario da mostrare
       let from = 8 * 60, to = 20 * 60;
-      hours.forEach((h) => {
-        from = Math.min(from, toMin(h.start_time));
-        to = Math.max(to, toMin(h.end_time2 || h.end_time));
-      });
-      appts.forEach((a) => {
-        const s = new Date(a.starts_at); const m = s.getHours() * 60 + s.getMinutes();
-        from = Math.min(from, m); to = Math.max(to, m + a.duration_min);
-      });
+      hours.forEach((h) => { from = Math.min(from, toMin(h.start_time)); to = Math.max(to, toMin(h.end_time2 || h.end_time)); });
+      appts.forEach((a) => { const m = minOf(a.starts_at); from = Math.min(from, m); to = Math.max(to, m + a.duration_min); });
       from = Math.floor(from / 60) * 60; to = Math.min(24 * 60, Math.ceil(to / 60) * 60);
       const height = (to - from) * PX_PER_MIN;
-
       const todayStr = ymd(new Date());
+
+      // Colonne: un giorno ciascuna, oppure (vista Giorno con più veterinari) un veterinario ciascuna
       const cols = [];
-      for (let i = 0; i < days; i++) {
-        const d = addDays(start, i);
-        const wd = d.getDay();
-        const h = hours.find((x) => x.weekday === wd);
-        const open = h ? [[toMin(h.start_time), toMin(h.end_time)], [toMin(h.start_time2), toMin(h.end_time2)]].filter((r) => r[0] != null && r[1] != null) : [];
-        const dayAppts = appts.filter((a) => ymd(new Date(a.starts_at)) === ymd(d));
-        cols.push({ d, open, dayAppts });
+      const openOf = (d) => {
+        const h = hours.find((x) => x.weekday === d.getDay());
+        return h ? [[toMin(h.start_time), toMin(h.end_time)], [toMin(h.start_time2), toMin(h.end_time2)]].filter((r) => r[0] != null && r[1] != null) : [];
+      };
+      if (days === 1 && multiVet) {
+        const dayAppts = appts.filter((a) => ymd(new Date(a.starts_at)) === ymd(start));
+        vets.forEach((v) => cols.push({ d: start, vet: v.id, head: `<strong class="cal-vet-name"><span class="vn-full">${VR.esc(v.name)}</span><span class="vn-short">${VR.esc(v.short)}</span></strong>`, appts: dayAppts.filter((a) => a.assigned_to === v.id) }));
+        const un = dayAppts.filter((a) => !a.assigned_to || !vets.some((v) => v.id === a.assigned_to));
+        // su telefono la colonna "Da assegnare" compare solo se serve
+        if (un.length || !isNarrow()) cols.push({ d: start, vet: '', head: '<strong class="cal-vet-name muted"><span class="vn-full">Da assegnare</span><span class="vn-short">Da assegn.</span></strong>', appts: un, unassigned: true });
+      } else {
+        for (let i = 0; i < days; i++) {
+          const d = addDays(start, i);
+          cols.push({ d, vet: null, head: `<span>${DAYNAME[d.getDay()]}</span> <strong>${d.getDate()}</strong>`, appts: appts.filter((a) => ymd(new Date(a.starts_at)) === ymd(d) && passFilter(a)) });
+        }
       }
 
       const timeLabels = [];
       for (let m = from; m < to; m += 60) timeLabels.push(`<div class="cal-hour" style="top:${(m - from) * PX_PER_MIN}px">${pad(m / 60)}:00</div>`);
+      const showVet = multiVet && !(days === 1);
 
-      cal.style.setProperty('--days', days);
+      cal.style.setProperty('--days', cols.length);
       cal.innerHTML = `
         <div class="cal-head">
           <div></div>
-          ${cols.map((c) => `<div class="cal-day-head ${ymd(c.d) === todayStr ? 'is-today' : ''}"><span>${DAYNAME[c.d.getDay()]}</span> <strong>${c.d.getDate()}</strong></div>`).join('')}
+          ${cols.map((c) => `<div class="cal-day-head ${ymd(c.d) === todayStr && c.vet === null ? 'is-today' : ''} ${c.unassigned ? 'is-unassigned' : ''}">${c.head}</div>`).join('')}
         </div>
         <div class="cal-body" style="height:${height}px">
           <div class="cal-times">${timeLabels.join('')}</div>
-          ${cols.map((c) => `
-            <div class="cal-col ${c.open.length ? '' : 'is-closed'}" data-date="${ymd(c.d)}">
-              ${c.open.map(([s, e]) => `<div class="cal-open" style="top:${(s - from) * PX_PER_MIN}px;height:${(e - s) * PX_PER_MIN}px"></div>`).join('')}
-              ${c.dayAppts.map((a) => {
-                const s = new Date(a.starts_at); const m = s.getHours() * 60 + s.getMinutes();
-                const who = a.pets?.name || (a.notes_internal || 'Appuntamento').split('\n')[0].slice(0, 40);
-                const owner = a.clients ? VR.clientName(a.clients) : '';
-                return `<button type="button" class="cal-appt st-${a.status}" data-id="${a.id}"
-                          style="top:${(m - from) * PX_PER_MIN}px;height:${Math.max(22, a.duration_min * PX_PER_MIN - 2)}px"
-                          title="${VR.esc(hm(s) + ' ' + who + (owner ? ' – ' + owner : '') + ' · ' + (STATUS[a.status] || ''))}">
-                          <b>${hm(s)}</b> ${VR.esc(who)}${owner ? ` <span>· ${VR.esc(owner)}</span>` : ''}
-                          <em>${VR.esc(a.type || '')}${a.status === 'requested' ? ' · da confermare' : ''}</em>
-                        </button>`;
-              }).join('')}
-            </div>`).join('')}
+          ${cols.map((c) => {
+            const open = openOf(c.d);
+            const active = layoutLanes(c.appts.filter((a) => !inactive(a)));
+            const off = c.appts.filter(inactive).map((a) => ({ a }));
+            return `
+            <div class="cal-col ${open.length ? '' : 'is-closed'} ${c.unassigned ? 'is-unassigned' : ''}" data-date="${ymd(c.d)}" ${c.vet !== null ? `data-vet="${c.vet}"` : ''}>
+              ${open.map(([s, e]) => `<div class="cal-open" style="top:${(s - from) * PX_PER_MIN}px;height:${(e - s) * PX_PER_MIN}px"></div>`).join('')}
+              ${ymd(c.d) === todayStr ? '<div class="cal-now" aria-hidden="true"></div>' : ''}
+              ${off.map((it) => apptHtml(it, from, showVet)).join('')}
+              ${active.map((it) => apptHtml(it, from, showVet)).join('')}
+            </div>`;
+          }).join('')}
         </div>`;
-      cal._from = from;
+      cal._from = from; cal._to = to;
+      placeNow();
     };
 
-    // Click su appuntamento o su spazio libero
+    // Linea rossa dell'ora attuale
+    const placeNow = () => {
+      const n = new Date(), m = n.getHours() * 60 + n.getMinutes();
+      cal.querySelectorAll('.cal-now').forEach((el) => {
+        if (m < cal._from || m > cal._to) { el.hidden = true; return; }
+        el.hidden = false; el.style.top = ((m - cal._from) * PX_PER_MIN) + 'px';
+      });
+    };
+    setInterval(placeNow, 60000);
+
+    // ---------- Avviso in basso (con "Annulla") ----------
+    const toast = VR.$('#toast');
+    let toastTimer;
+    const showToast = (html, ms = 9000) => {
+      clearTimeout(toastTimer);
+      toast.innerHTML = html + '<button type="button" class="toast-x" data-toast-close aria-label="Chiudi">×</button>';
+      VR.show(toast);
+      toastTimer = setTimeout(() => VR.hide(toast), ms);
+    };
+    toast.addEventListener('click', (ev) => { if (ev.target.closest('[data-toast-close]')) { clearTimeout(toastTimer); VR.hide(toast); } });
+    const waNotice = (a, startsAt) => {
+      const phone = a.clients?.phone || a._phone;
+      if (!phone || !VR.waPhone(phone)) return '';
+      return `<a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="${VR.esc(VR.waLink(phone, VR.apptMessage({ pet: a.pets?.name || a._petName, startsAt, clinic: ctx.clinic.name || '' })))}">Avvisa su WhatsApp</a>`;
+    };
+
+    // ---------- Click: appuntamento, spazio libero, giorno del mese ----------
+    let suppressClick = false;
     cal.addEventListener('click', (ev) => {
+      if (suppressClick) { suppressClick = false; return; }
       const mc = ev.target.closest('.mcell');
-      if (mc) { anchor = new Date(mc.dataset.date + 'T12:00:00'); setView('week'); load(); return; }
+      if (mc) { anchor = new Date(mc.dataset.date + 'T12:00:00'); setView('day'); load(); return; }
       const b = ev.target.closest('.cal-appt');
       if (b) { const a = appts.find((x) => x.id === b.dataset.id); if (a) openDialog(a); return; }
       const col = ev.target.closest('.cal-col');
@@ -279,27 +417,151 @@
       const rect = col.getBoundingClientRect();
       let m = cal._from + (ev.clientY - rect.top) / PX_PER_MIN;
       m = Math.floor(m / 15) * 15;
-      openDialog(null, { date: col.dataset.date, time: `${pad(Math.floor(m / 60))}:${pad(m % 60)}` });
+      openDialog(null, { date: col.dataset.date, time: `${pad(Math.floor(m / 60))}:${pad(m % 60)}`, vet: col.dataset.vet });
     });
 
+    // ---------- Trascinamento: sposta (anche su un altro giorno o veterinario) e cambia durata ----------
+    let drag = null;
+    const colAt = (x, y) => {
+      const el = document.elementFromPoint(x, y);
+      return el ? el.closest('.cal-col') : null;
+    };
+    const startDrag = () => {
+      drag.started = true;
+      drag.el.classList.add('is-dragging');
+      drag.el.style.left = '3px'; drag.el.style.width = 'calc(100% - 6px)'; drag.el.style.right = '';
+      if (navigator.vibrate && drag.type !== 'mouse') navigator.vibrate(15);
+    };
+    const moveDrag = (ev) => {
+      const { a, el } = drag;
+      if (drag.resize) {
+        let dur = Math.round((drag.dur0 + (ev.clientY - drag.y0) / PX_PER_MIN) / SNAP) * SNAP;
+        dur = Math.max(10, Math.min(dur, cal._to - drag.min0));
+        drag.newDur = dur;
+        el.style.height = Math.max(22, dur * PX_PER_MIN - 2) + 'px';
+        el.querySelector('em').textContent = `${dur} min`;
+        return;
+      }
+      const col = colAt(ev.clientX, ev.clientY) || drag.col;
+      if (col !== drag.col) { col.appendChild(el); drag.col = col; }
+      const rect = col.getBoundingClientRect();
+      let m = cal._from + (ev.clientY - rect.top - drag.grabY) / PX_PER_MIN;
+      m = Math.round(m / SNAP) * SNAP;
+      m = Math.max(cal._from, Math.min(m, cal._to - a.duration_min));
+      drag.newMin = m;
+      el.style.top = ((m - cal._from) * PX_PER_MIN) + 'px';
+      el.querySelector('b').textContent = `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+      // scorrimento automatico vicino ai bordi dello schermo
+      if (ev.clientY < 70) window.scrollBy(0, -12); else if (ev.clientY > window.innerHeight - 70) window.scrollBy(0, 12);
+    };
+    const finishDrag = async () => {
+      const { a, el } = drag;
+      el.classList.remove('is-dragging');
+      const before = { starts_at: a.starts_at, duration_min: a.duration_min, assigned_to: a.assigned_to ?? null };
+      const patch = {};
+      if (drag.resize) {
+        if (drag.newDur && drag.newDur !== a.duration_min) patch.duration_min = drag.newDur;
+      } else if (drag.newMin != null) {
+        const date = drag.col.dataset.date;
+        const t = new Date(`${date}T${pad(Math.floor(drag.newMin / 60))}:${pad(drag.newMin % 60)}:00`);
+        if (t.getTime() !== new Date(a.starts_at).getTime()) patch.starts_at = t.toISOString();
+        if (drag.col.dataset.vet !== undefined && hasAssign) {
+          const v = drag.col.dataset.vet || null;
+          if (v !== (a.assigned_to || null)) patch.assigned_to = v;
+        }
+      }
+      if (!Object.keys(patch).length) { render(); return; }
+      Object.assign(a, patch); render();
+      const { error } = await VR.sb.from('appointments').update(patch).eq('id', a.id);
+      if (error) { Object.assign(a, before); render(); VR.say(msg, 'Non spostato: ' + VR.errorText(error), 'error'); return; }
+      const who = VR.esc(a.pets?.name || 'Appuntamento');
+      const toVet = patch.assigned_to !== undefined ? VR.esc(patch.assigned_to ? vetName(patch.assigned_to) : 'da assegnare') : '';
+      const txt = patch.duration_min && !patch.starts_at
+        ? `${who}: durata ${patch.duration_min} min.`
+        : !patch.starts_at
+          ? `${who} ${patch.assigned_to ? 'assegnato a ' + toVet : 'da assegnare'}.`
+          : `${who} spostato a ${VR.esc(when(new Date(a.starts_at)))}${toVet ? ' · ' + toVet : ''}.`;
+      showToast(`<span>${txt}</span> <button type="button" class="btn btn-ghost btn-small" data-undo>Annulla</button> ${patch.starts_at ? waNotice(a, a.starts_at) : ''}`);
+      toast.querySelector('[data-undo]').addEventListener('click', async () => {
+        const back = {}; Object.keys(patch).forEach((k) => { back[k] = before[k]; });
+        const { error: e2 } = await VR.sb.from('appointments').update(back).eq('id', a.id);
+        if (e2) { VR.say(msg, VR.errorText(e2), 'error'); return; }
+        Object.assign(a, back); render();
+        showToast('<span>Spostamento annullato.</span>', 4000);
+      }, { once: true });
+    };
+    cal.addEventListener('pointerdown', (ev) => {
+      const el = ev.target.closest('.cal-appt.can-move');
+      if (!el || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+      const a = appts.find((x) => x.id === el.dataset.id); if (!a) return;
+      const r = el.getBoundingClientRect();
+      drag = { a, el, type: ev.pointerType, x0: ev.clientX, y0: ev.clientY, started: false,
+               resize: !!ev.target.closest('.cal-resize'), grabY: ev.clientY - r.top,
+               col: el.closest('.cal-col'), dur0: a.duration_min, min0: minOf(a.starts_at), newMin: null, newDur: null };
+      // Su telefono e tablet si trascina tenendo premuto un attimo (così si può ancora scorrere la pagina)
+      if (ev.pointerType !== 'mouse') drag.timer = setTimeout(() => { if (drag && !drag.started) startDrag(); }, 380);
+    });
+    window.addEventListener('pointermove', (ev) => {
+      if (!drag) return;
+      const dist = Math.hypot(ev.clientX - drag.x0, ev.clientY - drag.y0);
+      if (!drag.started) {
+        if (drag.type === 'mouse' && dist > 5) startDrag();
+        else if (drag.type !== 'mouse' && dist > 10) { clearTimeout(drag.timer); drag = null; }
+        if (!drag || !drag.started) return;
+      }
+      ev.preventDefault();
+      moveDrag(ev);
+    });
+    const endPointer = (cancelled) => {
+      if (!drag) return;
+      clearTimeout(drag.timer);
+      if (drag.started) {
+        suppressClick = true; setTimeout(() => { suppressClick = false; }, 300);
+        if (cancelled) { drag.el.classList.remove('is-dragging'); drag = null; render(); return; }
+        const d = drag; finishDrag().finally(() => { if (drag === d) drag = null; });
+        return;
+      }
+      drag = null;
+    };
+    window.addEventListener('pointerup', () => endPointer(false));
+    window.addEventListener('pointercancel', () => endPointer(true));
+    document.addEventListener('touchmove', (ev) => { if (drag && drag.started) ev.preventDefault(); }, { passive: false });
+    cal.addEventListener('contextmenu', (ev) => { if (ev.target.closest('.cal-appt')) ev.preventDefault(); });
+    // Su telefono: scorri a destra o a sinistra per cambiare giorno
+    let sw = null;
+    cal.addEventListener('touchstart', (ev) => { if (ev.touches.length === 1) sw = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, t: Date.now() }; }, { passive: true });
+    cal.addEventListener('touchend', (ev) => {
+      if (!sw || (drag && drag.started) || effectiveView() === 'month') { sw = null; return; }
+      const t = ev.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y;
+      if (Math.abs(dx) > 70 && Math.abs(dy) < 45 && Date.now() - sw.t < 600) shift(dx < 0 ? 1 : -1);
+      sw = null;
+    }, { passive: true });
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && drag && drag.started) { drag.el.classList.remove('is-dragging'); drag = null; render(); } });
+
+    // ---------- Navigazione ----------
     const shift = (dir) => {
-      if (view === 'month') anchor = new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1);
-      else anchor = addDays(anchor, (isNarrow() ? 1 : 7) * dir);
+      const ev = effectiveView();
+      if (ev === 'month') anchor = new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1);
+      else anchor = addDays(anchor, (ev === 'day' ? 1 : 7) * dir);
       load();
     };
     VR.$('#prev').addEventListener('click', () => shift(-1));
     VR.$('#next').addEventListener('click', () => shift(1));
-    VR.$('#vWeek').addEventListener('click', () => { setView('week'); load(); });
-    VR.$('#vMonth').addEventListener('click', () => { setView('month'); load(); });
-    setView('week');
+    document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { setView(b.dataset.view); load(); }));
     VR.$('#today').addEventListener('click', () => { anchor = new Date(); load(); });
     let wasNarrow = isNarrow();
     window.addEventListener('resize', () => { if (isNarrow() !== wasNarrow) { wasNarrow = isNarrow(); load(); } });
+    // Frecce della tastiera per cambiare giorno/settimana (quando non si sta scrivendo)
+    document.addEventListener('keydown', (ev) => {
+      if (ev.target.closest('input, textarea, select, dialog, [contenteditable]')) return;
+      if (ev.key === 'ArrowLeft') shift(-1); else if (ev.key === 'ArrowRight') shift(1);
+    });
 
     // ---------- Scelta del paziente ----------
-    let chosen = null; // { petId, clientId, label }
+    let chosen = null; // { petId, clientId, label, phone, petName }
     const setChosen = (c) => {
       chosen = c;
+      VR.hide(VR.$('#newPat'));
       if (c) {
         VR.$('#petChosenText').textContent = c.label;
         VR.$('#petLink').href = 'animale.html?id=' + c.petId;
@@ -315,10 +577,11 @@
         .select('id, first_name, last_name, phone, pet_access(status, pets(id, name, species, deleted_at))')
         .eq('clinic_id', ctx.clinicId).order('id')).catch(() => []);
       clientsCache = [];
-      (data || []).forEach((c) => (c.pet_access || []).forEach((a) => {
-        if (a.status === 'active' && a.pets && !a.pets.deleted_at) {
-          const label = `${a.pets.name}${a.pets.species ? ' (' + a.pets.species + ')' : ''} – ${VR.clientName(c)}`;
-          clientsCache.push({ petId: a.pets.id, clientId: c.id, label, text: (label + ' ' + (c.phone || '')).toLowerCase() });
+      (data || []).forEach((c) => (c.pet_access || []).forEach((acc) => {
+        if (acc.status === 'active' && acc.pets && !acc.pets.deleted_at) {
+          const label = `${acc.pets.name}${acc.pets.species ? ' (' + acc.pets.species + ')' : ''} – ${VR.clientName(c)}`;
+          clientsCache.push({ petId: acc.pets.id, clientId: c.id, label, phone: c.phone || null, petName: acc.pets.name,
+            text: (label + ' ' + (c.phone || '') + ' ' + String(c.phone || '').replace(/\D/g, '')).toLowerCase() });
         }
       }));
       return clientsCache;
@@ -327,8 +590,8 @@
       const list = await loadClients();
       const terms = ev.target.value.toLowerCase().split(/\s+/).filter(Boolean);
       const res = terms.length ? list.filter((p) => terms.every((t) => p.text.includes(t))).slice(0, 8) : [];
-      VR.$('#petResults').innerHTML = res.map((p, i) => `<button type="button" data-i="${list.indexOf(p)}">${VR.esc(p.label)}</button>`).join('')
-        || (terms.length ? '<p class="hint-small">Nessun paziente trovato. <a href="cliente.html?nuovo=1">Crea il proprietario</a> oppure scrivi nelle note.</p>' : '');
+      VR.$('#petResults').innerHTML = res.map((p) => `<button type="button" data-i="${list.indexOf(p)}">${VR.esc(p.label)}</button>`).join('')
+        || (terms.length ? '<p class="hint-small">Nessun paziente trovato con questo nome.</p>' : '');
     });
     VR.$('#petResults').addEventListener('click', (ev) => {
       const b = ev.target.closest('button[data-i]'); if (!b) return;
@@ -336,8 +599,27 @@
     });
     VR.$('#petChange').addEventListener('click', () => { setChosen(null); VR.$('#petSearch').focus(); });
 
+    // Nuovo paziente direttamente dall'appuntamento (tipico: prenotazione al telefono)
+    VR.fillSpecies(VR.$('#npSpecies'));
+    let npCreated = { clientId: null, petId: null };
+    const openNewPat = () => {
+      const typed = VR.$('#petSearch').value.trim();
+      ['#npLast', '#npPhone', '#npPet'].forEach((s) => { VR.$(s).value = ''; });
+      VR.$('#npSpecies').value = '';
+      if (typed) { if (/^[\d\s+]{6,}$/.test(typed)) VR.$('#npPhone').value = typed; else VR.$('#npLast').value = typed; }
+      npCreated = { clientId: null, petId: null };
+      VR.hide(VR.$('#petPicker')); VR.show(VR.$('#newPat'));
+      VR.$(VR.$('#npLast').value ? '#npPet' : '#npLast').focus();
+    };
+    VR.$('#newPatBtn').addEventListener('click', openNewPat);
+    VR.$('#newPatCancel').addEventListener('click', () => { VR.hide(VR.$('#newPat')); VR.show(VR.$('#petPicker')); VR.$('#petSearch').focus(); });
+
     // ---------- Finestra ----------
     const dlg = VR.$('#dlg'), dlgMsg = VR.$('#dlgMsg');
+    if (multiVet) {
+      VR.$('#apVet').innerHTML = '<option value="">Da assegnare</option>' + vets.map((v) => `<option value="${v.id}">${VR.esc(v.name)}</option>`).join('');
+      VR.show(VR.$('#vetBox'));
+    }
     let editing = null;
     const openDialog = (a, preset = {}) => {
       editing = a;
@@ -348,17 +630,23 @@
       VR.$('#apTime').value = a ? hm(s) : (preset.time || '');
       VR.$('#apDur').value = String(a ? a.duration_min : defaultSlot);
       if (![...VR.$('#apDur').options].some((o) => o.value === VR.$('#apDur').value)) {
-        VR.$('#apDur').insertAdjacentHTML('beforeend', `<option value="${a.duration_min}">${a.duration_min} min</option>`);
-        VR.$('#apDur').value = String(a.duration_min);
+        const dv = a ? a.duration_min : defaultSlot;
+        VR.$('#apDur').insertAdjacentHTML('beforeend', `<option value="${dv}">${dv} min</option>`);
+        VR.$('#apDur').value = String(dv);
       }
       VR.$('#apType').value = a?.type || 'Visita clinica';
       VR.$('#apStatus').value = a?.status || 'confirmed';
       VR.$('#apNotes').value = a?.notes_internal || '';
+      if (multiVet) {
+        const pv = a ? (a.assigned_to || '') : (preset.vet !== undefined ? preset.vet : (vetFilter && vetFilter !== 'none' ? vetFilter : (ctx.isVet ? ctx.session.user.id : '')));
+        VR.$('#apVet').value = vets.some((v) => v.id === pv) ? pv : '';
+      }
       (a?.notes_owner ? VR.show : VR.hide)(VR.$('#ownerNoteBox'));
+      if (a?.ref_code) { VR.$('#refCode').textContent = 'P-' + a.ref_code; VR.show(VR.$('#refBox')); } else VR.hide(VR.$('#refBox'));
       VR.$('#ownerNote').textContent = a?.notes_owner || '';
-      setChosen(a && a.pets ? { petId: a.pets.id, clientId: a.client_id, label: `${a.pets.name}${a.clients ? ' – ' + VR.clientName(a.clients) : ''}` } : (preset.pet || null));
+      setChosen(a && a.pets ? { petId: a.pets.id, clientId: a.client_id, label: `${a.pets.name}${a.clients ? ' – ' + VR.clientName(a.clients) : ''}`, phone: a.clients?.phone, petName: a.pets.name } : (preset.pet || null));
       (a ? VR.show : VR.hide)(VR.$('#apDelete'));
-      const canVisit = a && a.pets && ctx.isVet && !['cancelled', 'no_show'].includes(a.status);
+      const canVisit = a && a.pets && ctx.isVet && !inactive(a);
       (canVisit ? VR.show : VR.hide)(VR.$('#apVisit'));
       const canWa = a && a.clients?.phone && !['cancelled', 'no_show', 'done'].includes(a.status);
       (canWa ? VR.show : VR.hide)(VR.$('#apWa'));
@@ -366,7 +654,11 @@
       if (canVisit) VR.$('#apVisit').href = `visita.html?animale=${a.pets.id}&apt=${a.id}&tipo=${encodeURIComponent(a.type || '')}`;
       dlg.showModal();
       if (!a && !VR.$('#apTime').value) VR.$('#apTime').focus();
+      else if (!a && !chosen) VR.$('#petSearch').focus();
     };
+    VR.$('#refCopy').addEventListener('click', async (ev) => {
+      try { await navigator.clipboard.writeText(VR.$('#refCode').textContent); ev.target.textContent = 'Copiato!'; setTimeout(() => { ev.target.textContent = 'Copia'; }, 1500); } catch { /* niente */ }
+    });
     VR.$('#add').addEventListener('click', () => openDialog(null));
     VR.$('#apCancel').addEventListener('click', () => dlg.close());
 
@@ -378,28 +670,59 @@
       const startsAt = new Date(`${date}T${time}:00`);
       const dur = Number(VR.$('#apDur').value);
       const status = VR.$('#apStatus').value;
+      const assignee = multiVet ? (VR.$('#apVet').value || null) : undefined;
+      const newPatOpen = !VR.$('#newPat').hidden;
+      if (newPatOpen && (!VR.$('#npLast').value.trim() || !VR.$('#npPet').value.trim())) {
+        VR.say(dlgMsg, 'Per registrare il nuovo paziente servono il cognome del proprietario e il nome dell\'animale.', 'error'); return;
+      }
 
-      // Sovrapposizioni (solo se l'appuntamento cade nel periodo caricato)
+      // Sovrapposizioni (solo se l'appuntamento cade nel periodo caricato; con più veterinari, solo per lo stesso veterinario)
       const endsAt = new Date(startsAt.getTime() + dur * 60000);
-      const clash = appts.find((x) => x.id !== editing?.id && !['cancelled', 'no_show'].includes(x.status) &&
+      const clash = appts.find((x) => x.id !== editing?.id && !inactive(x) &&
+        (!multiVet || (x.assigned_to || null) === (assignee || null)) &&
         new Date(x.starts_at) < endsAt && new Date(new Date(x.starts_at).getTime() + x.duration_min * 60000) > startsAt);
       if (clash && status !== 'cancelled' &&
           !confirm(`Alle ${hm(new Date(clash.starts_at))} c'è già un appuntamento (${clash.pets?.name || 'senza paziente'}). Salvare comunque?`)) return;
+
+      const btn = VR.$('#apSave'); btn.disabled = true;
+      // Prima il nuovo paziente, se richiesto (senza doppioni se si riprova)
+      if (newPatOpen) {
+        try {
+          const r = await VR.createPatient({
+            clinicId: ctx.clinicId, clientId: npCreated.clientId, petId: npCreated.petId,
+            owner: { last_name: VR.$('#npLast').value.trim(), phone: VR.$('#npPhone').value.trim() || null },
+            pet: { name: VR.$('#npPet').value.trim(), species: VR.$('#npSpecies').value || null }
+          });
+          npCreated = { clientId: r.clientId, petId: r.petId };
+          chosen = { petId: r.petId, clientId: r.clientId, label: VR.$('#npPet').value.trim() + ' – ' + VR.$('#npLast').value.trim(),
+                     phone: VR.$('#npPhone').value.trim() || null, petName: VR.$('#npPet').value.trim() };
+          clientsCache = null;
+        } catch (e) {
+          if (e && e.clientId) npCreated.clientId = e.clientId;
+          if (e && e.petId) npCreated.petId = e.petId;
+          btn.disabled = false; VR.say(dlgMsg, 'Paziente non registrato: ' + VR.errorText(e), 'error'); return;
+        }
+      }
 
       const row = {
         starts_at: startsAt.toISOString(), duration_min: dur, type: VR.$('#apType').value, status,
         notes_internal: VR.$('#apNotes').value.trim() || null,
         pet_id: chosen?.petId || null, client_id: chosen?.clientId || null
       };
-      const btn = VR.$('#apSave'); btn.disabled = true;
+      if (assignee !== undefined) row.assigned_to = assignee;
       const res = editing
         ? await VR.sb.from('appointments').update(row).eq('id', editing.id)
         : await VR.sb.from('appointments').insert({ ...row, clinic_id: ctx.clinicId });
       btn.disabled = false;
       if (res.error) { VR.say(dlgMsg, VR.errorText(res.error), 'error'); return; }
+      const moved = !editing || new Date(editing.starts_at).getTime() !== startsAt.getTime();
       dlg.close();
       anchor = startsAt;
-      load();
+      await load();
+      // Conferma al proprietario con un tocco
+      if (moved && status === 'confirmed' && chosen?.phone) {
+        showToast(`<span>${editing ? 'Appuntamento spostato' : 'Appuntamento salvato'}: ${VR.esc(when(startsAt))}.</span> ${waNotice({ _phone: chosen.phone, _petName: chosen.petName }, startsAt.toISOString()).replace('Avvisa su WhatsApp', 'Conferma su WhatsApp')}`);
+      }
     });
 
     VR.$('#apDelete').addEventListener('click', async () => {
@@ -415,6 +738,7 @@
       const { data: ap } = await VR.sb.from('appointments').select('starts_at').eq('id', aptParam).maybeSingle();
       if (ap) anchor = new Date(ap.starts_at);
     }
+    setView(view);
     await load();
     if (petParam) {
       const list = await loadClients();

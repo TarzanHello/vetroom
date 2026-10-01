@@ -12,14 +12,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="FurrFinder">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-01c">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js"></script>
-  <script src="../js/app.js"></script>
-  <script src="../js/i18n.js"></script>
-  <script src="../js/layout.js"></script>
-  <script src="../js/clinica.js"></script>
-  <script src="../js/proprietario.js"></script>
+  <script src="../js/config.js?v=2026-10-01c"></script>
+  <script src="../js/app.js?v=2026-10-01c"></script>
+  <script src="../js/i18n.js?v=2026-10-01c"></script>
+  <script src="../js/layout.js?v=2026-10-01c"></script>
+  <script src="../js/clinica.js?v=2026-10-01c"></script>
+  <script src="../js/proprietario.js?v=2026-10-01c"></script>
+  <script src="../js/notifiche.js?v=2026-10-01c"></script>
 </head>
 <body data-shell="owner" data-nav="home">
   <main>
@@ -32,6 +33,8 @@
         <p>Documenti, referti e visite. Ordinati in un unico posto, sempre disponibili.</p>
         <a class="btn" id="heroBtn" href="animale.html?nuovo=1">Crea la scheda del tuo pet</a>
       </section>
+
+      <div id="pushBanner" hidden></div>
 
       <section class="panel" id="apptPanel" hidden>
         <h2>Prossimi appuntamenti</h2>
@@ -64,13 +67,14 @@
       VR.$('#heroBtn').textContent = '+ Aggiungi un pet';
     }
     VR.show(VR.$('#page'));
+    if (pets.length && VR.push) VR.push.banner(VR.$('#pushBanner'));
     if (!pets.length) return;
 
     const ids = pets.map((p) => p.id);
     const [docsRes, visitsRes, apptRes, urls, remRes] = await Promise.all([
       VR.sb.from('documents').select('pet_id').in('pet_id', ids),
       VR.sb.from('visits').select('pet_id, visit_kind, form_data').in('pet_id', ids),
-      VR.sb.from('appointments').select('id, starts_at, type, status, pet_id, pets(name), clinics(name)')
+      VR.sb.from('appointments').select('id, ref_code, starts_at, type, status, pet_id, pets(name), clinics(name)')
         .in('pet_id', ids).in('status', ['requested', 'confirmed']).gte('starts_at', new Date().toISOString()).order('starts_at'),
       Promise.all(pets.map((p) => VR.fileUrl(p.photo_path))),
       VR.sb.from('reminders').select('pet_id, title, due_date').in('pet_id', ids).eq('status', 'open').order('due_date')
@@ -108,6 +112,7 @@
           <div class="member-main">
             <strong>${VR.esc(VR.fmtDateTime(a.starts_at))}</strong>
             <span>${VR.esc([a.pets?.name, a.type, a.clinics?.name].filter(Boolean).join(' · '))}</span>
+            ${a.ref_code ? `<span class="ref-small">Numero <b class="notranslate">P-${VR.esc(a.ref_code)}</b></span>` : ''}
           </div>
           <div class="member-ctl">
             <span class="pill ${a.status === 'requested' ? 'pill-wait' : 'pill-ok'}">${VR.APPT_STATUS[a.status]}</span>

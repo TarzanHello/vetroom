@@ -12,13 +12,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-01c">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js"></script>
-  <script src="../js/app.js"></script>
-  <script src="../js/i18n.js"></script>
-  <script src="../js/layout.js"></script>
-  <script src="../js/clinica.js"></script>
+  <script src="../js/config.js?v=2026-10-01c"></script>
+  <script src="../js/app.js?v=2026-10-01c"></script>
+  <script src="../js/i18n.js?v=2026-10-01c"></script>
+  <script src="../js/layout.js?v=2026-10-01c"></script>
+  <script src="../js/clinica.js?v=2026-10-01c"></script>
 </head>
 <body data-shell="clinic" data-nav="clienti">
 
@@ -35,6 +35,8 @@
         </div>
       </div>
 
+      <section class="panel pet-summary" id="summary" hidden></section>
+
       <!-- Animali del cliente -->
       <section class="panel" id="petsPanel" hidden>
         <div class="page-head" style="margin-bottom:1rem">
@@ -50,22 +52,24 @@
         <ul class="rows" id="hist" style="box-shadow:none;border:1px solid var(--line)"></ul>
       </section>
 
+      <details class="edit-box" id="editBox">
+        <summary>Modifica i dati del proprietario</summary>
       <form id="form" novalidate>
         <section class="panel">
           <h2>Dati anagrafici</h2>
           <div class="grid">
             <div><label for="last_name">Cognome</label><input type="text" id="last_name" name="last_name" autocomplete="off" required></div>
             <div><label for="first_name">Nome</label><input type="text" id="first_name" name="first_name" autocomplete="off"></div>
-            <div><label for="fiscal_code">Codice fiscale</label><input type="text" id="fiscal_code" name="fiscal_code" maxlength="16" data-upper autocomplete="off"></div>
-            <div><label for="birth_date">Data di nascita</label><input type="date" id="birth_date" name="birth_date"></div>
             <div><label for="phone">Telefono</label><input type="tel" id="phone" name="phone" autocomplete="off"></div>
             <div><label for="email">Email</label><input type="email" id="email" name="email" autocomplete="off">
               <p class="hint-small">Se il cliente si iscrive a Vetroom con questa email, ritrova subito i suoi animali.</p></div>
+            <div><label for="fiscal_code">Codice fiscale</label><input type="text" id="fiscal_code" name="fiscal_code" maxlength="16" data-upper autocomplete="off"></div>
+            <div><label for="birth_date">Data di nascita</label><input type="date" id="birth_date" name="birth_date"></div>
           </div>
         </section>
 
-        <section class="panel">
-          <h2>Indirizzo</h2>
+        <details class="panel addr-box" id="addrBox">
+          <summary><h2 style="display:inline">Indirizzo e fatturazione</h2> <span class="muted" style="font-size:13px">(facoltativi)</span></summary>
           <div class="grid">
             <div class="s8"><label for="address_street">Via / Piazza</label><input type="text" id="address_street" name="address_street"></div>
             <div class="s4"><label for="address_number">Civico</label><input type="text" id="address_number" name="address_number"></div>
@@ -83,7 +87,7 @@
             <div class="s3"><label for="billing_province">Provincia</label><input type="text" id="billing_province" name="billing_province" maxlength="2" data-upper></div>
             <div class="s3"><label for="billing_country">Nazione</label><input type="text" id="billing_country" name="billing_country" maxlength="2" data-upper></div>
           </div>
-        </section>
+        </details>
 
         <section class="panel">
           <h2>Note</h2>
@@ -98,6 +102,7 @@
         </div>
         <div id="msg2" hidden></div>
       </form>
+      </details>
     </div>
   </main>
 
@@ -118,12 +123,57 @@
 
     let petsCount = 0;
 
+    // ---------- Riepilogo in alto: contatti a portata di tocco ----------
+    let client = null, petNames = [];
+    const renderSummary = () => {
+      if (!client) return;
+      const c = client, phone = c.phone;
+      const addr = [[c.address_street, c.address_number].filter(Boolean).join(' '), [c.address_zip, c.address_city].filter(Boolean).join(' '), c.address_province].filter(Boolean).join(', ');
+      const lines = [
+        phone ? `<a href="tel:${VR.esc(phone.replace(/\s/g, ''))}"><b>${VR.esc(phone)}</b></a>` : '<span class="muted">Telefono non indicato</span>',
+        c.email ? `<a href="mailto:${VR.esc(c.email)}">${VR.esc(c.email)}</a>` : '',
+        addr ? VR.esc(addr) : ''
+      ].filter(Boolean);
+      VR.$('#summary').innerHTML = `
+        <div class="pet-sum-main">
+          <div class="pet-sum-line">${lines.join(' · ')}</div>
+        </div>
+        ${c.notes ? `<div class="pet-alert"><b>Da sapere:</b> ${VR.esc(c.notes)}</div>` : ''}
+        <div class="actions-bar pet-sum-acts">
+          ${phone ? `<a class="btn btn-ghost" href="tel:${VR.esc(phone.replace(/\s/g, ''))}">Chiama</a>` : ''}
+          ${phone && VR.waPhone(phone) ? `<a class="btn btn-ghost" target="_blank" rel="noopener" href="${VR.esc(VR.waLink(phone, ''))}">WhatsApp</a>` : ''}
+          ${c.email ? `<a class="btn btn-ghost" href="mailto:${VR.esc(c.email)}">Email</a>` : ''}
+          ${!phone ? '<button class="btn btn-ghost" type="button" data-edit>Aggiungi il telefono</button>' : ''}
+          ${c.owner_user_id ? '<button class="btn btn-ghost" type="button" data-msg>💬 Messaggio</button><span class="ff-badge" title="Vede referti e vaccini, riceve i promemoria e può prenotare online">📱 Usa FurrFinder</span>'
+            : '<button class="btn btn-ghost ff-invite-btn" type="button" data-ffinvite>📱 Invita su FurrFinder</button>'}
+        </div>`;
+      VR.show(VR.$('#summary'));
+    };
+    VR.$('#summary').addEventListener('click', async (ev) => {
+      if (ev.target.closest('[data-msg]')) {
+        const btn = ev.target.closest('[data-msg]'); btn.disabled = true;
+        const { data: conv, error } = await VR.sb.rpc('msg_open_with_owner', { p_owner: client.owner_user_id, p_clinic: ctx.clinicId });
+        btn.disabled = false;
+        if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+        location.href = 'messaggi.html?c=' + encodeURIComponent(conv);
+        return;
+      }
+      if (ev.target.closest('[data-ffinvite]')) {
+        VR.ff.openInvite({ client: { ...client, id }, petNames: petNames, clinicName: ctx.clinic.name || '' });
+        return;
+      }
+      if (!ev.target.closest('[data-edit]')) return;
+      VR.$('#editBox').open = true; VR.$('#phone').focus();
+    });
+
     if (id) {
       const { data: c, error } = await VR.sb.from('clients').select('*')
         .eq('id', id).eq('clinic_id', ctx.clinicId).maybeSingle();
       if (error || !c) { VR.hide(loading); VR.say(msg, error ? VR.errorText(error) : 'Cliente non trovato.', 'error'); return; }
       VR.fillForm(form, c);
       toggleBilling();
+      client = c; renderSummary();
+      if (c.address_street || c.address_city || c.billing_is_different) VR.$('#addrBox').open = true;
       VR.$('#title').textContent = VR.clientName(c);
       document.title = VR.clientName(c) + ' – Vetroom';
       if (c.owner_user_id) VR.show(VR.$('#ownerBadge'));
@@ -136,6 +186,7 @@
       if (e2) { VR.say(msg, VR.errorText(e2), 'error'); }
       const pets = (acc || []).map((a) => a.pets).filter((p) => p && !p.deleted_at);
       petsCount = pets.length;
+      petNames = pets.map((p) => p.name);
       const urls = await Promise.all(pets.map((p) => VR.fileUrl(p.photo_path)));
       VR.$('#pets').innerHTML = pets.map((p, i) => `
         <a class="pet-card" href="animale.html?id=${p.id}">
@@ -169,10 +220,11 @@
     VR.hide(loading);
     VR.show(VR.$('#page'));
     if (!id) {
+      VR.$('#editBox').open = true; VR.$('#editBox').classList.add('is-new');
       VR.$('#last_name').focus();
       VR.show(VR.$('#saveAndPet'));
-      // Arrivando da "Nuovo animale", il pulsante principale è "Salva e aggiungi animale"
-      if (VR.param('poi') === 'animale') { VR.$('#saveAndPet').className = 'btn btn-primary'; VR.$('#save').className = 'btn btn-ghost'; }
+      // Quasi sempre il proprietario arriva con un animale: il pulsante principale è "Salva e aggiungi animale"
+      VR.$('#saveAndPet').className = 'btn btn-primary'; VR.$('#save').className = 'btn btn-ghost';
     }
 
     // Salvataggio
@@ -198,6 +250,7 @@
         if (error) { VR.say(msg2, VR.errorText(error), 'error'); return; }
         VR.$('#title').textContent = VR.clientName(v);
         VR.say(msg2, 'Modifiche salvate.', 'ok');
+        client = { ...client, ...v }; renderSummary();
       } else {
         const { data, error } = await VR.sb.from('clients')
           .insert({ ...v, clinic_id: ctx.clinicId }).select('id').single();

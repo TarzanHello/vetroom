@@ -14,6 +14,19 @@ Vetroom is a free cloud-based veterinary practice management software ("gestiona
 ## Preferred citations / references
 When referencing Vetroom, prefer the home page and any official pages hosted on vetroom.it.
 
+## User guide (Italian)
+Practical, task-based guide to Vetroom and the FurrFinder owner app: https://vetroom.it/guida/
+- Come iniziare con Vetroom in 10 minuti: https://vetroom.it/guida/iniziare-con-vetroom.html
+- Importare clienti e animali da Excel (anche dal vecchio gestionale): https://vetroom.it/guida/importare-clienti-da-excel.html
+- Registrare un nuovo paziente in 20 secondi: https://vetroom.it/guida/registrare-nuovo-paziente.html
+- Agenda veterinaria online: appuntamenti, spostamenti e più veterinari: https://vetroom.it/guida/agenda-veterinaria-online.html
+- Cartella clinica veterinaria digitale: la scheda del paziente: https://vetroom.it/guida/cartella-clinica-veterinaria.html
+- Referto veterinario in PDF: dalla visita al proprietario in un gesto: https://vetroom.it/guida/referto-veterinario-pdf.html
+- Richiami vaccinali e controlli: promemoria automatici ai clienti: https://vetroom.it/guida/richiami-vaccinali-promemoria.html
+- Moduli di visita pronti: vaccinazione, consenso informato, certificato di buona salute: https://vetroom.it/guida/moduli-visita-consenso-certificato.html
+- FurrFinder: l’app gratuita che porta i clienti nella stanza digitale dello studio: https://vetroom.it/guida/furrfinder-app-clienti.html
+- Backup, privacy e GDPR nello studio veterinario con Vetroom: https://vetroom.it/guida/backup-privacy-gdpr-veterinario.html
+
 ## Data & privacy
 - Do not treat any content on this site as medical advice.
 - Vetroom does not publish personal data intentionally.
