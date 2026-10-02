@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Fattura – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-02d">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02d"></script>
+  <script src="../js/app.js?v=2026-10-02d"></script>
+  <script src="../js/i18n.js?v=2026-10-02d"></script>
+  <script src="../js/layout.js?v=2026-10-02d"></script>
+  <script src="../js/clinica.js?v=2026-10-02d"></script>
+  <script src="../vendor/jspdf-2.5.2.min.js"></script>
+  <script src="../js/pdf.js?v=2026-10-02d"></script>
+  <script src="../js/fatture.js?v=2026-10-02d"></script>
+</head>
+<body data-shell="clinic" data-nav="cassa">
+  <main class="wrap wrap-wide">
+    <a class="back" href="cassa.html">← Cassa</a>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <!-- ================= NUOVA FATTURA ================= -->
+    <div id="newPage" hidden>
+      <div class="page-head"><div><h1>Nuova fattura</h1><p class="muted" style="margin:0" id="newSub">Compila, controlla il totale ed emetti. Il numero lo assegna Vetroom.</p></div></div>
+      <div id="dupNote" hidden></div>
+      <div class="cash-layout">
+        <div>
+          <section class="panel">
+            <h2>Cliente</h2>
+            <div class="grid">
+              <div class="s12 sugg">
+                <label for="cSearch">Cerca fra i tuoi proprietari, oppure scrivi direttamente i dati qui sotto</label>
+                <input type="search" id="cSearch" placeholder="Cognome, nome, telefono o animale" autocomplete="off">
+                <div class="sugg-list" id="cSugg" hidden></div>
+              </div>
+              <div class="s8"><label for="cName">Nome e cognome</label><input type="text" id="cName" autocomplete="off"></div>
+              <div class="s4"><label for="cCf">Codice fiscale</label><input type="text" id="cCf" maxlength="16" autocomplete="off" style="text-transform:uppercase"><span id="cfHint"></span></div>
+              <div class="s8"><label for="cAddr">Indirizzo</label><input type="text" id="cAddr"></div>
+              <div class="s4"><label for="cZip">CAP</label><input type="text" id="cZip" inputmode="numeric" maxlength="5"></div>
+              <div class="s8"><label for="cCity">Città</label><input type="text" id="cCity"></div>
+              <div class="s4"><label for="cProv">Provincia</label><input type="text" id="cProv" maxlength="2" style="text-transform:uppercase"></div>
+              <div class="s8"><label for="cPet">Animale (compare in fattura)</label><input type="text" id="cPet" list="petList" autocomplete="off"><datalist id="petList"></datalist></div>
+              <div class="s12"><label class="check"><input type="checkbox" id="cOpp"> Il cliente si oppone all'invio dei dati al Sistema Tessera Sanitaria</label></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h2>Prestazioni e farmaci</h2>
+            <div id="quickWrap" hidden>
+              <input type="search" id="qSearch" class="search" placeholder="Cerca nel listino" style="max-width:320px;margin-bottom:6px">
+              <div class="quick-add" id="quick"></div>
+            </div>
+            <p class="muted" id="noList" hidden style="margin-top:0;font-size:14px">Suggerimento: crea il <a href="fatturazione.html#listino">listino</a> con le prestazioni che fai più spesso, e qui le aggiungi con un tocco.</p>
+            <table class="inv-lines" id="lines">
+              <thead><tr><th>Descrizione</th><th class="c-qty">Q.tà</th><th class="c-price">Prezzo €</th><th class="c-kind">Tipo</th><th class="c-vat" id="thVat">IVA</th><th class="c-en" title="Contributo integrativo ENPAV">ENPAV</th><th class="c-amt">Importo</th><th class="c-x"></th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <div class="actions-bar" style="margin-top:10px"><button class="btn btn-ghost btn-small" type="button" id="addLine">+ Aggiungi riga</button></div>
+            <p class="hint-small" style="margin:.6rem 0 0">Prezzi senza IVA e senza contributo: li aggiunge Vetroom. <b>Prestazione</b> e <b>Farmaco</b> finiscono separati nella dichiarazione dei redditi del cliente (spese veterinarie e farmaci).</p>
+          </section>
+
+          <section class="panel">
+            <h2>Pagamento</h2>
+            <div class="pay-chips" id="payChips" role="radiogroup" aria-label="Metodo di pagamento"></div>
+            <p class="hint-small" id="payHint" style="margin:.5rem 0 0"></p>
+            <div class="grid" style="margin-top:10px">
+              <div class="s4"><label for="dIssued">Data della fattura</label><input type="date" id="dIssued"></div>
+              <div class="s4" id="paidWrap"><label for="dPaid">Data del pagamento</label><input type="date" id="dPaid"></div>
+              <div class="s12"><label for="notes">Note sulla fattura (facoltative)</label><textarea id="notes" rows="2" maxlength="1000"></textarea></div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="cash-side">
+          <div class="sum-box">
+            <h2 style="margin-top:0">Riepilogo</h2>
+            <dl id="sumDl"></dl>
+            <div class="tot" id="sumTot">€ 0,00</div>
+            <button class="btn btn-primary" type="button" id="issue">Emetti fattura</button>
+            <div id="issueMsg" hidden style="margin-top:10px"></div>
+            <p class="hint-small" style="margin:.7rem 0 0">Una fattura emessa non si modifica: se serve, si storna con una nota di credito.</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ================= FATTURA EMESSA ================= -->
+    <div id="viewPage" hidden>
+      <div class="page-head">
+        <div><h1 id="vTitle"></h1><p class="muted" style="margin:0" id="vSub"></p></div>
+        <div class="actions-bar">
+          <button class="btn btn-primary" type="button" id="pdf">Scarica PDF</button>
+          <button class="btn btn-ghost" type="button" id="share">Invia al cliente</button>
+          <button class="btn btn-ghost" type="button" id="paid" hidden>Registra incasso</button>
+          <button class="btn btn-danger btn-small" type="button" id="credit" hidden>Storna con nota di credito</button>
+        </div>
+      </div>
+      <div id="vNote"></div>
+      <div class="cash-layout">
+        <div class="inv-paper" id="paper"></div>
+        <aside class="cash-side">
+          <div class="sum-box">
+            <h2 style="margin-top:0">Sistema Tessera Sanitaria</h2>
+            <p id="tsState" style="margin:0 0 8px"></p>
+            <dl id="tsVoci"></dl>
+            <p class="hint-small" id="tsHint" style="margin:0"></p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    const I = VR.inv, esc = VR.esc;
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    let prof;
+    try { prof = await I.loadProfile(ctx.clinicId); } catch (e) {
+      VR.hide(loading);
+      VR.say(msg, /billing_profiles/.test(e.message || '') ? 'La cassa non è ancora attiva: va eseguita la patch 21 sul database.' : VR.errorText(e), 'error');
+      return;
+    }
+    const id = VR.param('id');
+
+    // ===================================================================
+    //  VISTA DI UNA FATTURA EMESSA
+    // ===================================================================
+    if (id) {
+      const { data: inv, error } = await VR.sb.from('invoices').select('*').eq('id', id).maybeSingle();
+      VR.hide(loading);
+      if (error || !inv) { VR.say(msg, error ? VR.errorText(error) : 'Fattura non trovata.', 'error'); return; }
+      const nc = inv.doc_type === 'NC';
+      const iss = inv.issuer || {}, cu = inv.customer || {};
+      document.title = (nc ? 'Nota di credito ' : 'Fattura ') + inv.doc_number + ' – Vetroom';
+      VR.$('#vTitle').textContent = (nc ? 'Nota di credito ' : 'Fattura ') + inv.doc_number;
+      VR.$('#vSub').textContent = `${cu.name || ''} · ${I.date(inv.issued_on)} · ${I.money(inv.total)}`;
+      const notes = [];
+      if (VR.param('emessa')) notes.push(`<div class="notice notice-ok">Fattura emessa. Scarica il PDF o inviala al cliente.</div>`);
+      if (inv.credited_by) {
+        const { data: n } = await VR.sb.from('invoices').select('id, doc_number, issued_on').eq('id', inv.credited_by).maybeSingle();
+        notes.push(`<div class="notice notice-error">Stornata con la <a href="fattura.html?id=${inv.credited_by}">nota di credito ${esc(n?.doc_number || '')}</a> del ${I.date(n?.issued_on)}.</div>`);
+      }
+      if (nc && inv.credit_of) {
+        const { data: o } = await VR.sb.from('invoices').select('doc_number').eq('id', inv.credit_of).maybeSingle();
+        notes.push(`<div class="notice notice-info">Storna la <a href="fattura.html?id=${inv.credit_of}">fattura ${esc(o?.doc_number || '')}</a>.</div>`);
+      }
+      if (!nc && !inv.paid_on && !inv.credited_by) notes.push('<div class="notice notice-info">Questa fattura non risulta ancora pagata. Quando il cliente paga, premi <b>Registra incasso</b>.</div>');
+      VR.$('#vNote').innerHTML = notes.join('');
+
+      // la fattura com'è
+      const ivaL = (l) => (l.vat != null ? l.vat + '%' : (l.nature || ''));
+      VR.$('#paper').innerHTML = `
+        <div class="inv-head">
+          <div><strong style="font-size:17px">${esc(iss.name || '')}</strong><br>
+            <span class="muted" style="font-size:13px">${esc([iss.address, [iss.zip, iss.city, iss.province ? '(' + iss.province + ')' : ''].filter(Boolean).join(' ')].filter(Boolean).join(' – '))}<br>
+            P. IVA ${esc(iss.piva || '')} · C.F. ${esc(iss.cf || '')}${iss.albo ? '<br>' + esc(iss.albo) : ''}</span></div>
+          <div style="text-align:right"><p class="inv-title">${nc ? 'Nota di credito' : 'Fattura'} n. ${esc(inv.doc_number)}</p><span class="muted">del ${I.date(inv.issued_on)}</span>
+            ${inv.credited_by ? '<br><span class="inv-stamp" style="margin-top:8px">STORNATA</span>' : ''}</div>
+        </div>
+        <div class="inv-to"><span class="muted" style="font-size:12px;font-weight:700">DESTINATARIO</span><br><strong>${esc(cu.name || '')}</strong>
+          ${cu.cf ? '<br>C.F. ' + esc(cu.cf) : ''}${cu.address || cu.city ? '<br>' + esc([cu.address, [cu.zip, cu.city, cu.province ? '(' + cu.province + ')' : ''].filter(Boolean).join(' ')].filter(Boolean).join(' – ')) : ''}
+          ${cu.pet ? `<br><span class="muted">Paziente: ${esc(cu.pet)}</span>` : ''}</div>
+        <div class="table-wrap"><table><thead><tr><th>Descrizione</th><th class="r">Q.tà</th><th class="r">Prezzo</th><th class="r">IVA</th><th class="r">Importo</th></tr></thead><tbody>
+          ${(inv.lines || []).map((l) => `<tr><td>${esc(l.desc)}<br><span class="muted" style="font-size:12px">${I.KIND[l.kind] || ''}</span></td><td class="r">${I.num(l.qty).replace(/,00$/, '')}</td><td class="r">${I.num(l.unit)}</td><td class="r">${ivaL(l)}</td><td class="r">${I.num(l.net)}</td></tr>`).join('')}
+          ${Number(inv.contrib) > 0 ? `<tr><td colspan="4">Contributo integrativo ENPAV ${I.num(iss.enpav_rate).replace(/,00$/, '')}%</td><td class="r">${I.num(inv.contrib)}</td></tr>` : ''}
+        </tbody></table></div>
+        <div class="inv-sum">
+          ${(inv.vat_summary || []).map((s) => s.vat != null
+            ? `<div><span>Imponibile ${s.vat}%</span><span>${I.money(s.imponibile)}</span></div><div><span>IVA ${s.vat}%</span><span>${I.money(s.iva)}</span></div>`
+            : `<div><span>Imponibile ${esc((I.NATURE[s.nature] || s.nature).toLowerCase())}</span><span>${I.money(s.imponibile)}</span></div>`).join('')}
+          ${Number(inv.stamp) > 0 ? `<div><span>Imposta di bollo</span><span>${I.money(inv.stamp)}</span></div>` : ''}
+          <div class="big"><span>${nc ? 'Totale stornato' : 'Totale'}</span><span>${I.money(inv.total)}</span></div>
+        </div>
+        <p class="muted" style="font-size:13px;margin:14px 0 0">${nc ? '' : inv.paid_on ? `Pagata il ${I.date(inv.paid_on)} · ${esc(I.PAY[inv.payment_method] || '')}${inv.traced ? ' (tracciabile)' : ''}` : 'Da pagare'}
+          ${inv.ts_opposition ? '<br>Il cliente si è opposto all\'invio al Sistema Tessera Sanitaria.' : ''}${inv.notes ? '<br>' + esc(inv.notes) : ''}</p>`;
+
+      // Sistema TS
+      const st = I.TS[inv.ts_status] || [inv.ts_status, ''];
+      VR.$('#tsState').innerHTML = `<span class="pill ${st[1]}">${st[0]}</span>`;
+      VR.$('#tsVoci').innerHTML = (inv.ts_voci || []).map((v) => `<dt>${v.tipoSpesa === 'SV' ? 'Spese veterinarie' : v.tipoSpesa === 'FV' ? 'Farmaci veterinari' : 'Altre spese'}</dt><dd>${I.money(v.importo)}</dd>`).join('');
+      const tsMsgs = (inv.ts_messages || []).filter((x) => x && x.descrizione);
+      if (tsMsgs.length) VR.$('#tsVoci').insertAdjacentHTML('afterend', `<div class="notice ${inv.ts_status === 'rejected' ? 'notice-error' : 'notice-info'}" style="font-size:13px">${tsMsgs.map((x) => `${esc(x.codice)} – ${esc(x.descrizione)}`).join('<br>')}</div>`);
+      if (inv.ts_status === 'rejected' || inv.ts_status === 'pending' && inv.paid_on && !inv.credited_by) {
+        VR.$('#tsHint').insertAdjacentHTML('afterend', `<div class="actions-bar" style="margin-top:10px"><button class="btn btn-ghost btn-small" type="button" id="tsOne">${inv.ts_status === 'rejected' ? 'Riprova l\'invio' : 'Invia adesso'}</button></div>`);
+        VR.$('#tsOne').addEventListener('click', async () => {
+          if (inv.ts_status === 'rejected') { const { error: e } = await VR.sb.rpc('ts_requeue', { p_id: inv.id }); if (e) { VR.say(msg, VR.errorText(e), 'error'); return; } }
+          const out = await I.sendToTs({ clinicId: ctx.clinicId, defaultCf: iss.cf || '', only: inv.id });
+          if (!out) { if (inv.ts_status === 'rejected') location.reload(); return; }
+          if (out.error) { VR.say(msg, out.error, 'error'); return; }
+          location.reload();
+        });
+      }
+      VR.$('#tsHint').textContent = inv.ts_status === 'not_required'
+        ? 'Questo documento non va inviato: la fattura è stata stornata prima dell\'invio.'
+        : inv.ts_status === 'pending'
+          ? (!nc && !inv.paid_on ? 'Si potrà inviare quando la fattura risulterà pagata.' : 'Parte con il prossimo invio dalla Cassa, oppure subito con il pulsante qui sotto.')
+          : inv.ts_status === 'rejected' ? 'Il Sistema TS l\'ha scartata. Se il problema è nei dati della fattura, stornala e riemettila corretta; se era un problema momentaneo, riprova.'
+          : (inv.ts_protocol ? 'Protocollo ' + inv.ts_protocol + (inv.ts_sent_at ? ' del ' + new Date(inv.ts_sent_at).toLocaleString('it-IT') : '') : '');
+
+      // PDF e invio
+      let logoP = null;
+      const makePdf = async () => { if (!logoP) logoP = I.loadLogo(ctx.clinicId); return I.buildPdf(inv, { logo: await logoP }); };
+      VR.$('#pdf').addEventListener('click', async (ev) => {
+        const b = ev.currentTarget; b.disabled = true;
+        try { (await makePdf()).save(I.pdfName(inv)); } catch (e) { VR.say(msg, VR.errorText(e), 'error'); }
+        b.disabled = false;
+      });
+      VR.$('#share').addEventListener('click', async (ev) => {
+        const b = ev.currentTarget; b.disabled = true;
+        try {
+          const blob = (await makePdf()).output('blob');
+          const file = new File([blob], I.pdfName(inv), { type: 'application/pdf' });
+          const text = `${nc ? 'Nota di credito' : 'Fattura'} n. ${inv.doc_number} del ${I.date(inv.issued_on)} – ${iss.name || ''}`;
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: text, text });
+          } else {
+            (await makePdf()).save(I.pdfName(inv));
+            let email = '';
+            if (inv.client_id) { const { data: c } = await VR.sb.from('clients').select('email').eq('id', inv.client_id).maybeSingle(); email = c?.email || ''; }
+            location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(text)}&body=${encodeURIComponent('Buongiorno,\n\nin allegato la ' + text.toLowerCase() + '.\n\nCordiali saluti\n' + (iss.name || ''))}`;
+            VR.say(msg, 'Il PDF è stato scaricato: allegalo all\'email che si è aperta.', 'info');
+          }
+        } catch (e) { if (e.name !== 'AbortError') VR.say(msg, VR.errorText(e), 'error'); }
+        b.disabled = false;
+      });
+      if (!nc && !inv.paid_on && !inv.credited_by) {
+        VR.show(VR.$('#paid'));
+        VR.$('#paid').addEventListener('click', async () => {
+          const v = await I.ask({ title: 'Registra incasso', ok: 'Registra', fields: [
+            { name: 'method', label: 'Come ha pagato', type: 'select', value: 'carta', options: Object.entries(I.PAY) },
+            { name: 'date', label: 'Quando', type: 'date', value: I.today(), min: inv.issued_on, max: I.today() }] });
+          if (!v) return;
+          const { error: e } = await VR.sb.rpc('invoice_mark_paid', { p_id: inv.id, p_paid_on: v.date, p_method: v.method });
+          if (e) { VR.say(msg, VR.errorText(e), 'error'); return; }
+          location.reload();
+        });
+      }
+      if (!nc && !inv.credited_by && ctx.isVet) {
+        VR.show(VR.$('#credit'));
+        VR.$('#credit').addEventListener('click', async () => {
+          const v = await I.ask({ title: `Stornare la fattura ${inv.doc_number}?`, ok: 'Emetti nota di credito', danger: true,
+            html: `<p>Viene emessa una <b>nota di credito</b> per l'intero importo (${I.money(inv.total)}). La fattura resta in archivio, segnata come stornata. Se serve, poi ne emetti una nuova corretta.</p>`,
+            fields: [{ name: 'reason', label: 'Motivo', required: true }] });
+          if (!v) return;
+          const { data: n, error: e } = await VR.sb.rpc('invoice_credit_note', { p_id: inv.id, p_reason: v.reason });
+          if (e) { VR.say(msg, VR.errorText(e), 'error'); return; }
+          location.href = 'fattura.html?id=' + n.id;
+        });
+      }
+      VR.show(VR.$('#viewPage'));
+      return;
+    }
+
+    // ===================================================================
+    //  NUOVA FATTURA
+    // ===================================================================
+    if (!I.profileReady(prof)) {
+      VR.hide(loading);
+      msg.className = 'notice notice-info'; VR.show(msg);
+      msg.innerHTML = ctx.role === 'admin'
+        ? 'Prima di emettere la prima fattura servono i dati fiscali della clinica (partita IVA, codice fiscale, indirizzo). <a class="btn btn-primary btn-small" href="fatturazione.html" style="margin-left:6px">Inseriscili ora</a>'
+        : 'Per emettere fatture servono i dati fiscali della clinica: chiedi all\'amministratore di inserirli in Cassa → Impostazioni.';
+      return;
+    }
+    const forf = prof.regime === 'forfettario';
+
+    const [{ data: list }, clientsAll] = await Promise.all([
+      VR.sb.from('price_list').select('*').eq('clinic_id', ctx.clinicId).eq('active', true).order('sort').order('name'),
+      VR.fetchAll(() => VR.sb.from('clients').select('id, first_name, last_name, fiscal_code, phone, email, address_street, address_number, address_zip, address_city, address_province, pet_access(status, pets(id, name, deleted_at))')
+        .eq('clinic_id', ctx.clinicId).order('last_name').order('id')).catch(() => [])
+    ]);
+    const clients = (clientsAll || []).map((c) => ({ ...c, pets: (c.pet_access || []).filter((a) => a.status === 'active' && a.pets && !a.pets.deleted_at).map((a) => a.pets) }));
+    clients.forEach((c) => { c.text = [c.first_name, c.last_name, c.phone, c.email, c.fiscal_code, ...c.pets.map((p) => p.name)].filter(Boolean).join(' ').toLowerCase(); });
+
+    const state = { client_id: null, pet_id: null, visit_id: VR.param('visita') || null, appointment_id: VR.param('apt') || null, lines: [], method: 'carta' };
+
+    // ---------- Cliente ----------
+    const setClient = (c) => {
+      state.client_id = c ? c.id : null;
+      VR.$('#cName').value = c ? [c.first_name, c.last_name].filter(Boolean).join(' ') : '';
+      VR.$('#cCf').value = c?.fiscal_code || '';
+      VR.$('#cAddr').value = c ? [c.address_street, c.address_number].filter(Boolean).join(' ') : '';
+      VR.$('#cZip').value = c?.address_zip || ''; VR.$('#cCity').value = c?.address_city || ''; VR.$('#cProv').value = c?.address_province || '';
+      VR.$('#petList').innerHTML = (c?.pets || []).map((p) => `<option value="${esc(p.name)}">`).join('');
+      if (c && c.pets.length === 1 && !VR.$('#cPet').value) VR.$('#cPet').value = c.pets[0].name;
+      VR.$('#cSearch').value = ''; VR.hide(VR.$('#cSugg'));
+      cfCheck();
+    };
+    const cfCheck = () => {
+      const v = VR.$('#cCf').value.trim().toUpperCase(), h = VR.$('#cfHint');
+      if (!v) { h.className = 'field-bad'; h.textContent = VR.$('#cOpp').checked ? '' : 'Serve per il Sistema TS'; return; }
+      if (/^[0-9]{11}$/.test(v)) { h.className = 'field-bad'; h.textContent = 'È una partita IVA: per le aziende serve la fattura elettronica'; return; }
+      h.className = I.cfValid(v) ? 'field-ok' : 'field-bad';
+      h.textContent = I.cfValid(v) ? '✓ Valido' : 'Controlla: il codice non torna';
+    };
+    VR.$('#cCf').addEventListener('input', cfCheck);
+    VR.$('#cOpp').addEventListener('change', cfCheck);
+    let sel = -1, shown = [];
+    const sugg = VR.$('#cSugg');
+    VR.$('#cSearch').addEventListener('input', () => {
+      const t = VR.$('#cSearch').value.toLowerCase().split(/\s+/).filter(Boolean);
+      shown = t.length ? clients.filter((c) => t.every((w) => c.text.includes(w))).slice(0, 8) : [];
+      sel = -1;
+      sugg.innerHTML = shown.map((c, k) => `<button type="button" data-k="${k}"><strong>${esc(VR.clientName(c))}</strong> <small>${esc([c.pets.map((p) => p.name).join(', '), c.fiscal_code].filter(Boolean).join(' · '))}</small></button>`).join('')
+        || (t.length ? '<p class="muted" style="padding:10px 12px;margin:0;font-size:14px">Nessun proprietario trovato: scrivi i dati qui sotto.</p>' : '');
+      sugg.hidden = !t.length;
+    });
+    VR.$('#cSearch').addEventListener('keydown', (e) => {
+      if (!shown.length) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + shown.length) % shown.length; sugg.querySelectorAll('button').forEach((b, k) => b.setAttribute('aria-selected', k === sel)); }
+      if (e.key === 'Enter') { e.preventDefault(); setClient(shown[Math.max(0, sel)]); }
+    });
+    sugg.addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) setClient(shown[Number(b.dataset.k)]); });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.sugg')) sugg.hidden = true; });
+
+    // ---------- Righe ----------
+    const vatOpts = (l) => [['22', '22%'], ['10', '10%'], ['5', '5%'], ['4', '4%'], ['N4', 'Esente art. 10'], ['N1', 'Escluso art. 15']]
+      .map(([v, t]) => `<option value="${v}" ${String(l.nature || l.vat || prof.vat_default) === v || (!l.nature && Number(v) === Number(l.vat ?? prof.vat_default)) ? 'selected' : ''}>${t}</option>`).join('');
+    const newLine = (o = {}) => ({ desc: o.desc || '', qty: o.qty ?? 1, unit: o.unit ?? '', kind: o.kind || 'SV', vat: o.vat ?? (o.kind === 'FV' ? 10 : null), nature: o.nature || null, enpav: o.enpav ?? ((o.kind || 'SV') === 'SV') });
+    const drawLines = () => {
+      VR.$('#lines tbody').innerHTML = state.lines.map((l, k) => `<tr data-k="${k}">
+        <td class="c-desc"><input type="text" data-f="desc" value="${esc(l.desc)}" placeholder="Descrizione, es. Visita clinica" aria-label="Descrizione"></td>
+        <td class="c-qty"><span class="cap">Q.tà</span><input type="number" data-f="qty" value="${esc(l.qty)}" min="0.01" step="0.01" inputmode="decimal" aria-label="Quantità"></td>
+        <td class="c-price"><span class="cap">Prezzo €</span><input type="number" data-f="unit" value="${esc(l.unit)}" min="0" step="0.01" inputmode="decimal" aria-label="Prezzo"></td>
+        <td class="c-kind"><span class="cap">Tipo</span><select data-f="kind" aria-label="Tipo">${Object.entries(I.KIND).map(([v, t]) => `<option value="${v}" ${l.kind === v ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+        <td class="c-vat"><span class="cap">IVA</span>${forf ? '<span class="muted" style="font-size:13px;line-height:34px">no IVA</span>' : `<select data-f="vat" aria-label="IVA">${vatOpts(l)}</select>`}</td>
+        <td class="c-en"><span class="cap">ENPAV</span><input type="checkbox" data-f="enpav" ${l.enpav ? 'checked' : ''} ${prof.enpav_on ? '' : 'disabled'} aria-label="Contributo ENPAV" title="Applica il contributo integrativo ENPAV" style="width:auto"></td>
+        <td class="c-amt" data-amt></td>
+        <td class="c-x"><button class="x-btn" type="button" data-del aria-label="Togli riga">×</button></td></tr>`).join('');
+      recalc();
+    };
+    const parseNum = (v) => { const n = Number(String(v).replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+    const linesForCalc = () => state.lines.filter((l) => l.desc.trim() || parseNum(l.unit) > 0).map((l) => ({
+      desc: l.desc.trim() || '—', qty: parseNum(l.qty) || 1, unit: Math.round(parseNum(l.unit) * 100) / 100, kind: l.kind,
+      vat: l.nature ? null : (l.vat ?? prof.vat_default), nature: l.nature || null, enpav: l.enpav }));
+    const recalc = () => {
+      const ls = linesForCalc();
+      const c = ls.length ? I.calc(prof, ls) : null;
+      let j = 0;
+      VR.$('#lines tbody').querySelectorAll('tr').forEach((tr, k) => {
+        const l = state.lines[k];
+        const used = l.desc.trim() || parseNum(l.unit) > 0;
+        tr.querySelector('[data-amt]').textContent = used && c ? I.money(c.lines[j++].net) : '';
+      });
+      const dl = [];
+      if (c) {
+        dl.push(['Prestazioni e farmaci', I.money(c.taxable)]);
+        if (c.contrib > 0) dl.push([`Contributo ENPAV ${I.num(prof.enpav_rate).replace(/,00$/, '')}%`, I.money(c.contrib)]);
+        c.vat_summary.forEach((s) => { if (s.vat != null) dl.push([`IVA ${s.vat}%`, I.money(s.iva)]); });
+        if (c.stamp > 0) dl.push(['Imposta di bollo', I.money(c.stamp)]);
+      }
+      VR.$('#sumDl').innerHTML = dl.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('') || '<dt>Nessuna riga</dt><dd></dd>';
+      VR.$('#sumTot').textContent = I.money(c ? c.total : 0);
+    };
+    VR.$('#lines').addEventListener('input', (e) => {
+      const tr = e.target.closest('tr[data-k]'); if (!tr) return;
+      const l = state.lines[Number(tr.dataset.k)], f = e.target.dataset.f;
+      if (f === 'enpav') l.enpav = e.target.checked;
+      else if (f === 'vat') { if (/^N/.test(e.target.value)) { l.nature = e.target.value; l.vat = null; } else { l.nature = null; l.vat = Number(e.target.value); } }
+      else if (f === 'kind') {
+        l.kind = e.target.value;
+        // un farmaco di solito ha IVA 10% e niente contributo; una prestazione 22% e contributo
+        if (!forf) { l.nature = null; l.vat = l.kind === 'FV' ? 10 : prof.vat_default; const vs = tr.querySelector('[data-f="vat"]'); if (vs) vs.innerHTML = vatOpts(l); }
+        l.enpav = l.kind === 'SV' && prof.enpav_on; tr.querySelector('[data-f="enpav"]').checked = l.enpav;
+      } else l[f] = e.target.value;
+      recalc();
+    });
+    VR.$('#lines').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-del]'); if (!b) return;
+      state.lines.splice(Number(b.closest('tr').dataset.k), 1);
+      if (!state.lines.length) state.lines.push(newLine());
+      drawLines();
+    });
+    VR.$('#addLine').addEventListener('click', () => { state.lines.push(newLine()); drawLines(); VR.$('#lines tbody tr:last-child input').focus(); });
+
+    // ---------- Listino ----------
+    const items = list || [];
+    const drawQuick = () => {
+      const t = VR.$('#qSearch').value.toLowerCase().trim();
+      VR.$('#quick').innerHTML = items.filter((p) => !t || p.name.toLowerCase().includes(t)).slice(0, 24)
+        .map((p) => `<button type="button" data-p="${p.id}">${esc(p.name)}<small>${I.money(p.unit_price)}</small></button>`).join('') || '<span class="muted" style="font-size:13px">Nessuna voce.</span>';
+    };
+    if (items.length) { VR.show(VR.$('#quickWrap')); drawQuick(); } else VR.show(VR.$('#noList'));
+    VR.$('#qSearch').addEventListener('input', drawQuick);
+    VR.$('#quick').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-p]'); if (!b) return;
+      const p = items.find((x) => x.id === b.dataset.p);
+      const nl = newLine({ desc: p.name, unit: Number(p.unit_price), kind: p.kind, vat: p.vat != null ? Number(p.vat) : (p.kind === 'FV' ? 10 : null), enpav: p.enpav });
+      const empty = state.lines.findIndex((l) => !l.desc.trim() && !parseNum(l.unit));
+      if (empty >= 0) state.lines[empty] = nl; else state.lines.push(nl);
+      drawLines();
+    });
+
+    // ---------- Pagamento ----------
+    const PAYS = [...Object.entries(I.PAY), ['', 'Non ancora pagata']];
+    VR.$('#payChips').innerHTML = PAYS.map(([v, t]) => `<label><input type="radio" name="pay" value="${v}" ${state.method === v ? 'checked' : ''}> ${t}</label>`).join('');
+    const payHint = () => {
+      VR.$('#payHint').textContent = state.method === 'contanti'
+        ? 'Pagamento in contanti: per il cliente la spesa veterinaria NON è detraibile nella dichiarazione dei redditi (serve un pagamento tracciabile).'
+        : state.method === '' ? 'La fattura resta "da incassare": registri il pagamento quando arriva.' : 'Pagamento tracciabile: la spesa è detraibile per il cliente.';
+      VR.$('#paidWrap').hidden = state.method === '';
+    };
+    VR.$('#payChips').addEventListener('change', (e) => { state.method = e.target.value; payHint(); });
+    VR.$('#dIssued').value = I.today(); VR.$('#dIssued').max = I.today();
+    VR.$('#dPaid').value = I.today(); VR.$('#dPaid').max = I.today();
+    VR.$('#dIssued').addEventListener('change', () => { if (VR.$('#dPaid').value < VR.$('#dIssued').value) VR.$('#dPaid').value = VR.$('#dIssued').value; });
+    payHint();
+
+    // ---------- Precompilazione da visita, animale, appuntamento o cliente ----------
+    let visit = null, petId = VR.param('animale'), clientId = VR.param('cliente');
+    if (state.visit_id) {
+      const { data } = await VR.sb.from('visits').select('id, pet_id, client_id, title, visit_kind, visit_date').eq('id', state.visit_id).maybeSingle();
+      visit = data;
+      if (visit) { petId = petId || visit.pet_id; clientId = clientId || visit.client_id; }
+      const { data: prev } = await VR.sb.from('invoices').select('id, doc_number').eq('visit_id', state.visit_id).eq('doc_type', 'FT').is('credited_by', null).limit(1);
+      if (prev && prev.length) { const dn = VR.$('#dupNote'); dn.innerHTML = `<div class="notice notice-info">Questa visita è già stata incassata con la <a href="fattura.html?id=${prev[0].id}">fattura ${esc(prev[0].doc_number)}</a>. Puoi comunque emetterne un'altra.</div>`; VR.show(dn); }
+    }
+    if (state.appointment_id && !petId) {
+      const { data } = await VR.sb.from('appointments').select('pet_id, client_id, type').eq('id', state.appointment_id).maybeSingle();
+      if (data) { petId = data.pet_id; clientId = clientId || data.client_id; if (data.type) state.lines.push(newLine({ desc: data.type })); }
+    }
+    if (petId && !clientId) {
+      const { data } = await VR.sb.from('pet_access').select('client_id').eq('pet_id', petId).eq('clinic_id', ctx.clinicId).maybeSingle();
+      clientId = data?.client_id || null;
+    }
+    if (clientId) { const c = clients.find((x) => x.id === clientId); if (c) setClient(c); }
+    if (petId) {
+      state.pet_id = petId;
+      const { data } = await VR.sb.from('pets').select('name').eq('id', petId).maybeSingle();
+      if (data) VR.$('#cPet').value = data.name;
+    }
+    if (visit && !state.lines.length) state.lines.push(newLine({ desc: visit.title || (visit.visit_kind ? 'Visita: ' + visit.visit_kind : 'Visita clinica') }));
+    if (!state.lines.length) state.lines.push(newLine());
+    if (visit) VR.$('#newSub').textContent = `Incasso della visita del ${I.date(visit.visit_date)}. Controlla le righe ed emetti.`;
+    VR.$('#cPet').addEventListener('input', () => { state.pet_id = null; });
+    drawLines(); cfCheck();
+    VR.hide(loading); VR.show(VR.$('#newPage'));
+    if (!clientId) VR.$('#cSearch').focus();
+
+    // ---------- Emissione ----------
+    const payload = () => ({
+      client_id: state.client_id, pet_id: state.pet_id, visit_id: visit ? visit.id : null, appointment_id: state.appointment_id,
+      pet_name: VR.$('#cPet').value.trim() || null,
+      customer: { name: VR.$('#cName').value.trim(), cf: VR.$('#cCf').value.trim().toUpperCase(), address: VR.$('#cAddr').value.trim(),
+                  zip: VR.$('#cZip').value.trim(), city: VR.$('#cCity').value.trim(), province: VR.$('#cProv').value.trim().toUpperCase() },
+      ts_opposition: VR.$('#cOpp').checked,
+      lines: linesForCalc(),
+      issued_on: VR.$('#dIssued').value || null,
+      payment_method: state.method || null,
+      paid_on: state.method ? (VR.$('#dPaid').value || null) : null,
+      notes: VR.$('#notes').value.trim() || null
+    });
+    VR.$('#issue').addEventListener('click', async (ev) => {
+      const b = ev.currentTarget, im = VR.$('#issueMsg');
+      VR.hide(im);
+      const p = payload();
+      if (!p.lines.length) { VR.say(im, 'Aggiungi almeno una riga con descrizione e prezzo.', 'error'); return; }
+      if (p.lines.some((l) => l.desc === '—')) { VR.say(im, 'Ogni riga deve avere una descrizione.', 'error'); return; }
+      if (p.customer.cf && !/^[0-9]{11}$/.test(p.customer.cf) && !I.cfValid(p.customer.cf)) { VR.say(im, 'Il codice fiscale del cliente non è valido: controllalo.', 'error'); VR.$('#cCf').focus(); return; }
+      b.disabled = true;
+      // anteprima dal database: quello che confermi è esattamente quello che viene salvato
+      const { data: pv, error } = await VR.sb.rpc('invoice_preview', { p_clinic: ctx.clinicId, p });
+      b.disabled = false;
+      if (error) { VR.say(im, VR.errorText(error), 'error'); return; }
+      const ok = await I.ask({ title: `Emettere la fattura n. ${pv.doc_number}?`, ok: 'Emetti',
+        html: `<p style="margin-top:0">A <b>${esc(p.customer.name)}</b>${p.customer.cf ? ' (' + esc(p.customer.cf) + ')' : ''}, data ${I.date(pv.issued_on)}.</p>
+               <p style="font-size:22px;font-weight:800;margin:6px 0">${I.money(pv.total)}</p>
+               <p class="muted" style="font-size:14px">${p.payment_method ? 'Pagata con ' + esc(I.PAY[p.payment_method]).toLowerCase() : 'Da incassare'}. Dopo l'emissione non si può modificare.</p>` });
+      if (!ok) return;
+      b.disabled = true; b.textContent = 'Emissione…';
+      const { data: inv, error: e2 } = await VR.sb.rpc('invoice_issue', { p_clinic: ctx.clinicId, p });
+      if (e2) { b.disabled = false; b.textContent = 'Emetti fattura'; VR.say(im, VR.errorText(e2), 'error'); return; }
+      location.replace('fattura.html?id=' + inv.id + '&emessa=1');
+    });
+  })();
+  </script>
+</body>
+</html>

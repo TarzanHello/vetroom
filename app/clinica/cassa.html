@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Cassa – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-02d">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02d"></script>
+  <script src="../js/app.js?v=2026-10-02d"></script>
+  <script src="../js/i18n.js?v=2026-10-02d"></script>
+  <script src="../js/layout.js?v=2026-10-02d"></script>
+  <script src="../js/clinica.js?v=2026-10-02d"></script>
+  <script src="../js/fatture.js?v=2026-10-02d"></script>
+</head>
+<body data-shell="clinic" data-nav="cassa">
+  <main class="wrap wrap-wide">
+    <div class="page-head">
+      <div><h1>Cassa</h1><p class="muted" style="margin:0">Fatture e incassi della clinica.</p></div>
+      <div class="actions-bar">
+        <a class="btn btn-ghost" href="fatturazione.html">Impostazioni</a>
+        <a class="btn btn-primary" href="fattura.html?nuova=1">Nuova fattura</a>
+      </div>
+    </div>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <div class="seg seg-big" role="group" aria-label="Periodo" id="period" style="margin-bottom:12px"></div>
+      <div class="stat-grid" id="stats"></div>
+      <div class="pay-split" id="split"></div>
+
+      <section class="panel" id="tsPanel" hidden>
+        <div class="page-head" style="margin:0">
+          <div><h2 style="margin:0 0 .3rem">Sistema Tessera Sanitaria</h2><p class="muted" style="margin:0" id="tsLine"></p></div>
+          <button class="btn btn-primary" type="button" id="tsSend">Invia al Sistema TS</button>
+        </div>
+        <div id="tsResult" hidden style="margin-top:12px"></div>
+      </section>
+
+      <section class="panel">
+        <div class="page-head" style="margin-bottom:8px">
+          <input type="search" id="q" class="search" placeholder="Cerca numero, cliente, codice fiscale o animale" style="max-width:380px;margin:0">
+          <div class="actions-bar">
+            <label class="check" style="font-size:14px"><input type="checkbox" id="onlyUnpaid"> Solo da incassare</label>
+            <button class="btn btn-ghost btn-small" type="button" id="csv">Esporta per il commercialista</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="vtable" id="tbl">
+            <thead><tr><th>Numero</th><th>Data</th><th>Cliente</th><th class="num">Totale</th><th>Pagamento</th><th>Sistema TS</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="hint-small" style="margin:.6rem 0 0">Le righe con il bordo arancione sono da incassare. Le fatture barrate sono state stornate con una nota di credito.</p>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    const I = VR.inv, esc = VR.esc;
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    let prof, all = [];
+    try {
+      prof = await I.loadProfile(ctx.clinicId);
+      all = await VR.fetchAll(() => VR.sb.from('invoices')
+        .select('id, doc_type, doc_number, year, number, issued_on, paid_on, payment_method, traced, customer, total, taxable, contrib, vat_total, stamp, vat_summary, ts_status, ts_opposition, credited_by, credit_of, pet_id, client_id')
+        .eq('clinic_id', ctx.clinicId).order('issued_on', { ascending: false }).order('number', { ascending: false }));
+    } catch (e) {
+      VR.hide(loading);
+      VR.say(msg, /billing_profiles|invoices/.test(e.message || '') ? 'La cassa non è ancora attiva: va eseguita la patch 21 sul database.' : VR.errorText(e), 'error');
+      return;
+    }
+    VR.hide(loading);
+    if (!I.profileReady(prof)) {
+      msg.className = 'notice notice-info'; VR.show(msg);
+      msg.innerHTML = ctx.role === 'admin'
+        ? '<b>Prima fattura?</b> Inserisci una volta i dati fiscali della clinica (partita IVA, codice fiscale, indirizzo, regime). <a class="btn btn-primary btn-small" href="fatturazione.html" style="margin-left:6px">Inserisci i dati fiscali</a>'
+        : 'Per emettere fatture servono i dati fiscali della clinica: chiedi all\'amministratore di inserirli in Cassa → Impostazioni.';
+    }
+
+    const today = I.today(), month = today.slice(0, 7), year = today.slice(0, 4);
+    const P = [['day', 'Oggi'], ['month', 'Questo mese'], ['year', 'Quest\'anno'], ['all', 'Tutto']];
+    let period = new URLSearchParams(location.search).get('periodo') || 'day';
+    const inP = (d) => !!d && (period === 'all' || (period === 'day' ? d === today : period === 'month' ? d.slice(0, 7) === month : d.slice(0, 4) === year));
+    const isVoid = (r) => r.doc_type === 'FT' && !!r.credited_by;
+
+    const draw = () => {
+      VR.$('#period').innerHTML = P.map(([k, l]) => `<button type="button" data-p="${k}" aria-pressed="${period === k}">${l}</button>`).join('');
+      const ft = all.filter((r) => r.doc_type === 'FT');
+      const issued = ft.filter((r) => inP(r.issued_on));
+      const paid = ft.filter((r) => !isVoid(r) && inP(r.paid_on));
+      const credits = all.filter((r) => r.doc_type === 'NC' && inP(r.issued_on));
+      const unpaid = ft.filter((r) => !r.paid_on && !isVoid(r));
+      const sum = (a) => a.reduce((s, r) => s + Number(r.total), 0);
+      const tsTodo = ft.filter((r) => !isVoid(r) && r.ts_status === 'pending' && r.paid_on).length;
+      VR.$('#stats').innerHTML = [
+        [I.money(sum(paid)), 'Incassato'],
+        [String(issued.length), issued.length === 1 ? 'Fattura emessa' : 'Fatture emesse'],
+        [I.money(sum(unpaid)), `Da incassare (${unpaid.length})`],
+        [credits.length ? I.money(sum(credits)) : '—', 'Note di credito'],
+        [String(tsTodo), 'Da inviare al Sistema TS']
+      ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
+      const by = {};
+      paid.forEach((r) => { by[r.payment_method] = (by[r.payment_method] || 0) + Number(r.total); });
+      VR.$('#split').innerHTML = Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(I.PAY[k] || k)} <b>${I.money(v)}</b></span>`).join('');
+
+      const t = VR.$('#q').value.toLowerCase().split(/\s+/).filter(Boolean);
+      const only = VR.$('#onlyUnpaid').checked;
+      const rows = all.filter((r) => (only ? (r.doc_type === 'FT' && !r.paid_on && !isVoid(r)) : (period === 'all' || inP(r.issued_on) || (r.doc_type === 'FT' && inP(r.paid_on))))
+        && (!t.length || t.every((w) => [r.doc_number, r.customer?.name, r.customer?.cf, r.customer?.pet].join(' ').toLowerCase().includes(w))));
+      VR.$('#tbl tbody').innerHTML = rows.map((r) => {
+        const st = I.TS[r.ts_status] || [r.ts_status, ''];
+        const pay = r.doc_type === 'NC' ? '<span class="muted">nota di credito</span>'
+          : isVoid(r) ? '<span class="muted">stornata</span>'
+          : r.paid_on ? `${esc(I.PAY[r.payment_method] || '')}<br><span class="muted" style="font-size:12px">${I.date(r.paid_on)}</span>`
+          : '<span class="pill pill-wait">Da incassare</span>';
+        return `<tr class="${isVoid(r) ? 'cash-row-void' : ''} ${r.doc_type === 'FT' && !r.paid_on && !isVoid(r) ? 'cash-row-unpaid' : ''}" style="cursor:pointer" data-id="${r.id}">
+          <td><a href="fattura.html?id=${r.id}"><strong>${r.doc_type === 'NC' ? 'NC ' : ''}${esc(r.doc_number.replace(/^NC/, ''))}</strong></a></td>
+          <td style="white-space:nowrap">${I.date(r.issued_on)}</td>
+          <td>${esc(r.customer?.name || '')}${r.customer?.pet ? `<br><span class="muted" style="font-size:12px">${esc(r.customer.pet)}</span>` : ''}</td>
+          <td class="num" style="white-space:nowrap">${r.doc_type === 'NC' ? '−' : ''}${I.money(r.total)}</td>
+          <td>${pay}</td>
+          <td><span class="pill ${st[1]}">${st[0]}</span></td>
+          <td class="row-actions"><a class="btn btn-ghost btn-small" href="fattura.html?id=${r.id}">Apri</a></td></tr>`;
+      }).join('') || `<tr><td colspan="7" class="muted">${all.length ? 'Nessun documento con questi criteri.' : 'Ancora nessuna fattura. Si parte da <b>Nuova fattura</b>, oppure da <b>Incassa</b> in fondo a una visita.'}</td></tr>`;
+      const u = new URL(location.href); u.searchParams.set('periodo', period); history.replaceState(null, '', u);
+    };
+    VR.$('#period').addEventListener('click', (e) => { const b = e.target.closest('[data-p]'); if (b) { period = b.dataset.p; draw(); } });
+    VR.$('#q').addEventListener('input', draw);
+    VR.$('#onlyUnpaid').addEventListener('change', draw);
+    VR.$('#tbl').addEventListener('click', (e) => { if (e.target.closest('a, button')) return; const tr = e.target.closest('tr[data-id]'); if (tr) location.href = 'fattura.html?id=' + tr.dataset.id; });
+
+    // Esportazione per il commercialista: un documento per riga, colonne separate da punto e virgola (Excel italiano)
+    VR.$('#csv').addEventListener('click', () => {
+      const rows = all.filter((r) => period === 'all' || inP(r.issued_on));
+      const q = (v) => { const s = v == null ? '' : String(v); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+      const n = (v) => Number(v || 0).toFixed(2).replace('.', ',');
+      const vatOf = (r, k) => (r.vat_summary || []).filter((s) => String(s.vat ?? s.nature) === k);
+      const head = ['Tipo', 'Numero', 'Data', 'Cliente', 'Codice fiscale', 'Imponibile', 'Contributo ENPAV', 'IVA', 'Bollo', 'Totale',
+        'Imponibile 22%', 'IVA 22%', 'Imponibile 10%', 'IVA 10%', 'Non soggetto/esente', 'Pagata il', 'Metodo', 'Tracciabile', 'Stornata', 'Sistema TS'];
+      const lines = rows.map((r) => {
+        const g = (k, f) => vatOf(r, k).reduce((s, x) => s + Number(x[f]), 0);
+        const ex = (r.vat_summary || []).filter((s) => s.vat == null).reduce((s, x) => s + Number(x.imponibile), 0);
+        return [r.doc_type === 'NC' ? 'Nota di credito' : 'Fattura', r.doc_number, I.date(r.issued_on), r.customer?.name, r.customer?.cf,
+          n(r.taxable), n(r.contrib), n(r.vat_total), n(r.stamp), n(r.total), n(g('22', 'imponibile')), n(g('22', 'iva')), n(g('10', 'imponibile')), n(g('10', 'iva')), n(ex),
+          I.date(r.paid_on), I.PAY[r.payment_method] || '', r.traced == null ? '' : (r.traced ? 'sì' : 'no'), isVoid(r) ? 'sì' : '', (I.TS[r.ts_status] || [''])[0]].map(q).join(';');
+      });
+      const csv = '\ufeff' + [head.join(';'), ...lines].join('\r\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = `fatture-${{ day: today, month, year, all: 'tutte' }[period]}.csv`;
+      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    });
+
+    // ---------- Sistema TS ----------
+    const tsLoad = async () => {
+      const { data: o, error } = await VR.sb.rpc('ts_overview', { p_clinic: ctx.clinicId });
+      if (error) { VR.hide(VR.$('#tsPanel')); return; }   // patch 22 non ancora eseguita
+      VR.show(VR.$('#tsPanel'));
+      const y = Number(today.slice(0, 4));
+      const parts = [o.pending ? `<b>${o.pending}</b> ${o.pending === 1 ? 'documento da inviare' : 'documenti da inviare'}` : 'Niente da inviare',
+        o.rejected ? `<b style="color:var(--danger)">${o.rejected} ${o.rejected === 1 ? 'scartato' : 'scartati'}</b>` : '',
+        o.waiting_payment ? `${o.waiting_payment} in attesa di pagamento` : '',
+        o.accepted_year ? `${o.accepted_year} accolti nel ${y}` : '',
+        o.last_run ? `ultimo invio ${new Date(o.last_run.started_at).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''].filter(Boolean);
+      VR.$('#tsLine').innerHTML = parts.join(' · ') + `<br><span style="font-size:13px">Le spese pagate nel ${y} vanno trasmesse entro il 31 gennaio ${y + 1}: conviene inviare una volta a settimana.</span>`;
+      VR.$('#tsSend').disabled = !o.pending;
+    };
+    VR.$('#tsSend').addEventListener('click', async () => {
+      const out = await I.sendToTs({ clinicId: ctx.clinicId, defaultCf: prof?.cf || '' });
+      if (!out) return;
+      const box = VR.$('#tsResult');
+      const rej = out.results.filter((r) => r.status === 'rejected');
+      box.innerHTML = out.error ? `<div class="notice notice-error">${esc(out.error)}</div>`
+        : `<div class="notice ${rej.length ? 'notice-error' : 'notice-ok'}"><b>${out.sent} ${out.sent === 1 ? 'documento inviato' : 'documenti inviati'}</b>: ${out.accepted} ${out.accepted === 1 ? 'accolto' : 'accolti'}${out.warnings ? `, ${out.warnings} con avvisi` : ''}${rej.length ? `, ${rej.length} ${rej.length === 1 ? 'scartato' : 'scartati'}` : ''}.${out.stop && out.stop !== 'credenziali' ? ' L\'invio si è fermato: ' + esc(out.stop === 'servizio' ? 'il Sistema TS non risponde, riprova più tardi.' : 'problema di rete, riprova più tardi.') : ''}
+            ${rej.length ? '<ul style="margin:.5rem 0 0">' + rej.map((r) => `<li><a href="fattura.html?id=${r.id}">${esc(r.doc_number)}</a>: ${esc((r.messaggi || []).map((x) => x.descrizione).join('; '))}</li>`).join('') + '</ul>' : ''}</div>`;
+      VR.show(box);
+      all = await VR.fetchAll(() => VR.sb.from('invoices')
+        .select('id, doc_type, doc_number, year, number, issued_on, paid_on, payment_method, traced, customer, total, taxable, contrib, vat_total, stamp, vat_summary, ts_status, ts_opposition, credited_by, credit_of, pet_id, client_id')
+        .eq('clinic_id', ctx.clinicId).order('issued_on', { ascending: false }).order('number', { ascending: false }));
+      draw(); tsLoad();
+    });
+
+    VR.show(VR.$('#page'));
+    draw();
+    if (I.profileReady(prof)) tsLoad();
+  })();
+  </script>
+</body>
+</html>

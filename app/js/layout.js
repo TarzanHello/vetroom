@@ -13,6 +13,7 @@
     { key: 'studio', title: 'Studio', items: [
       { k: 'home', l: 'Dashboard', h: 'clinica/', i: 'dashboard' },
       { k: 'agenda', l: 'Agenda', h: 'clinica/agenda.html', i: 'agenda' },
+      { k: 'cassa', l: 'Cassa', h: 'clinica/cassa.html', i: 'cash' },
       { k: 'furrfinder', l: 'FurrFinder', h: 'clinica/furrfinder.html', i: '../furrfinder-mark' },
       { k: 'messaggi', l: 'Messaggi', h: 'clinica/messaggi.html', i: 'owner_profile', badge: true }
     ] },
@@ -134,7 +135,7 @@
 
       // Telefono e tablet: barra in basso con le 5 cose che servono ogni giorno.
       // Il resto del menu (con le stesse icone) si apre da "Menu".
-      const tabActive = isPlat ? '' : (['home', 'agenda', 'animali'].includes(active) ? active : (['clienti', 'impostazioni', 'team', 'piattaforma', 'furrfinder'].includes(active) ? 'menu' : ''));
+      const tabActive = isPlat ? '' : (['home', 'agenda', 'animali'].includes(active) ? active : (['clienti', 'impostazioni', 'team', 'piattaforma', 'furrfinder', 'cassa'].includes(active) ? 'menu' : ''));
       const bar = document.createElement('nav');
       bar.className = 'vr-tabbar';
       bar.setAttribute('aria-label', 'Menu rapido');

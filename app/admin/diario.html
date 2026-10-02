@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Diario di bordo · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02d">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02a"></script>
-  <script src="../js/app.js?v=2026-10-02a"></script>
-  <script src="plancia.js?v=2026-10-02a"></script>
+  <script src="../js/config.js?v=2026-10-02d"></script>
+  <script src="../js/app.js?v=2026-10-02d"></script>
+  <script src="plancia.js?v=2026-10-02d"></script>
 </head>
 <body class="pl" data-station="diario">
 <main>
@@ -33,7 +33,7 @@
   const actor = qs.get('u'), clinic = qs.get('c');
   const WHO = [['', 'Tutti'], ['user', 'Utenti'], ['admin', 'Amministratori'], ['system', 'Sistema']];
   const CAT = [['', 'Tutto'], ['account', 'Account'], ['clinica', 'Cliniche'], ['team', 'Team'], ['anagrafica', 'Anagrafiche'], ['prenotazione', 'Prenotazioni'],
-    ['visita', 'Visite e referti'], ['documento', 'Documenti'], ['messaggio', 'Messaggi'], ['furrfinder', 'FurrFinder'], ['admin', 'Interventi admin']];
+    ['visita', 'Visite e referti'], ['cassa', 'Cassa'], ['documento', 'Documenti'], ['messaggio', 'Messaggi'], ['furrfinder', 'FurrFinder'], ['admin', 'Interventi admin']];
   const segs = () => {
     $('#fWho').innerHTML = WHO.map(([k, l]) => `<button type="button" data-w="${k}" aria-pressed="${who === k}">${l}</button>`).join('');
     $('#fCat').innerHTML = CAT.map(([k, l]) => `<button type="button" data-c="${k}" aria-pressed="${cat === k}">${l}</button>`).join('');

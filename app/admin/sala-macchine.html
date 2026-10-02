@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Sala macchine · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02d">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02a"></script>
-  <script src="../js/app.js?v=2026-10-02a"></script>
-  <script src="plancia.js?v=2026-10-02a"></script>
+  <script src="../js/config.js?v=2026-10-02d"></script>
+  <script src="../js/app.js?v=2026-10-02d"></script>
+  <script src="plancia.js?v=2026-10-02d"></script>
 </head>
 <body class="pl" data-station="sala">
 <main>
@@ -29,6 +29,12 @@
       <div class="pn-h"><h2>Amministratori della piattaforma</h2><div class="tools"><button class="btn sm" id="addAdm">Aggiungi</button></div></div>
       <ul class="list" id="admins"></ul>
       <p class="small dim" style="margin:10px 0 0">Ogni amministratore vede tutti i dati della piattaforma. Tienili al minimo, con la verifica in due passaggi attiva sull'account Google.</p>
+    </section>
+
+    <section class="pn c12" id="sistemats">
+      <div class="pn-h"><h2>Collegamento al Sistema Tessera Sanitaria</h2><div class="tools"><button class="btn sm" id="tsTest">Prova nell'ambiente di test</button></div></div>
+      <p class="dim" style="margin-top:-6px">Invia due documenti di prova all'ambiente di test del Sistema TS con l'utenza pubblicata nel kit ufficiale (veterinario di prova). Non tocca dati veri e non usa le credenziali di nessuno. Se entrambi risultano <b>accolti</b>, la funzione <span class="mono">vetroom-ts</span> è installata bene e la cifratura è corretta.</p>
+      <div id="tsOut"></div>
     </section>
 
     <section class="pn c12" id="sistema">
@@ -169,6 +175,53 @@
     }
   });
   $('#hk').addEventListener('click', async (e) => { await PL.run(e.currentTarget, () => PL.rpc('platform_housekeeping'), (k) => k ? `Tolte ${n(k)} righe.` : 'Niente da togliere: il diario è già in regola.'); });
+
+  // ---------- Diagnosi dei certificati dei server del Sistema TS ----------
+  const tlsReport = async () => {
+    $('#tsOut').insertAdjacentHTML('beforeend', '<p class="loader" id="tlsLoad">Lettura dei certificati dei server</p>');
+    const { data, error } = await VR.sb.functions.invoke('vetroom-ts', { body: { action: 'tlsinfo' } });
+    $('#tlsLoad')?.remove();
+    if (error || !data?.report) { $('#tsOut').insertAdjacentHTML('beforeend', '<p class="note bad">Diagnosi non riuscita: aggiorna la funzione vetroom-ts all\'ultima versione.</p>'); return; }
+    const lines = ['DIAGNOSI CERTIFICATI SISTEMA TS · ' + new Date().toISOString()];
+    for (const r of data.report) {
+      lines.push('', `== ${r.env} · ${r.host}`);
+      if (r.error) { lines.push('ERRORE: ' + r.error); continue; }
+      r.certs.forEach((c, k) => lines.push(`[${k}] ${c.subject}`, `    emesso da: ${c.issuer}`, `    scade: ${c.notAfter}`, `    emittente su: ${c.aia || '-'}`, c.pem));
+      if (r.issuer) lines.push('[emittente scaricato]', r.issuer.error || `${r.issuer.subject}\n    emesso da: ${r.issuer.issuer}\n    da: ${r.issuer.from}\n${r.issuer.pem}`);
+    }
+    const text = lines.join('\n');
+    $('#tsOut').insertAdjacentHTML('beforeend', `<div class="note warn" style="margin-top:14px">Il server del Sistema TS usa un certificato emesso da un'autorità che la funzione non riconosce ancora. Qui sotto c'è il rapporto: premi <b>Copia il rapporto</b> e incollalo nella chat con Claude, così si aggiunge l'autorità giusta.</div>
+      <div class="actions" style="margin:8px 0"><button class="btn sm prim" type="button" id="tlsCopy">Copia il rapporto</button></div>
+      <textarea id="tlsText" rows="10" readonly style="font-family:var(--mono);font-size:12px">${esc(text)}</textarea>`);
+    $('#tlsCopy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(text); PL.toast('Rapporto copiato: incollalo nella chat.'); }
+      catch { $('#tlsText').select(); document.execCommand('copy'); PL.toast('Rapporto copiato.'); }
+    });
+  };
+
+  // ---------- Prova del collegamento al Sistema TS ----------
+  $('#tsTest').addEventListener('click', async (e) => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = 'Prova in corso…';
+    $('#tsOut').innerHTML = '<p class="loader">Dialogo con il Sistema TS</p>';
+    try {
+      const { data, error } = await VR.sb.functions.invoke('vetroom-ts', { body: { action: 'selftest' } });
+      if (error) {
+        let m = error.message; try { const j = await error.context.json(); m = j.error || m; } catch { /* testo */ }
+        if (/Failed to send|fetch/i.test(m)) m = 'La funzione "vetroom-ts" non risponde: controlla che sia installata su Supabase (Edge Functions).';
+        $('#tsOut').innerHTML = `<p class="note bad">${esc(m)}</p>`;
+      } else {
+        const ok = (data.risultati || []).every((r) => r.status === 'accepted' || r.status === 'warning');
+        $('#tsOut').innerHTML = `<p class="note ${ok ? 'ok' : 'bad'}">${ok ? 'Collegamento riuscito: il Sistema TS ha accolto i documenti di prova.' : 'Il Sistema TS non ha accolto tutti i documenti di prova: leggi i messaggi qui sotto.'}</p>
+          <div class="tw"><table class="t"><thead><tr><th>Documento di prova</th><th>Esito</th><th>Protocollo</th><th>Messaggi del Sistema TS</th></tr></thead><tbody>${(data.risultati || []).map((r) => `
+            <tr><td class="mono">${esc(r.documento)}<span class="sub">${r.conCodiceFiscale ? 'con codice fiscale del cliente' : 'cliente che si oppone'}</span></td>
+            <td><span class="pill ${r.status === 'accepted' ? 'ok' : r.status === 'warning' ? 'warn' : 'bad'}">${esc({ accepted: 'Accolto', warning: 'Accolto con avvisi', rejected: 'Scartato', pending: 'Non inviato' }[r.status] || r.status)}</span></td>
+            <td class="mono small">${esc(r.protocollo || '—')}</td>
+            <td class="small">${(r.messaggi || []).map((m) => esc(m.codice + ' – ' + m.descrizione)).join('<br>') || '—'}</td></tr>`).join('')}</tbody></table></div>`;
+        if ((data.risultati || []).some((r) => (r.messaggi || []).some((m) => m.codice === 'NET'))) await tlsReport();
+      }
+    } catch (err) { $('#tsOut').innerHTML = `<p class="note bad">${esc(err.message)}</p>`; }
+    b.disabled = false; b.textContent = 'Prova nell\'ambiente di test';
+  });
 
   loadMaint(); loadAdmins(); loadSys(); loadErr(); loadMine();
 })();

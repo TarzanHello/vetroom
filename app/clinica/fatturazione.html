@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Impostazioni fatturazione – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-02d">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02d"></script>
+  <script src="../js/app.js?v=2026-10-02d"></script>
+  <script src="../js/i18n.js?v=2026-10-02d"></script>
+  <script src="../js/layout.js?v=2026-10-02d"></script>
+  <script src="../js/clinica.js?v=2026-10-02d"></script>
+  <script src="../js/fatture.js?v=2026-10-02d"></script>
+</head>
+<body data-shell="clinic" data-nav="cassa">
+  <main class="wrap">
+    <a class="back" href="cassa.html">← Cassa</a>
+    <div class="page-head"><div><h1>Impostazioni fatturazione</h1><p class="muted" style="margin:0">Si compilano una volta sola. Ogni fattura ne conserva una copia, quindi cambiarle non tocca le fatture già emesse.</p></div></div>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <form id="form" novalidate>
+        <section class="panel">
+          <h2>Chi emette le fatture</h2>
+          <p class="muted" style="margin-top:0;font-size:14px">Il medico veterinario titolare della partita IVA, oppure la società. Il codice fiscale deve essere quello con cui si accede al Sistema Tessera Sanitaria.</p>
+          <div class="grid">
+            <div class="s12"><label for="name">Intestazione</label><input type="text" id="name" name="name" placeholder="Es. Dott.ssa Federica Vigiani – Medico veterinario"></div>
+            <div class="s4"><label for="piva">Partita IVA</label><input type="text" id="piva" name="piva" inputmode="numeric" maxlength="11"><span id="pivaHint"></span></div>
+            <div class="s4"><label for="cf">Codice fiscale</label><input type="text" id="cf" name="cf" maxlength="16" style="text-transform:uppercase"><span id="cfHint"></span></div>
+            <div class="s4"><label for="albo">Iscrizione all'Ordine</label><input type="text" id="albo" name="albo" placeholder="Ordine dei Medici Veterinari di … n. …"></div>
+            <div class="s8"><label for="address">Indirizzo</label><input type="text" id="address" name="address"></div>
+            <div class="s4"><label for="zip">CAP</label><input type="text" id="zip" name="zip" inputmode="numeric" maxlength="5"></div>
+            <div class="s8"><label for="city">Città</label><input type="text" id="city" name="city"></div>
+            <div class="s4"><label for="province">Provincia</label><input type="text" id="province" name="province" maxlength="2" style="text-transform:uppercase"></div>
+            <div class="s4"><label for="phone">Telefono</label><input type="tel" id="phone" name="phone"></div>
+            <div class="s4"><label for="email">Email</label><input type="email" id="email" name="email"></div>
+            <div class="s4"><label for="pec">PEC</label><input type="email" id="pec" name="pec"></div>
+            <div class="s12"><label for="iban">IBAN (compare sulle fatture da pagare con bonifico)</label><input type="text" id="iban" name="iban" style="text-transform:uppercase"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Regime fiscale e contributi</h2>
+          <div class="pay-chips" role="radiogroup" aria-label="Regime">
+            <label><input type="radio" name="regime" value="ordinario"> Regime ordinario (con IVA)</label>
+            <label><input type="radio" name="regime" value="forfettario"> Regime forfettario (senza IVA)</label>
+          </div>
+          <div class="grid" style="margin-top:12px">
+            <div class="s4" id="vatWrap"><label for="vat_default">IVA sulle prestazioni</label><select id="vat_default" name="vat_default"><option value="22">22%</option><option value="10">10%</option></select></div>
+            <div class="s4"><label for="enpav_rate">Contributo integrativo ENPAV</label><input type="number" id="enpav_rate" name="enpav_rate" min="0" max="10" step="0.01"></div>
+            <div class="s4" style="padding-top:28px"><label class="check"><input type="checkbox" id="enpav_on" name="enpav_on"> Applica il contributo</label></div>
+            <div class="s12"><label class="check"><input type="checkbox" id="bollo_auto" name="bollo_auto"> Aggiungi da solo il bollo da 2 € quando la parte senza IVA supera 77,47 €</label></div>
+            <div class="s4"><label for="series">Sezionale (facoltativo)</label><input type="text" id="series" name="series" maxlength="4" placeholder="Es. A" style="text-transform:uppercase"></div>
+            <div class="s12"><label for="footer">Nota fissa in fondo alle fatture (facoltativa)</label><textarea id="footer" name="footer" rows="2"></textarea></div>
+          </div>
+          <p class="hint-small" style="margin:.6rem 0 0">Vetroom applica di serie: IVA 22% sulle prestazioni, 10% sui farmaci, contributo ENPAV sulle prestazioni ma non sui farmaci. Riga per riga si può cambiare. Se hai dubbi sul tuo caso, mostra questa pagina al commercialista.</p>
+        </section>
+        <div id="formMsg" hidden></div>
+        <div class="actions-bar" style="margin-bottom:18px" id="saveBar"><button class="btn btn-primary" type="submit" id="save">Salva dati fiscali</button></div>
+      </form>
+
+      <section class="panel" id="numerazione">
+        <h2>Numerazione</h2>
+        <p id="numInfo" style="margin-top:0"></p>
+        <div id="numEdit" hidden>
+          <p class="muted" style="font-size:14px">Hai già emesso fatture quest'anno con un altro programma o a mano? Indica l'ultimo numero usato, così Vetroom prosegue da lì senza buchi né doppioni. Si può fare solo prima della prima fattura emessa con Vetroom.</p>
+          <div class="grid">
+            <div class="s4"><label for="lastNum">Ultimo numero emesso</label><input type="number" id="lastNum" min="0" step="1"></div>
+            <div class="s4"><label for="lastDate">Data dell'ultima fattura</label><input type="date" id="lastDate"></div>
+            <div class="s4" style="padding-top:28px"><button class="btn btn-ghost" type="button" id="saveNum">Imposta</button></div>
+          </div>
+          <div id="numMsg" hidden></div>
+        </div>
+      </section>
+
+      <section class="panel" id="listino">
+        <div class="page-head" style="margin-bottom:8px">
+          <div><h2 style="margin:0">Listino</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Le voci che usi più spesso: in fattura si aggiungono con un tocco. Prezzi senza IVA e contributo.</p></div>
+          <button class="btn btn-primary btn-small" type="button" id="addItem">Aggiungi voce</button>
+        </div>
+        <div class="table-wrap"><table class="vtable" id="items"><thead><tr><th>Voce</th><th class="num">Prezzo</th><th>Tipo</th><th>IVA</th><th>ENPAV</th><th></th></tr></thead><tbody></tbody></table></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    const I = VR.inv, esc = VR.esc;
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const admin = ctx.role === 'admin', canList = ctx.isVet;
+    let prof;
+    try { prof = await I.loadProfile(ctx.clinicId); }
+    catch (e) { VR.hide(loading); VR.say(msg, /billing_profiles/.test(e.message || '') ? 'La cassa non è ancora attiva: va eseguita la patch 21 sul database.' : VR.errorText(e), 'error'); return; }
+
+    // ---------- Dati fiscali ----------
+    const form = VR.$('#form');
+    let p = prof;
+    if (!p) {
+      // prima volta: si parte dai dati già inseriti per i referti
+      const { data: c } = await VR.sb.from('clinics').select('header_name, header_piva, header_albo, header_phone, header_email, header_address').eq('id', ctx.clinicId).maybeSingle();
+      p = { name: c?.header_name, piva: (c?.header_piva || '').replace(/\D/g, '').slice(-11) || null, albo: c?.header_albo, phone: c?.header_phone, email: c?.header_email,
+            address: c?.header_address, regime: 'ordinario', enpav_on: true, enpav_rate: 2, vat_default: 22, bollo_auto: true, series: '' };
+    }
+    for (const el of form.elements) {
+      if (!el.name) continue;
+      if (el.type === 'checkbox') el.checked = !!p[el.name];
+      else if (el.type === 'radio') el.checked = (p[el.name] || 'ordinario') === el.value;
+      else el.value = p[el.name] ?? '';
+    }
+    const regimeUi = () => { VR.$('#vatWrap').hidden = form.regime.value === 'forfettario'; };
+    form.addEventListener('change', regimeUi); regimeUi();
+    const hint = (el, h, ok, okText, badText) => { if (!el.value.trim()) { h.textContent = ''; return; } h.className = ok ? 'field-ok' : 'field-bad'; h.textContent = ok ? okText : badText; };
+    const checks = () => {
+      hint(VR.$('#piva'), VR.$('#pivaHint'), I.pivaValid(VR.$('#piva').value), '✓ Valida', 'Controlla: la partita IVA non torna');
+      const cf = VR.$('#cf').value.trim().toUpperCase();
+      hint(VR.$('#cf'), VR.$('#cfHint'), I.cfValid(cf) || I.pivaValid(cf), '✓ Valido', 'Controlla: il codice fiscale non torna');
+    };
+    VR.$('#piva').addEventListener('input', checks); VR.$('#cf').addEventListener('input', checks); checks();
+    if (!admin) {
+      [...form.elements].forEach((el) => { el.disabled = true; });
+      VR.hide(VR.$('#saveBar'));
+      form.insertAdjacentHTML('afterbegin', '<div class="notice notice-info">Solo l\'amministratore della clinica può cambiare questi dati.</div>');
+    }
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fm = VR.$('#formMsg'); VR.hide(fm);
+      const v = {};
+      for (const el of form.elements) {
+        if (!el.name) continue;
+        if (el.type === 'checkbox') v[el.name] = el.checked;
+        else if (el.type === 'radio') { if (el.checked) v[el.name] = el.value; }
+        else v[el.name] = el.value.trim();
+      }
+      const miss = [['name', 'intestazione'], ['piva', 'partita IVA'], ['cf', 'codice fiscale'], ['address', 'indirizzo'], ['city', 'città']].filter(([k]) => !v[k]).map(([, l]) => l);
+      if (miss.length) { VR.say(fm, 'Mancano: ' + miss.join(', ') + '.', 'error'); return; }
+      if (!I.pivaValid(v.piva)) { VR.say(fm, 'La partita IVA non è valida: controlla le cifre.', 'error'); return; }
+      const b = VR.$('#save'); b.disabled = true;
+      const { data, error } = await VR.sb.rpc('billing_profile_save', { p_clinic: ctx.clinicId, p: v });
+      b.disabled = false;
+      if (error) { VR.say(fm, VR.errorText(error), 'error'); return; }
+      prof = data;
+      VR.say(fm, 'Dati salvati. Ora puoi emettere fatture dalla Cassa.', 'ok');
+      loadNum();
+    });
+
+    // ---------- Numerazione ----------
+    const loadNum = async () => {
+      const { data, error } = await VR.sb.rpc('billing_counter_status', { p_clinic: ctx.clinicId });
+      if (error) { VR.$('#numInfo').textContent = VR.errorText(error); return; }
+      VR.$('#numInfo').innerHTML = `La prossima fattura sarà la <b>n. ${esc(data.series || '')}${data.next_number}/${data.year}</b>.` +
+        (data.last_date ? ` L'ultima registrata è del ${I.date(data.last_date)}.` : '') + ' La numerazione riparte da 1 ogni anno.';
+      VR.$('#numEdit').hidden = !(admin && data.editable);
+      VR.$('#lastNum').value = data.last_number || '';
+      VR.$('#lastDate').value = data.last_date || '';
+    };
+    VR.$('#saveNum').addEventListener('click', async () => {
+      const n = Number(VR.$('#lastNum').value || 0);
+      const { error } = await VR.sb.rpc('billing_counter_set', { p_clinic: ctx.clinicId, p_last: n, p_last_date: VR.$('#lastDate').value || null });
+      if (error) { VR.say(VR.$('#numMsg'), VR.errorText(error), 'error'); return; }
+      VR.say(VR.$('#numMsg'), 'Fatto: Vetroom proseguirà da qui.', 'ok');
+      loadNum();
+    });
+    await loadNum();
+
+    // ---------- Listino ----------
+    let items = [];
+    const loadItems = async () => {
+      const { data } = await VR.sb.from('price_list').select('*').eq('clinic_id', ctx.clinicId).order('active', { ascending: false }).order('sort').order('name');
+      items = data || [];
+      VR.$('#items tbody').innerHTML = items.map((it) => `<tr ${it.active ? '' : 'style="opacity:.55"'}>
+        <td><strong>${esc(it.name)}</strong>${it.active ? '' : ' <span class="pill">non attiva</span>'}</td>
+        <td class="num">${I.money(it.unit_price)}</td>
+        <td>${I.KIND[it.kind]}</td>
+        <td>${it.vat != null ? Number(it.vat) + '%' : (it.kind === 'FV' ? '10%' : 'predefinita')}</td>
+        <td>${it.enpav ? 'sì' : 'no'}</td>
+        <td class="row-actions">${canList ? `<button class="btn btn-ghost btn-small" type="button" data-e="${it.id}">Modifica</button>` : ''}</td></tr>`).join('')
+        || '<tr><td colspan="6" class="muted">Nessuna voce. Aggiungi le prestazioni che fai più spesso: visita clinica, vaccinazione, microchip, controllo…</td></tr>';
+    };
+    const editItem = async (it) => {
+      const v = await I.ask({ title: it ? 'Modifica voce' : 'Nuova voce del listino', ok: 'Salva', fields: [
+        { name: 'name', label: 'Nome della voce', value: it?.name || '', required: true },
+        { name: 'price', label: 'Prezzo in euro (senza IVA e contributo)', type: 'number', value: it ? it.unit_price : '', required: true },
+        { name: 'kind', label: 'Tipo', type: 'select', value: it?.kind || 'SV', options: Object.entries(I.KIND) },
+        { name: 'vat', label: 'IVA', type: 'select', value: it?.vat != null ? String(Number(it.vat)) : '', options: [['', 'Predefinita (22% prestazioni, 10% farmaci)'], ['22', '22%'], ['10', '10%'], ['5', '5%'], ['4', '4%']] },
+        { name: 'enpav', label: 'Contributo ENPAV', type: 'select', value: it ? String(it.enpav) : '', options: [['', 'Automatico (sì per le prestazioni)'], ['true', 'Sì'], ['false', 'No']] },
+        ...(it ? [{ name: 'active', label: 'Stato', type: 'select', value: String(it.active), options: [['true', 'Attiva'], ['false', 'Non attiva (non compare in fattura)']] }] : [])
+      ] });
+      if (!v) return;
+      const price = Number(String(v.price).replace(',', '.'));
+      if (!(price >= 0)) { alert('Prezzo non valido.'); return; }
+      const row = { clinic_id: ctx.clinicId, name: v.name.trim(), unit_price: Math.round(price * 100) / 100, kind: v.kind,
+        vat: v.vat ? Number(v.vat) : null, enpav: v.enpav ? v.enpav === 'true' : v.kind === 'SV', active: it ? v.active === 'true' : true, updated_at: new Date().toISOString() };
+      const { error } = it ? await VR.sb.from('price_list').update(row).eq('id', it.id) : await VR.sb.from('price_list').insert(row);
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      loadItems();
+    };
+    if (!canList) VR.hide(VR.$('#addItem'));
+    VR.$('#addItem').addEventListener('click', () => editItem(null));
+    VR.$('#items').addEventListener('click', (e) => { const b = e.target.closest('[data-e]'); if (b) editItem(items.find((x) => x.id === b.dataset.e)); });
+    await loadItems();
+
+    VR.hide(loading); VR.show(VR.$('#page'));
+    if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+  })();
+  </script>
+</body>
+</html>
