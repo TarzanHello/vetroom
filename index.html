@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#033860" />
 
   <title>Vetroom – Gestionale veterinario gratuito | La stanza digitale</title>
-  <meta name="description" content="Gestionale veterinario gratuito in cloud: cartella clinica, anagrafiche, agenda e PDF. In sviluppo il profilo sanitario del pet owner‑first, con consenso." />
+  <meta name="description" content="Gestionale veterinario gratuito in cloud: cartella clinica, agenda, referti PDF, fatture e invio delle spese veterinarie al Sistema Tessera Sanitaria con un pulsante." />
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <link rel="canonical" href="https://vetroom.it/" />
 
@@ -766,6 +766,36 @@
     a.guide-card:hover{ text-decoration:none; transform: translateY(-2px); box-shadow: 0 16px 44px rgba(15,23,42,.12); }
     a.guide-card h3{ color: var(--teal2, #115e59); }
     .guide-more{ margin: 18px 0 0 !important; }
+
+    /* Novità in cima */
+    .news{display:inline-flex;align-items:center;gap:10px;margin:0 0 4px;padding:8px 14px 8px 8px;border-radius:999px;
+      background:#fff;border:1px solid rgba(52,174,167,.45);box-shadow:0 8px 24px rgba(3,56,96,.08);font-size:14px;font-weight:700;color:var(--navy)}
+    .news b{background:var(--teal);color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;letter-spacing:.3px}
+    .news:hover{text-decoration:none;border-color:var(--teal)}
+    /* Sezione Sistema TS */
+    #sistema-ts .ts-band{position:relative;border-radius:var(--radius2);padding:28px;background:
+      linear-gradient(135deg,rgba(52,174,167,.16),rgba(54,164,230,.10) 55%,rgba(212,197,226,.20));border:1px solid rgba(52,174,167,.35);box-shadow:var(--shadow)}
+    #sistema-ts .ts-head{display:grid;grid-template-columns:1.25fr .75fr;gap:22px;align-items:center}
+    #sistema-ts .ts-kicker{display:inline-block;font-size:12px;font-weight:900;letter-spacing:.6px;text-transform:uppercase;color:#0f766e;background:#fff;border-radius:999px;padding:4px 12px;margin-bottom:10px}
+    #sistema-ts h2{margin:0 0 10px}
+    #sistema-ts .ts-head p{color:var(--muted);margin:0 0 10px}
+    #sistema-ts .ts-shot img{display:block;width:100%;height:auto;border-radius:16px;border:1px solid var(--border);box-shadow:0 14px 40px rgba(3,56,96,.14);background:#fff}
+    #sistema-ts .ts-steps{list-style:none;counter-reset:t;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:0;margin:22px 0 0}
+    #sistema-ts .ts-steps li{counter-increment:t;background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:var(--radius);padding:16px 16px 14px;position:relative}
+    #sistema-ts .ts-steps li::before{content:counter(t);display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--coral);color:#fff;font-weight:900;margin-bottom:8px}
+    #sistema-ts .ts-steps strong{display:block;margin-bottom:4px}
+    #sistema-ts .ts-steps span{color:var(--muted);font-size:14px}
+    #sistema-ts .ts-facts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}
+    #sistema-ts .ts-facts div{background:rgba(255,255,255,.7);border-radius:14px;padding:12px 14px;border:1px dashed rgba(3,56,96,.18)}
+    #sistema-ts .ts-facts b{display:block;font-size:17px}
+    #sistema-ts .ts-facts span{color:var(--muted);font-size:13.5px}
+    #sistema-ts .ts-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+    @media (max-width: 900px){
+      #sistema-ts .ts-head{grid-template-columns:1fr}
+      #sistema-ts .ts-steps,#sistema-ts .ts-facts{grid-template-columns:1fr 1fr}
+      #sistema-ts .ts-band{padding:20px}
+    }
+    @media (max-width: 520px){ #sistema-ts .ts-steps,#sistema-ts .ts-facts{grid-template-columns:1fr} }
   </style>
 
   <!-- Structured Data -->
@@ -792,11 +822,39 @@
         "price": "0",
         "priceCurrency": "EUR",
         "category": "Free"
-      }
+      },
+      "featureList": [
+        "Fatture veterinarie in PDF",
+        "Invio delle spese veterinarie al Sistema Tessera Sanitaria"
+      ]
     },
     {
       "@type": "FAQPage",
       "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Vetroom invia le spese veterinarie al Sistema Tessera Sanitaria?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sì. Ogni fattura emessa con Vetroom ha già pronti i dati per il Sistema TS, separati tra spese veterinarie e farmaci. Dalla Cassa premi “Invia al Sistema TS”, inserisci codice fiscale, password e pincode del Sistema TS e vedi subito quali documenti sono stati accolti. Le credenziali non vengono salvate."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Entro quando vanno inviate le spese veterinarie al Sistema TS?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Entro il 16 marzo dell'anno successivo a quello del pagamento. Conta la data in cui il cliente ha pagato, non la data della fattura. Con Vetroom conviene inviare ogni settimana: ci vuole meno di un minuto."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Con Vetroom devo fare la fattura elettronica?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Per le prestazioni a clienti privati, i cui dati vanno al Sistema TS, la fattura elettronica tramite SdI è vietata: Vetroom crea la fattura in PDF. Per aziende ed enti serve la fattura elettronica, che Vetroom per ora non gestisce."
+          }
+        },
         {
           "@type": "Question",
           "name": "È davvero un gestionale veterinario gratuito?",
@@ -857,6 +915,7 @@
 
         <nav class="nav" id="nav" aria-label="Navigazione principale">
           <a href="#cosa-fa">Cosa fa</a>
+          <a href="#sistema-ts">Fatture e Sistema TS</a>
           <a href="#profilo-pet">Profilo pet</a>
           <a href="#per-chi">Per chi</a>
           <a href="/guida/">Guida</a>
@@ -879,11 +938,13 @@
           <div>
             <div class="badge"><span class="dot" aria-hidden="true"></span>Gestionale veterinario gratuito • Cloud • Dal browser</div>
 
+            <p style="margin:14px 0 0"><a class="news" href="#sistema-ts"><b>NOVITÀ</b> Fatture e invio al Sistema Tessera Sanitaria</a></p>
+
             <h1>Gestionale veterinario gratuito in cloud: tutto lo studio in ordine.</h1>
 
                         <p class="lead">
               <strong>Vetroom</strong> è un <strong>gestionale veterinario gratuito</strong> in cloud pensato per la pratica quotidiana:
-              <strong>cartella clinica</strong>, anagrafiche, <strong>agenda</strong> e documenti nello stesso posto.
+              <strong>cartella clinica</strong>, anagrafiche, <strong>agenda</strong>, documenti e <strong>fatture con invio al Sistema Tessera Sanitaria</strong> nello stesso posto.
               In più stiamo costruendo il <strong>profilo sanitario del pet</strong> <em>owner‑first</em>: la storia clinica segue l’animale e si condivide solo con consenso.
             </p>
 
@@ -896,7 +957,7 @@
             <div class="pills" aria-label="Punti chiave">
               <span class="pill"><span class="k" aria-hidden="true"></span>Gratuito per veterinari</span>
               <span class="pill"><span class="k" aria-hidden="true"></span>Niente installazioni</span>
-              <span class="pill"><span class="k" aria-hidden="true"></span>Ricerca veloce</span>
+              <span class="pill"><span class="k" aria-hidden="true"></span>Fatture + Sistema TS</span>
               <span class="pill"><span class="k" aria-hidden="true"></span>Owner‑first in arrivo</span>
             </div>
 
@@ -958,6 +1019,12 @@
           </div>
 
           <div class="card" role="listitem">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/cash.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Fatture e Sistema TS</h3>
+            <p>Fattura dalla visita in PDF, incassi, note di credito e invio delle spese al Sistema Tessera Sanitaria con un pulsante.</p>
+          </div>
+
+          <div class="card" role="listitem">
             <div class="icon" aria-hidden="true"><img src="/app/img/icons/scan_code.png" alt="" width="64" height="64" loading="lazy"></div>
             <h3>Affidabilità prima di tutto</h3>
             <p>Un gestionale deve essere coerente: accessi, dati e operatività devono restare sotto controllo.</p>
@@ -981,6 +1048,44 @@
           <div class="actions">
             <a class="btn primary" href="/app/">Inizia gratis</a>
             <a class="btn" href="/app/">Accedi</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="sistema-ts">
+      <div class="container">
+        <div class="ts-band">
+          <div class="ts-head">
+            <div>
+              <span class="ts-kicker">Novità · Adempimento fiscale</span>
+              <h2>Fatture e invio delle spese veterinarie al Sistema Tessera Sanitaria</h2>
+              <p>Il veterinario deve comunicare ogni anno al <strong>Sistema Tessera Sanitaria</strong> le spese pagate dai clienti, per il loro 730 precompilato. Con Vetroom la fattura nasce dalla visita e i dati per il Sistema TS sono già pronti: li invii dalla <strong>Cassa</strong> con un pulsante e vedi subito quali sono stati accolti.</p>
+              <p><strong>Le tue credenziali del Sistema TS non vengono salvate</strong>: le scrivi al momento dell'invio (può ricordarle il tuo browser) e Vetroom le usa solo per quello.</p>
+            </div>
+            <figure class="ts-shot" style="margin:0">
+              <img src="/guida/img/fattura-veterinaria-accolta-sistema-ts.webp" width="1100" height="772" alt="Fattura veterinaria in Vetroom accolta dal Sistema Tessera Sanitaria, con numero di protocollo e importi di spese veterinarie e farmaci" loading="lazy">
+            </figure>
+          </div>
+
+          <ol class="ts-steps">
+            <li><strong>Fattura dalla visita</strong><span>Premi “Incassa” in fondo alla visita: cliente, animale e prestazioni sono già compilati. ENPAV, IVA e bollo li calcola Vetroom.</span></li>
+            <li><strong>PDF al cliente</strong><span>La fattura in PDF con il tuo logo, da scaricare o inviare su WhatsApp ed email. Numerazione senza buchi.</span></li>
+            <li><strong>Invia al Sistema TS</strong><span>Dalla Cassa: codice fiscale, password e pincode del Sistema TS, poi Invia. Ci vuole meno di un minuto.</span></li>
+            <li><strong>Controlla l'esito</strong><span>Accolta, con avvisi o scartata, con il motivo e il numero di protocollo. Le scartate si correggono o si reinviano.</span></li>
+          </ol>
+
+          <div class="ts-facts">
+            <div><b>16 marzo</b><span>termine per le spese veterinarie pagate l'anno prima</span></div>
+            <div><b>PDF, non SdI</b><span>per i clienti privati la fattura elettronica è vietata</span></div>
+            <div><b>Prestazioni e farmaci</b><span>separati, come nel 730 del cliente</span></div>
+            <div><b>Opposizione</b><span>se il cliente si oppone, una spunta e Vetroom fa il resto</span></div>
+          </div>
+
+          <div class="ts-actions">
+            <a class="btn primary" href="/guida/invio-spese-veterinarie-sistema-ts.html">Leggi la guida all'invio al Sistema TS</a>
+            <a class="btn soft" href="/guida/fatture-veterinarie-cassa.html">Guida a fatture e Cassa</a>
+            <a class="btn" href="/app/">Inizia gratis</a>
           </div>
         </div>
       </div>
@@ -1069,6 +1174,11 @@
         </p>
 
         <div class="grid" role="list">
+          <a class="card guide-card" role="listitem" href="/guida/invio-spese-veterinarie-sistema-ts.html">
+            <div class="icon" aria-hidden="true"><img src="/app/img/icons/cash.png" alt="" width="64" height="64" loading="lazy"></div>
+            <h3>Invio al Sistema Tessera Sanitaria</h3>
+            <p>Credenziali e pincode, invio dalla Cassa, esiti, scarti e scadenza del 16 marzo: passo passo.</p>
+          </a>
           <a class="card guide-card" role="listitem" href="/guida/referto-veterinario-pdf.html">
             <div class="icon" aria-hidden="true"><img src="/app/img/icons/upload_document.png" alt="" width="64" height="64" loading="lazy"></div>
             <h3>Referto veterinario in PDF</h3>
@@ -1113,6 +1223,39 @@
         </p>
 
         <div class="faq-list">
+
+          <details>
+            <summary>
+              <span>Vetroom invia le spese veterinarie al Sistema Tessera Sanitaria?</span>
+              <span class="cta-hint" aria-hidden="true">Leggi</span>
+            </summary>
+            <div class="faq-a">
+              <p>Sì. Ogni fattura emessa con Vetroom ha già pronti i dati per il Sistema TS, separati tra spese veterinarie e farmaci. Dalla Cassa premi “Invia al Sistema TS”, inserisci codice fiscale, password e pincode del Sistema TS e vedi subito quali documenti sono stati accolti. Le credenziali non vengono salvate.</p>
+              <p><a href="/guida/invio-spese-veterinarie-sistema-ts.html">Guida completa all'invio al Sistema TS</a></p>
+            </div>
+          </details>
+
+          <details>
+            <summary>
+              <span>Entro quando vanno inviate le spese veterinarie al Sistema TS?</span>
+              <span class="cta-hint" aria-hidden="true">Leggi</span>
+            </summary>
+            <div class="faq-a">
+              <p>Entro il 16 marzo dell'anno successivo a quello del pagamento. Conta la data in cui il cliente ha pagato, non la data della fattura. Con Vetroom conviene inviare ogni settimana: ci vuole meno di un minuto.</p>
+              <p><a href="/guida/invio-spese-veterinarie-sistema-ts.html">Guida completa all'invio al Sistema TS</a></p>
+            </div>
+          </details>
+
+          <details>
+            <summary>
+              <span>Con Vetroom devo fare la fattura elettronica?</span>
+              <span class="cta-hint" aria-hidden="true">Leggi</span>
+            </summary>
+            <div class="faq-a">
+              <p>Per le prestazioni a clienti privati, i cui dati vanno al Sistema TS, la fattura elettronica tramite SdI è vietata: Vetroom crea la fattura in PDF. Per aziende ed enti serve la fattura elettronica, che Vetroom per ora non gestisce.</p>
+              <p><a href="/guida/invio-spese-veterinarie-sistema-ts.html">Guida completa all'invio al Sistema TS</a></p>
+            </div>
+          </details>
 
           <details>
             <summary>

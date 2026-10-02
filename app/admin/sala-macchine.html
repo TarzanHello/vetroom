@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Sala macchine · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-02d">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02f">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02d"></script>
-  <script src="../js/app.js?v=2026-10-02d"></script>
-  <script src="plancia.js?v=2026-10-02d"></script>
+  <script src="../js/config.js?v=2026-10-02f"></script>
+  <script src="../js/app.js?v=2026-10-02f"></script>
+  <script src="plancia.js?v=2026-10-02f"></script>
 </head>
 <body class="pl" data-station="sala">
 <main>
@@ -211,13 +211,16 @@
         $('#tsOut').innerHTML = `<p class="note bad">${esc(m)}</p>`;
       } else {
         const ok = (data.risultati || []).every((r) => r.status === 'accepted' || r.status === 'warning');
-        $('#tsOut').innerHTML = `<p class="note ${ok ? 'ok' : 'bad'}">${ok ? 'Collegamento riuscito: il Sistema TS ha accolto i documenti di prova.' : 'Il Sistema TS non ha accolto tutti i documenti di prova: leggi i messaggi qui sotto.'}</p>
+        const NEED = '2026-10-02e';
+        const old = !data.versione || data.versione < NEED;
+        $('#tsOut').innerHTML = (old ? `<p class="note bad">La funzione <span class="mono">vetroom-ts</span> installata su Supabase è una versione vecchia${data.versione ? ' (' + esc(data.versione) + ')' : ''}: sostituiscila con l'ultima (${NEED}) e riprova.</p>` : '') +
+          `<p class="note ${ok ? 'ok' : 'bad'}">${ok ? 'Collegamento riuscito: il Sistema TS ha accolto i documenti di prova.' : 'Il Sistema TS non ha accolto tutti i documenti di prova: leggi i messaggi qui sotto.'} <span class="faint small">Versione della funzione: ${esc(data.versione || 'sconosciuta')}</span></p>
           <div class="tw"><table class="t"><thead><tr><th>Documento di prova</th><th>Esito</th><th>Protocollo</th><th>Messaggi del Sistema TS</th></tr></thead><tbody>${(data.risultati || []).map((r) => `
             <tr><td class="mono">${esc(r.documento)}<span class="sub">${r.conCodiceFiscale ? 'con codice fiscale del cliente' : 'cliente che si oppone'}</span></td>
             <td><span class="pill ${r.status === 'accepted' ? 'ok' : r.status === 'warning' ? 'warn' : 'bad'}">${esc({ accepted: 'Accolto', warning: 'Accolto con avvisi', rejected: 'Scartato', pending: 'Non inviato' }[r.status] || r.status)}</span></td>
             <td class="mono small">${esc(r.protocollo || '—')}</td>
             <td class="small">${(r.messaggi || []).map((m) => esc(m.codice + ' – ' + m.descrizione)).join('<br>') || '—'}</td></tr>`).join('')}</tbody></table></div>`;
-        if ((data.risultati || []).some((r) => (r.messaggi || []).some((m) => m.codice === 'NET'))) await tlsReport();
+        if (!old && (data.risultati || []).some((r) => (r.messaggi || []).some((m) => m.codice === 'NET' && /certificat/i.test(m.descrizione)))) await tlsReport();
       }
     } catch (err) { $('#tsOut').innerHTML = `<p class="note bad">${esc(err.message)}</p>`; }
     b.disabled = false; b.textContent = 'Prova nell\'ambiente di test';

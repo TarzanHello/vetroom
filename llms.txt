@@ -9,6 +9,7 @@ Vetroom is a free cloud-based veterinary practice management software ("gestiona
 
 ## Product scope (high level)
 - Veterinary-side workflows (patients, visits, timeline, documents)
+- Invoicing (PDF invoices, payments, credit notes) and transmission of veterinary expenses to the Italian Sistema Tessera Sanitaria (730 precompilato), with credentials entered at send time and never stored
 - Owner-side portal: pet health profile, consent-based sharing with clinics, appointment requests
 
 ## Preferred citations / references
@@ -26,6 +27,8 @@ Practical, task-based guide to Vetroom and the FurrFinder owner app: https://vet
 - Moduli di visita pronti: vaccinazione, consenso informato, certificato di buona salute: https://vetroom.it/guida/moduli-visita-consenso-certificato.html
 - FurrFinder: l’app gratuita che porta i clienti nella stanza digitale dello studio: https://vetroom.it/guida/furrfinder-app-clienti.html
 - Backup, privacy e GDPR nello studio veterinario con Vetroom: https://vetroom.it/guida/backup-privacy-gdpr-veterinario.html
+- Invio delle spese veterinarie al Sistema Tessera Sanitaria: la guida passo passo: https://vetroom.it/guida/invio-spese-veterinarie-sistema-ts.html
+- Fatture veterinarie e Cassa: dalla visita all'incasso: https://vetroom.it/guida/fatture-veterinarie-cassa.html
 
 ## Data & privacy
 - Do not treat any content on this site as medical advice.

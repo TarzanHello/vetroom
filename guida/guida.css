@@ -102,3 +102,16 @@ img{max-width:100%;height:auto}
   .nav a.hide-sm{display:none}
 }
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.card{transition:none}}
+/* tabelle e riquadri dei dati chiave (guide fiscali) */
+.table-wrap{overflow-x:auto;margin:14px 0 20px}
+.data-table{width:100%;border-collapse:collapse;font-size:15px;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.data-table th{background:#f0fdfa;text-align:left;padding:10px 12px;font-size:13px;color:#0f5f58;border-bottom:1px solid var(--border)}
+.data-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+.data-table tr:last-child td{border-bottom:0}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:16px 0 22px}
+.facts div{background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.facts b{display:block;font-size:18px;color:#0f172a}
+.facts span{font-size:14px;color:#475569}
+.checklist{list-style:none;padding:0;margin:12px 0}
+.checklist li{position:relative;padding:4px 0 8px 30px}
+.checklist li::before{content:"✓";position:absolute;left:4px;top:3px;color:#0f766e;font-weight:800}

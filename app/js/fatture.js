@@ -156,7 +156,7 @@
       <div class="grid">
         <div class="s12"><label for="tsU">Codice fiscale (nome utente)</label><input id="tsU" type="text" name="username" autocomplete="username" maxlength="16" style="text-transform:uppercase" value="${VR.esc(defaultCf)}"></div>
         <div class="s12"><label for="tsP">Password</label><input id="tsP" name="password" type="password" autocomplete="current-password"></div>
-        <div class="s12"><label for="tsPin">Pincode</label><input id="tsPin" name="pincode" type="password" inputmode="numeric" autocomplete="off" maxlength="14"></div>
+        <div class="s12"><label for="tsPin">Pincode</label><input id="tsPin" name="pincode" type="password" inputmode="numeric" autocomplete="off" maxlength="14"><span class="hint-small">10 cifre: su sistemats.it, in Profilo utente → Stampa pincode. <a href="/guida/invio-spese-veterinarie-sistema-ts.html#credenziali" target="_blank" rel="noopener">Non hai le credenziali?</a></span></div>
       </div>
       <div class="ts-msg" hidden style="margin-top:10px"></div>
       <div class="actions-bar" style="margin-top:14px"><button class="btn btn-primary" type="submit">Invia</button><button class="btn btn-ghost" type="button" data-x>Annulla</button></div>

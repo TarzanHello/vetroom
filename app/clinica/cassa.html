@@ -12,14 +12,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-02d">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-02f">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02d"></script>
-  <script src="../js/app.js?v=2026-10-02d"></script>
-  <script src="../js/i18n.js?v=2026-10-02d"></script>
-  <script src="../js/layout.js?v=2026-10-02d"></script>
-  <script src="../js/clinica.js?v=2026-10-02d"></script>
-  <script src="../js/fatture.js?v=2026-10-02d"></script>
+  <script src="../js/config.js?v=2026-10-02f"></script>
+  <script src="../js/app.js?v=2026-10-02f"></script>
+  <script src="../js/i18n.js?v=2026-10-02f"></script>
+  <script src="../js/layout.js?v=2026-10-02f"></script>
+  <script src="../js/clinica.js?v=2026-10-02f"></script>
+  <script src="../js/fatture.js?v=2026-10-02f"></script>
 </head>
 <body data-shell="clinic" data-nav="cassa">
   <main class="wrap wrap-wide">
@@ -40,7 +40,7 @@
 
       <section class="panel" id="tsPanel" hidden>
         <div class="page-head" style="margin:0">
-          <div><h2 style="margin:0 0 .3rem">Sistema Tessera Sanitaria</h2><p class="muted" style="margin:0" id="tsLine"></p></div>
+          <div><h2 style="margin:0 0 .3rem">Sistema Tessera Sanitaria</h2><p class="muted" style="margin:0" id="tsLine"></p><p style="margin:.4rem 0 0;font-size:14px"><a href="/guida/invio-spese-veterinarie-sistema-ts.html" target="_blank" rel="noopener">Come funziona l'invio, passo passo</a></p></div>
           <button class="btn btn-primary" type="button" id="tsSend">Invia al Sistema TS</button>
         </div>
         <div id="tsResult" hidden style="margin-top:12px"></div>
@@ -178,7 +178,7 @@
         o.waiting_payment ? `${o.waiting_payment} in attesa di pagamento` : '',
         o.accepted_year ? `${o.accepted_year} accolti nel ${y}` : '',
         o.last_run ? `ultimo invio ${new Date(o.last_run.started_at).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''].filter(Boolean);
-      VR.$('#tsLine').innerHTML = parts.join(' · ') + `<br><span style="font-size:13px">Le spese pagate nel ${y} vanno trasmesse entro il 31 gennaio ${y + 1}: conviene inviare una volta a settimana.</span>`;
+      VR.$('#tsLine').innerHTML = parts.join(' · ') + `<br><span style="font-size:13px">Le spese veterinarie pagate nel ${y} vanno trasmesse entro il 16 marzo ${y + 1}: conviene inviare ogni settimana, senza aspettare la scadenza.</span>`;
       VR.$('#tsSend').disabled = !o.pending;
     };
     VR.$('#tsSend').addEventListener('click', async () => {
