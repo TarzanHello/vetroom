@@ -7,16 +7,16 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Messaggi · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-02f">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02g">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02f"></script>
-  <script src="../js/app.js?v=2026-10-02f"></script>
-  <script src="plancia.js?v=2026-10-02f"></script>
+  <script src="../js/config.js?v=2026-10-02g"></script>
+  <script src="../js/app.js?v=2026-10-02g"></script>
+  <script src="plancia.js?v=2026-10-02g"></script>
 </head>
 <body class="pl" data-station="messaggi">
 <main>
   <div class="pl-head"><div class="grow"><h1>Messaggi</h1><p>Tutte le conversazioni della piattaforma. Nell'assistenza puoi rispondere; quelle fra clinica e proprietario le puoi leggere ma non scriverci, e ogni lettura resta registrata.</p></div>
-    <div class="actions"><button class="btn prim" id="new">Nuovo messaggio</button></div></div>
+    <div class="actions"><button class="btn" id="allVet" title="/all_vet">A tutti i veterinari</button><button class="btn" id="allUser" title="/all_user">A tutti i proprietari</button><button class="btn prim" id="new">Nuovo messaggio</button></div></div>
   <section class="pn">
     <div class="pn-h" style="margin-bottom:12px">
       <div class="seg" role="group" aria-label="Filtro" id="filt"></div>
@@ -98,8 +98,12 @@
   $('#reply').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
   $('#back').addEventListener('click', () => { $('#inbox').classList.remove('reading'); $('#back').hidden = true; });
   $('#new').addEventListener('click', async () => {
-    const v = await PL.ask({ title: 'A chi vuoi scrivere?', ok: 'Cerca', fields: [{ name: 'q', label: 'Codice (CL- / UT-), email o nome', required: true }] });
+    const v = await PL.ask({ title: 'A chi vuoi scrivere?', ok: 'Continua',
+      html: 'Scrivi un codice, un\'email o un nome. Per scrivere a tutti: <span class="mono">/all_vet</span> (tutte le cliniche) oppure <span class="mono">/all_user</span> (tutti i proprietari).',
+      fields: [{ name: 'q', label: 'Destinatario', required: true }] });
     if (!v) return;
+    const cmd = v.q.trim().toLowerCase();
+    if (cmd === '/all_vet' || cmd === '/all_user') { if (await PL.broadcast(cmd === '/all_vet' ? 'vet' : 'user')) loadList(); return; }
     const res = (await PL.try('platform_find', { p_q: v.q.trim() }, []) || []).filter((x) => x.kind === 'clinic' || x.kind === 'user');
     if (!res.length) { PL.toast('Nessun account trovato.', 'bad'); return; }
     let pick = res[0];
@@ -111,6 +115,8 @@
     if (await PL.messageTo(pick.kind, pick.id, pick.name)) loadList();
   });
 
+  $('#allVet').addEventListener('click', async () => { if (await PL.broadcast('vet')) loadList(); });
+  $('#allUser').addEventListener('click', async () => { if (await PL.broadcast('user')) loadList(); });
   await loadList();
   const want = qs.get('conv');
   if (want) { const c = convs.find((x) => x.id === want); if (c) open(c); }

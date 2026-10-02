@@ -36,7 +36,7 @@
     ] },
     { g: 'Contatti', items: [
       { k: 'messaggi', l: 'Messaggi', h: 'messaggi.html', badge: 'support' },
-      { k: 'comunicazioni', l: 'Annunci ed email', h: 'comunicazioni.html' }
+      { k: 'comunicazioni', l: 'A tutti, annunci, email', h: 'comunicazioni.html' }
     ] },
     { g: 'Controllo', items: [
       { k: 'diario', l: 'Diario di bordo', h: 'diario.html' },
@@ -270,6 +270,7 @@
       'admin.nuovo_amministratore': `ha nominato amministratore ${T}`,
       'admin.tolto_amministratore': `ha tolto ${T} dagli amministratori`,
       'admin.annuncio': `ha pubblicato l'annuncio “${esc(a.label || '')}”`,
+      'admin.broadcast': `ha scritto a tutti ${a.label === '/all_vet' ? 'i veterinari' : 'i proprietari'} (${Number(m.destinatari || 0)} destinatari)`,
       'admin.impostazione': a.label === 'maintenance' ? (m.on ? 'ha ATTIVATO la modalità manutenzione' : 'ha disattivato la modalità manutenzione') : `ha cambiato l'impostazione ${esc(a.label || '')}`
     };
     let what = map[a.action];
@@ -499,6 +500,34 @@
     const r = await PL.run(null, () => PL.rpc(kind === 'clinic' ? 'platform_message_clinic' : 'platform_message_user',
       kind === 'clinic' ? { p_clinic: id, p_body: v.body } : { p_user: id, p_body: v.body }), 'Messaggio inviato.');
     return r !== undefined;
+  };
+
+  // Messaggio a tutti: /all_vet (una conversazione per clinica) o /all_user (una per proprietario)
+  PL.BROADCAST_TEXT = {
+    vet: 'Ciao,\n\nVetroom sta crescendo: ogni settimana arrivano funzioni nuove, come le fatture e l\'invio delle spese al Sistema Tessera Sanitaria.\n\nVogliamo costruire il gestionale insieme a chi lo usa ogni giorno. Rispondi direttamente qui: raccontaci cosa ti fa perdere tempo in ambulatorio, cosa manca o cosa miglioreresti. Leggiamo ogni risposta, una per una.\n\nGrazie!\nAureliano – Vetroom',
+    user: 'Ciao,\n\nFurrFinder sta crescendo e vogliamo renderla sempre più utile per te e per il tuo animale.\n\nRispondi direttamente qui: cosa vorresti trovare nell\'app? Cosa ti farebbe risparmiare tempo con il veterinario? Leggiamo ogni risposta, una per una.\n\nGrazie!\nAureliano – FurrFinder'
+  };
+  PL.broadcast = async (audience) => {
+    let pv;
+    try { pv = await PL.rpc('platform_broadcast_preview', { p_audience: audience }); }
+    catch (e) { PL.toast(e.missing ? 'Per i messaggi a tutti va eseguita la patch 23 su Supabase.' : e.message, 'bad'); return null; }
+    if (!pv.count) { PL.toast(audience === 'vet' ? 'Nessuna clinica a cui scrivere.' : 'Nessun proprietario a cui scrivere.', 'bad'); return null; }
+    const who = audience === 'vet' ? `${pv.count} ${pv.count === 1 ? 'clinica' : 'cliniche'}` : `${pv.count} ${pv.count === 1 ? 'proprietario' : 'proprietari'}`;
+    const v = await PL.ask({
+      title: audience === 'vet' ? `/all_vet · a tutti i veterinari (${who})` : `/all_user · a tutti i proprietari (${who})`,
+      wide: true, danger: true, ok: `Invia a ${who}`, word: 'INVIA',
+      html: `Arriva nella casella <b>Messaggi</b> di ${audience === 'vet' ? 'ogni clinica (lo vede tutto il team)' : 'ogni proprietario, in FurrFinder (con notifica sul telefono se attiva)'}, dentro la sua conversazione con l'Assistenza.
+        Le risposte arrivano a te <b>separate</b>, una per ${audience === 'vet' ? 'clinica' : 'persona'}: nessuno vede le risposte degli altri.
+        <br><span class="small faint">Fra i destinatari: ${pv.sample.map(esc).join(', ')}${pv.count > pv.sample.length ? '…' : ''}${pv.last ? ` · ultimo messaggio a tutti: ${PL.dt(pv.last.created_at)}` : ''}</span>`,
+      fields: [{ name: 'body', label: 'Messaggio', type: 'textarea', rows: 12, value: PL.BROADCAST_TEXT[audience], required: true }]
+    });
+    if (!v) return null;
+    PL.toast(`Invio a ${who} in corso…`, 'info');
+    try {
+      const r = await PL.rpc('platform_broadcast_send', { p_audience: audience, p_body: v.body });
+      PL.toast(`Inviato a ${r.sent} ${audience === 'vet' ? 'cliniche' : 'proprietari'}${r.failed ? `, ${r.failed} non riusciti` : ''}. Le risposte arriveranno in Messaggi.`, r.failed ? 'bad' : 'ok');
+      return r;
+    } catch (e) { PL.toast(e.message, 'bad'); return null; }
   };
 
   // Note interne (scheda clinica e scheda utente)

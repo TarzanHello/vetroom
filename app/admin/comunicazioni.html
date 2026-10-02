@@ -7,15 +7,20 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Annunci ed email · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-02f">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02g">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02f"></script>
-  <script src="../js/app.js?v=2026-10-02f"></script>
-  <script src="plancia.js?v=2026-10-02f"></script>
+  <script src="../js/config.js?v=2026-10-02g"></script>
+  <script src="../js/app.js?v=2026-10-02g"></script>
+  <script src="plancia.js?v=2026-10-02g"></script>
 </head>
 <body class="pl" data-station="comunicazioni">
 <main>
-  <div class="pl-head"><div class="grow"><h1>Annunci ed email</h1><p>Gli annunci compaiono una sola volta, come breve presentazione, la prossima volta che la persona apre l'app. Le email partono dalla casella configurata.</p></div></div>
+  <div class="pl-head"><div class="grow"><h1>Messaggi a tutti, annunci ed email</h1><p>Gli annunci compaiono una sola volta, come breve presentazione, la prossima volta che la persona apre l'app. Le email partono dalla casella configurata.</p></div></div>
+  <section class="pn">
+    <div class="pn-h"><h2>Messaggi a tutti</h2><div class="tools"><button class="btn" id="bVet">/all_vet · veterinari</button><button class="btn" id="bUser">/all_user · proprietari</button></div></div>
+    <p class="dim" style="margin-top:-6px">A differenza degli annunci, arrivano nella casella Messaggi di ciascuno e si può rispondere: ogni risposta arriva a te separata, nella pagina Messaggi.</p>
+    <div id="bcasts"><p class="loader">Caricamento</p></div>
+  </section>
   <section class="pn">
     <div class="pn-h"><h2>Annunci nell'app</h2><div class="tools"><button class="btn prim" id="newAnn">Nuovo annuncio</button></div></div>
     <div id="anns"><p class="loader">Caricamento</p></div>
@@ -76,7 +81,45 @@
     } catch (e) { $('#mails').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
   };
   $('#newMail').addEventListener('click', async () => { if (await PL.compose({ body: '\n\nUn saluto,\nAureliano\nVetroom — www.vetroom.it' })) setTimeout(loadMails, 2500); });
-  loadAnns(); loadMails();
+  // ---------- Messaggi a tutti ----------
+  let bcs = [];
+  const loadBcasts = async () => {
+    try { bcs = await PL.rpc('platform_broadcasts_list') || []; }
+    catch (e) { $('#bcasts').innerHTML = `<p class="note warn">${esc(e.missing ? 'Si attiva con la patch 23 su Supabase.' : e.message)}</p>`; return; }
+    const pct = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '—');
+    $('#bcasts').innerHTML = `<div class="tw"><table class="t"><thead><tr><th>Quando</th><th>A chi</th><th>Messaggio</th><th class="num">Destinatari</th><th class="num">Letto da</th><th class="num">Risposte</th><th></th></tr></thead><tbody>${bcs.map((b) => `
+      <tr><td class="nowrap">${PL.dt(b.created_at)}</td>
+        <td><span class="pill ${b.audience === 'vet' ? 'ok' : 'info'}">${b.audience === 'vet' ? '/all_vet' : '/all_user'}</span></td>
+        <td><span class="small">${esc(b.body.slice(0, 120))}${b.body.length > 120 ? '…' : ''}</span></td>
+        <td class="num">${n(b.recipients)}${b.failures ? `<span class="sub" style="color:var(--red)">${n(b.failures)} non riusciti</span>` : ''}</td>
+        <td class="num">${n(b.read_count)}<span class="sub">${pct(b.read_count, b.recipients)}</span></td>
+        <td class="num">${n(b.reply_count)}<span class="sub">${pct(b.reply_count, b.recipients)}</span></td>
+        <td>${b.reply_count ? `<button class="btn sm" data-r="${b.id}">Leggi le risposte</button>` : ''}</td></tr>`).join('')
+      || '<tr><td colspan="7" class="empty">Ancora nessun messaggio a tutti. Prova con /all_vet: chiedi ai veterinari cosa gli serve.</td></tr>'}</tbody></table></div>`;
+  };
+  const showReplies = async (id) => {
+    const b = bcs.find((x) => String(x.id) === String(id));
+    let rows = [];
+    try { rows = await PL.rpc('platform_broadcast_replies', { p_id: Number(id) }) || []; } catch (e) { PL.toast(e.message, 'bad'); return; }
+    const codes = await PL.codes();
+    const d = document.createElement('dialog'); d.className = 'dl wide';
+    d.innerHTML = `<h2>Risposte a ${b.audience === 'vet' ? '/all_vet' : '/all_user'} del ${PL.d(b.created_at)}</h2>
+      <p class="dim">${n(rows.length)} ${rows.length === 1 ? 'risposta' : 'risposte'} su ${n(b.recipients)} destinatari. Apri una conversazione per rispondere solo a quella persona.</p>
+      <ul class="list">${rows.map((r) => `<li><div class="grow"><strong>${esc(r.name || '—')}</strong> ${PL.chip(r.code)} ${r.waiting ? '<span class="pill warn">da rispondere</span>' : '<span class="pill ok">hai risposto</span>'}
+        <span class="small dim" style="display:block;white-space:pre-wrap;margin-top:4px">${esc(r.first_reply || '')}</span>
+        <span class="small faint">${n(r.replies)} ${Number(r.replies) === 1 ? 'messaggio' : 'messaggi'} · ultimo ${PL.ago(r.last_reply_at)} · <a href="${r.target_kind === 'clinic' ? PL.clinicHref(r.target_id, codes.clinics?.[r.target_id]) : PL.userHref(r.target_id, r.code)}">scheda</a></span></div>
+        <a class="btn sm prim" href="messaggi.html?conv=${r.conversation_id}">Apri e rispondi</a></li>`).join('') || '<li class="dim">Nessuna risposta.</li>'}</ul>
+      <div class="foot"><button class="btn" type="button" data-x>Chiudi</button></div>`;
+    document.body.appendChild(d);
+    d.querySelector('[data-x]').addEventListener('click', () => { d.close(); d.remove(); });
+    d.addEventListener('close', () => d.remove());
+    d.showModal();
+  };
+  $('#bcasts').addEventListener('click', (e) => { const r = e.target.closest('[data-r]'); if (r) showReplies(r.dataset.r); });
+  $('#bVet').addEventListener('click', async () => { if (await PL.broadcast('vet')) loadBcasts(); });
+  $('#bUser').addEventListener('click', async () => { if (await PL.broadcast('user')) loadBcasts(); });
+
+  loadBcasts(); loadAnns(); loadMails();
 })();
 </script>
 </body>
