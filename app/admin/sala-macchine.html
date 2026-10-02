@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Sala macchine · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="sala">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Sala macchine</h1><p>Interruttori generali, salute del sistema, errori e chi ha le chiavi della plancia.</p></div></div>
+  <div class="cols">
+    <section class="pn c6 danger" id="manutenzione">
+      <div class="pn-h"><h2>Modalità manutenzione</h2></div>
+      <label class="check" style="gap:14px"><input type="checkbox" class="switch" id="mOn"> <span id="mLbl">Spenta: l'app funziona normalmente</span></label>
+      <label class="f" for="mMsg">Messaggio che vedono gli utenti</label>
+      <textarea id="mMsg" rows="3"></textarea>
+      <div class="actions" style="margin-top:10px"><button class="btn" id="mSave">Salva messaggio</button></div>
+      <p class="small dim" style="margin:12px 0 0">Quando è accesa, chi apre Vetroom o FurrFinder vede solo questo avviso. Tu e gli altri amministratori continuate a entrare normalmente. Usala durante gli aggiornamenti del database.</p>
+    </section>
+    <section class="pn c6" id="amministratori">
+      <div class="pn-h"><h2>Amministratori della piattaforma</h2><div class="tools"><button class="btn sm" id="addAdm">Aggiungi</button></div></div>
+      <ul class="list" id="admins"></ul>
+      <p class="small dim" style="margin:10px 0 0">Ogni amministratore vede tutti i dati della piattaforma. Tienili al minimo, con la verifica in due passaggi attiva sull'account Google.</p>
+    </section>
+
+    <section class="pn c12" id="sistema">
+      <div class="pn-h"><h2>Stato del sistema</h2><div class="tools"><span class="small dim" id="sysAt"></span><button class="btn sm ghost" id="sysRe">Aggiorna</button></div></div>
+      <div id="sys"><p class="loader">Lettura</p></div>
+    </section>
+
+    <section class="pn c12" id="errori">
+      <div class="pn-h"><h2>Errori dell'app</h2><div class="tools"><button class="btn sm ghost" id="clearErr" hidden>Svuota elenco</button></div></div>
+      <p class="small dim" style="margin-top:-6px">Gli errori mostrati agli utenti finiscono qui, così te ne accorgi prima che te li segnalino. Si cancellano da soli dopo 90 giorni.</p>
+      <div id="errs"><p class="loader">Caricamento</p></div>
+    </section>
+
+    <section class="pn c6" id="account">
+      <div class="pn-h"><h2>Il tuo account</h2></div>
+      <div id="mine"></div>
+    </section>
+    <section class="pn c6" id="pulizia">
+      <div class="pn-h"><h2>Pulizia del diario</h2></div>
+      <p class="dim">Il diario di bordo conserva 13 mesi, come scritto nell'informativa. Le righe più vecchie si tolgono con questo pulsante (puoi premerlo ogni tanto, non fa danni).</p>
+      <div class="actions"><button class="btn" id="hk">Togli le righe oltre 13 mesi</button></div>
+    </section>
+  </div>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+
+  // ---------- Manutenzione ----------
+  let maint = { on: false, message: '' };
+  const drawMaint = () => {
+    $('#mOn').checked = !!maint.on;
+    $('#mLbl').textContent = maint.on ? 'ACCESA: gli utenti vedono solo l\'avviso' : 'Spenta: l\'app funziona normalmente';
+    $('#mLbl').style.color = maint.on ? 'var(--red)' : '';
+    if (document.activeElement !== $('#mMsg')) $('#mMsg').value = maint.message || '';
+  };
+  const loadMaint = async () => {
+    try { const s = await PL.rpc('platform_settings_get'); maint = (s && s.maintenance) || maint; drawMaint(); }
+    catch (e) { $('#manutenzione').insertAdjacentHTML('beforeend', `<p class="note warn" style="margin-top:12px">${esc(e.message)}</p>`); $('#mOn').disabled = true; }
+  };
+  const saveMaint = async (on) => {
+    const next = { on, message: $('#mMsg').value.trim() || 'Stiamo facendo un aggiornamento. Torna fra qualche minuto.' };
+    const r = await PL.run(null, () => PL.rpc('platform_setting_set', { p_key: 'maintenance', p_value: next }), on ? 'Manutenzione ACCESA.' : (on === maint.on ? 'Messaggio salvato.' : 'Manutenzione spenta.'));
+    if (r !== undefined) maint = next;
+    drawMaint(); PL.refreshSignals();
+  };
+  $('#mOn').addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    if (on && !(await PL.ask({ title: 'Accendere la manutenzione?', danger: true, ok: 'Accendi', html: 'Da adesso cliniche e proprietari non possono usare l\'app finché non la spegni.' }))) { drawMaint(); return; }
+    saveMaint(on);
+  });
+  $('#mSave').addEventListener('click', () => saveMaint(!!maint.on));
+
+  // ---------- Amministratori ----------
+  const loadAdmins = async () => {
+    try {
+      const rows = await PL.rpc('platform_admins_list') || [];
+      $('#admins').innerHTML = rows.map((a) => `<li><div class="grow"><a href="${PL.userHref(a.user_id)}"><strong>${esc(a.name || a.email)}</strong></a>${a.is_me ? ' <span class="pill vio">Tu</span>' : ''}
+        <span class="small dim" style="display:block">${esc(a.email || '')} · dal ${PL.d(a.since)} · ultimo accesso ${PL.ago(a.last_sign_in_at)}</span></div>
+        ${a.is_me ? '' : `<button class="btn sm danger" data-rm="${a.user_id}" data-n="${esc(a.email || '')}">Togli</button>`}</li>`).join('');
+    } catch (e) { $('#admins').innerHTML = `<li class="note warn">${esc(e.message)}</li>`; }
+  };
+  $('#addAdm').addEventListener('click', async () => {
+    const v = await PL.ask({ title: 'Nuovo amministratore', ok: 'Aggiungi', danger: true,
+      html: 'Avrà <b>tutti</b> i poteri della plancia, compreso eliminare account e leggere tutte le conversazioni. La persona deve essere già entrata almeno una volta in Vetroom.',
+      fields: [{ name: 'email', label: 'Email Google della persona', type: 'email', required: true }] });
+    if (v && await PL.run(null, () => PL.rpc('platform_admin_add', { p_email: v.email })) !== undefined) loadAdmins();
+  });
+  $('#admins').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-rm]'); if (!b) return;
+    if (await PL.ask({ title: `Togliere ${b.dataset.n} dagli amministratori?`, ok: 'Togli', danger: true }) &&
+        await PL.run(b, () => PL.rpc('platform_admin_remove', { p_user: b.dataset.rm })) !== undefined) loadAdmins();
+  });
+
+  // ---------- Stato del sistema ----------
+  const bar = (v, max, label) => {
+    const p = Math.min(100, (v / max) * 100);
+    return `<div style="margin:6px 0 14px"><div class="small" style="display:flex;justify-content:space-between"><span>${label}</span><span class="mono">${PL.bytes(v)} <span class="faint">/ ${PL.bytes(max)}</span></span></div>
+      <div style="height:6px;background:var(--hull-3);margin-top:5px"><div style="height:100%;width:${p.toFixed(1)}%;background:${p > 80 ? 'var(--red)' : p > 60 ? 'var(--amber)' : 'var(--signal)'};box-shadow:0 0 8px currentColor"></div></div></div>`;
+  };
+  const NAMES = { profiles: 'Profili', clinics: 'Cliniche', clinic_members: 'Membri dei team', clients: 'Proprietari (anagrafiche)', pets: 'Animali', visits: 'Visite', documents: 'Documenti',
+    appointments: 'Appuntamenti', reminders: 'Richiami', messages: 'Messaggi', conversations: 'Conversazioni', platform_audit: 'Diario di bordo', client_errors: 'Errori', push_subscriptions: 'Dispositivi con notifiche',
+    pet_access: 'Collegamenti FurrFinder', availabilities: 'Orari', visit_forms: 'Moduli di visita', push_queue: 'Coda notifiche' };
+  const loadSys = async () => {
+    try {
+      const s = await PL.rpc('platform_system');
+      const files = (s.storage || []).reduce((a, b) => a + Number(b.bytes || 0), 0);
+      $('#sysAt').textContent = 'Letto alle ' + PL.hm(s.checked_at);
+      $('#sys').innerHTML = `<div class="cols">
+        <div class="c5">${bar(Number(s.db_bytes), 500 * 1024 * 1024, 'Database')}${bar(files, 1024 * 1024 * 1024, 'File (referti, foto, loghi)')}
+          <p class="small faint">Il riferimento è il piano gratuito di Supabase (500 MB di database, 1 GB di file). Se sei su un piano diverso, i limiti sono più alti.</p>
+          <dl class="kv" style="margin-top:12px">${(s.storage || []).map((b) => `<dt>Cartella ${esc(b.bucket)}</dt><dd>${n(b.files)} file · ${PL.bytes(b.bytes)}</dd>`).join('')}
+            <dt>Diario di bordo</dt><dd>${n(s.audit_rows)} righe${s.audit_oldest ? ', dal ' + PL.d(s.audit_oldest) : ''}</dd><dt>Nel cestino</dt><dd>${n(s.trash_waiting)}</dd></dl></div>
+        <div class="c7"><div class="tw"><table class="t"><thead><tr><th>Tabella</th><th class="num">Righe</th><th class="num">Spazio</th></tr></thead><tbody>${(s.tables || []).slice(0, 18).map((t) =>
+          `<tr><td>${esc(NAMES[t.name] || t.name)} <span class="faint mono small">${esc(t.name)}</span></td><td class="num">${n(t.rows)}</td><td class="num">${PL.bytes(t.bytes)}</td></tr>`).join('')}</tbody></table></div>
+          <p class="small faint" style="margin-top:6px">Il numero di righe è una stima del database, aggiornata periodicamente.</p></div></div>`;
+    } catch (e) { $('#sys').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
+  };
+  $('#sysRe').addEventListener('click', loadSys);
+
+  // ---------- Errori ----------
+  const loadErr = async () => {
+    try {
+      const rows = await PL.rpc('platform_errors', { p_limit: 200 }) || [];
+      $('#clearErr').hidden = !rows.length;
+      PL.table({ el: $('#errs'), pageSize: 20, sortKey: 'last', sortDir: -1, empty: 'Nessun errore registrato. 👍', rows, cols: [
+        { k: 'last', l: 'Ultima volta', sort: (r) => new Date(r.last_seen).getTime(), render: (r) => `<span class="nowrap">${PL.ago(r.last_seen)}</span>` },
+        { k: 'hits', l: 'Volte', cls: 'num', sort: (r) => Number(r.hits), render: (r) => n(r.hits) },
+        { k: 'page', l: 'Pagina', hideM: true, render: (r) => `<span class="mono small">${esc((r.page || '').replace('/app/', ''))}</span>` },
+        { k: 'msg', l: 'Errore', render: (r) => `<details><summary>${esc(r.message)}</summary><pre class="mono small" style="white-space:pre-wrap;color:var(--dim);margin:8px 0 0">${esc([r.detail, r.user_agent, r.app_version ? 'versione app ' + r.app_version : ''].filter(Boolean).join('\n\n'))}</pre></details>` },
+        { k: 'who', l: 'Utente', render: (r) => `<span class="small">${esc(r.email || '—')}</span>` }] });
+    } catch (e) { $('#errs').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
+  };
+  $('#clearErr').addEventListener('click', async (e) => {
+    if (await PL.ask({ title: 'Svuotare l\'elenco degli errori?', ok: 'Svuota', html: 'Fallo dopo averli letti o sistemati.' }) &&
+        await PL.run(e.currentTarget, () => PL.rpc('platform_clear_errors'), 'Elenco svuotato.') !== undefined) { loadErr(); PL.refreshSignals(); }
+  });
+
+  // ---------- Il tuo account ----------
+  const loadMine = async () => {
+    try {
+      const rows = await PL.rpc('platform_my_clinics') || [];
+      $('#mine').innerHTML = rows.length ? `<p class="note warn">Questo account fa ancora parte di ${rows.length === 1 ? 'una clinica' : rows.length + ' cliniche'}. Per tenere separati i dati di prova da quelli veri, l'amministratore della piattaforma non dovrebbe far parte di nessuna.</p>
+        <ul class="list">${rows.map((c) => `<li><div class="grow"><strong>${esc(c.name)}</strong> ${PL.chip(c.code)}<span class="small dim" style="display:block">${esc(PL.ROLE[c.role] || c.role)} · ${n(c.clients)} clienti · ${n(c.visits)} visite</span></div>
+          <div class="actions"><button class="btn sm" data-leave="${c.clinic_id}">Esci dalla clinica</button><button class="btn sm danger" data-del="${c.clinic_id}" data-name="${esc(c.name)}">Elimina la clinica</button></div></li>`).join('')}</ul>`
+        : '<p class="note ok" style="margin:0">Questo account è solo amministratore della piattaforma: non fa parte di nessuna clinica.</p>';
+    } catch (e) { $('#mine').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
+  };
+  $('#mine').addEventListener('click', async (e) => {
+    const l = e.target.closest('[data-leave]'), d = e.target.closest('[data-del]');
+    if (l && await PL.ask({ title: 'Uscire da questa clinica?', ok: 'Esci', html: 'I dati restano alla clinica, tu smetti di farne parte.' }) &&
+        await PL.run(l, () => PL.rpc('platform_leave_clinic', { p_clinic: l.dataset.leave })) !== undefined) loadMine();
+    if (d) {
+      const v = await PL.ask({ title: `Eliminare ${d.dataset.name}?`, danger: true, ok: 'Elimina per sempre', word: d.dataset.name,
+        html: 'Elimina la clinica e <b>tutti</b> i suoi dati (clienti, animali, visite, referti). Non si può annullare.' });
+      if (v && await PL.run(d, () => PL.rpc('platform_delete_clinic', { p_clinic: d.dataset.del, p_confirm_name: v.__word })) !== undefined) loadMine();
+    }
+  });
+  $('#hk').addEventListener('click', async (e) => { await PL.run(e.currentTarget, () => PL.rpc('platform_housekeeping'), (k) => k ? `Tolte ${n(k)} righe.` : 'Niente da togliere: il diario è già in regola.'); });
+
+  loadMaint(); loadAdmins(); loadSys(); loadErr(); loadMine();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Annunci ed email · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="comunicazioni">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Annunci ed email</h1><p>Gli annunci compaiono una sola volta, come breve presentazione, la prossima volta che la persona apre l'app. Le email partono dalla casella configurata.</p></div></div>
+  <section class="pn">
+    <div class="pn-h"><h2>Annunci nell'app</h2><div class="tools"><button class="btn prim" id="newAnn">Nuovo annuncio</button></div></div>
+    <div id="anns"><p class="loader">Caricamento</p></div>
+  </section>
+  <section class="pn">
+    <div class="pn-h"><h2>Email inviate dal pannello</h2><div class="tools"><button class="btn" id="newMail">Scrivi un'email</button></div></div>
+    <div id="mails"><p class="loader">Caricamento</p></div>
+  </section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+  const AUD = { all: 'Tutti', clinic: 'Solo cliniche', owner: 'Solo proprietari' };
+  let anns = [];
+  const editAnn = async (a) => {
+    const v = await PL.ask({ title: a ? 'Modifica annuncio' : 'Nuovo annuncio', ok: a ? 'Salva' : 'Pubblica', wide: true,
+      html: 'Breve e a colpo d\'occhio: un titolo e due o tre frasi. Chi lo ha già visto non lo rivede.',
+      fields: [
+        { name: 'title', label: 'Titolo (max 120 caratteri)', value: a?.title || '', required: true, placeholder: 'Es. Ora puoi scrivere alla tua clinica' },
+        { name: 'body', label: 'Testo (max 1200 caratteri)', type: 'textarea', rows: 5, value: a?.body || '', required: true },
+        { name: 'audience', label: 'Chi lo vede', type: 'select', value: a?.audience || 'all', options: Object.entries(AUD) },
+        { name: 'ends', label: 'Visibile fino al (lascia vuoto per sempre)', type: 'date', value: a?.ends_at ? a.ends_at.slice(0, 10) : '' },
+        { name: 'active', label: 'Attivo', type: 'checkbox', value: a ? a.active : true }] });
+    if (!v) return;
+    if (v.title.length > 120 || v.body.length > 1200) { PL.toast('Titolo o testo troppo lunghi.', 'bad'); return; }
+    const r = await PL.run(null, () => PL.rpc('platform_announcement_save', { p_id: a?.id || null, p_title: v.title, p_body: v.body, p_audience: v.audience,
+      p_active: v.active, p_ends_at: v.ends ? new Date(v.ends + 'T23:59:59').toISOString() : null }), a ? 'Annuncio aggiornato.' : 'Annuncio pubblicato.');
+    if (r !== undefined) loadAnns();
+  };
+  const loadAnns = async () => {
+    try { anns = await PL.rpc('platform_announcements_list') || []; }
+    catch (e) { $('#anns').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; return; }
+    $('#anns').innerHTML = `<div class="tw"><table class="t"><thead><tr><th>Annuncio</th><th>Per</th><th>Stato</th><th class="num">Visto da</th><th class="hide-m">Creato</th><th></th></tr></thead><tbody>${anns.map((a) => {
+      const expired = a.ends_at && new Date(a.ends_at) < new Date();
+      return `<tr><td><strong>${esc(a.title)}</strong><span class="sub">${esc(a.body.slice(0, 140))}${a.body.length > 140 ? '…' : ''}</span></td><td>${AUD[a.audience]}</td>
+        <td>${!a.active ? '<span class="pill">Spento</span>' : expired ? '<span class="pill">Scaduto</span>' : '<span class="pill ok">In onda</span>'}${a.ends_at ? `<span class="sub">fino al ${PL.d(a.ends_at)}</span>` : ''}</td>
+        <td class="num">${n(a.views)}</td><td class="hide-m nowrap">${PL.d(a.created_at)}</td>
+        <td><div class="actions" style="justify-content:flex-end"><button class="btn sm" data-e="${a.id}">Modifica</button><button class="btn sm danger" data-d="${a.id}">Elimina</button></div></td></tr>`;
+    }).join('') || '<tr><td colspan="6" class="empty">Nessun annuncio. Usane uno per presentare una novità a tutti in un colpo.</td></tr>'}</tbody></table></div>`;
+  };
+  $('#newAnn').addEventListener('click', () => editAnn(null));
+  $('#anns').addEventListener('click', async (e) => {
+    const ed = e.target.closest('[data-e]'), de = e.target.closest('[data-d]');
+    if (ed) editAnn(anns.find((a) => a.id === ed.dataset.e));
+    if (de && await PL.ask({ title: 'Eliminare l\'annuncio?', ok: 'Elimina', danger: true, html: 'Sparisce per chi non l\'ha ancora visto.' }) &&
+        await PL.run(de, () => PL.rpc('platform_announcement_delete', { p_id: de.dataset.d }), 'Annuncio eliminato.') !== undefined) loadAnns();
+  });
+
+  const loadMails = async () => {
+    try {
+      const rows = await PL.rpc('platform_mail_log', { p_limit: 300 }) || [];
+      PL.table({ el: $('#mails'), pageSize: 25, sortKey: 'at', sortDir: -1, empty: 'Nessuna email inviata dal pannello.', rows, cols: [
+        { k: 'at', l: 'Quando', sort: (r) => new Date(r.sent_at || r.created_at || 0).getTime(), render: (r) => `<span class="nowrap">${PL.dt(r.sent_at || r.created_at)}</span>` },
+        { k: 'to', l: 'A', sort: (r) => r.to_email, render: (r) => esc(r.to_email || '') },
+        { k: 'subj', l: 'Oggetto', render: (r) => esc(r.subject || '') },
+        { k: 'st', l: 'Esito', render: (r) => r.status === 'sent' ? '<span class="pill ok">Inviata</span>' : r.status === 'failed' ? `<span class="pill bad" title="${esc(r.error || '')}">Non partita</span>` : `<span class="pill warn">${esc(r.status || 'in coda')}</span>` }] });
+    } catch (e) { $('#mails').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
+  };
+  $('#newMail').addEventListener('click', async () => { if (await PL.compose({ body: '\n\nUn saluto,\nAureliano\nVetroom — www.vetroom.it' })) setTimeout(loadMails, 2500); });
+  loadAnns(); loadMails();
+})();
+</script>
+</body>
+</html>

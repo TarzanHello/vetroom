@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Ponte di comando · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="ponte">
+<main>
+  <p class="loader" id="boot">Collegamento alla plancia</p>
+  <div id="page" hidden>
+    <section class="viewscreen" aria-label="Stato della piattaforma">
+      <div class="vs-status"><span class="vs-dot" id="vsDot"></span><span class="big" id="vsTitle">Tutto regolare</span></div>
+      <p class="vs-sub" id="vsSub"></p>
+      <div class="gauges" id="gauges"></div>
+    </section>
+
+    <div class="cols">
+      <section class="pn c8">
+        <div class="pn-h"><h2 id="chartTitle">Crescita</h2>
+          <div class="tools">
+            <div class="seg" role="group" aria-label="Cosa mostrare" id="segS">
+              <button type="button" data-s="users" aria-pressed="true">Iscritti</button><button type="button" data-s="clinics" aria-pressed="false">Cliniche</button><button type="button" data-s="visits" aria-pressed="false">Visite</button><button type="button" data-s="appointments" aria-pressed="false">Appuntamenti</button>
+            </div>
+            <div class="seg" role="group" aria-label="Periodo" id="segP">
+              <button type="button" data-p="days" aria-pressed="true">30 giorni</button><button type="button" data-p="weeks" aria-pressed="false">12 settimane</button>
+            </div>
+          </div></div>
+        <div class="chart" id="chart"></div>
+        <p class="chart-sum" id="chartSum"></p>
+      </section>
+      <section class="pn c4 warn">
+        <div class="pn-h"><h2>Da sistemare</h2></div>
+        <ul class="alerts" id="alerts"><li class="dim">Controllo in corso…</li></ul>
+      </section>
+
+      <section class="pn c7">
+        <div class="pn-h"><h2>Diario in diretta</h2><div class="tools"><span class="live" id="live"><i></i>in diretta</span><a class="btn sm ghost" href="diario.html">Diario completo</a></div></div>
+        <ul class="log" id="feed"></ul>
+      </section>
+      <div class="c5" style="display:grid;gap:18px;align-content:start">
+        <section class="pn" style="margin:0">
+          <div class="pn-h"><h2>Percorso delle cliniche</h2></div>
+          <div class="nums" id="funnel" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>
+          <p class="small dim" style="margin:10px 0 0">Una clinica diventa la “stanza digitale dello studio” quando almeno un suo cliente usa FurrFinder.</p>
+        </section>
+        <section class="pn" style="margin:0">
+          <div class="pn-h"><h2>Ultimi arrivati</h2><div class="tools"><a class="btn sm ghost" href="utenti.html">Tutti</a></div></div>
+          <ul class="list" id="newest"></ul>
+        </section>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+  const SEEN = 'vetroom_plancia_seen';
+  const seenAt = localStorage.getItem(SEEN);
+
+  // ---------- Schermo principale ----------
+  const drawStatus = (alerts) => {
+    const bad = alerts.filter((a) => a.level === 'bad').length, warn = alerts.filter((a) => a.level === 'warn').length;
+    $('#vsDot').className = 'vs-dot ' + (bad ? 'bad' : warn ? 'warn' : '');
+    $('#vsTitle').textContent = bad ? 'Allarme: serve un intervento' : warn ? `${warn} ${warn === 1 ? 'cosa richiede' : 'cose richiedono'} attenzione` : 'Tutto regolare';
+    $('#alerts').innerHTML = alerts.map((a) => `<li class="${a.level}"><a href="${esc(a.href)}"><i></i><span>${esc(a.text)}</span><span class="go">Apri</span></a></li>`).join('')
+      || '<li class="dim" style="padding:12px 0">Niente da sistemare. Ottimo.</li>';
+  };
+  document.addEventListener('pl:signals', (e) => drawStatus(e.detail || []));
+
+  // ---------- Numeri ----------
+  let stats = {};
+  const drawGauges = () => {
+    const s = stats;
+    const g = (href, val, label, extra, extraTitle) => `<a class="gauge" href="${href}"><b>${n(val)}</b><span>${label}</span>${extra != null ? `<em class="${Number(extra) ? '' : 'zero'}" title="${extraTitle || ''}">+${n(extra)}</em>` : ''}</a>`;
+    $('#gauges').innerHTML =
+      g('utenti.html', s.utenti, 'Iscritti', s.nuovi_utenti_30gg, 'nuovi negli ultimi 30 giorni') +
+      g('cliniche.html', s.cliniche, 'Cliniche', s.nuove_cliniche_30gg, 'nuove negli ultimi 30 giorni') +
+      g('cliniche.html?fase=active', s.cliniche_attive_30gg, 'Cliniche attive (30 gg)') +
+      g('utenti.html?tipo=owner', s.proprietari, 'Proprietari su FurrFinder') +
+      g('diario.html?cat=visita', s.visite, 'Visite registrate') +
+      g('prenotazioni.html?ambito=online', s.prenotazioni_online, 'Prenotazioni online');
+  };
+
+  // ---------- Grafico ----------
+  let daily = [], weekly = [], period = 'days', series = 'users';
+  const NAME = { users: 'iscritti', clinics: 'cliniche', visits: 'visite', appointments: 'appuntamenti' };
+  const day = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
+  const short = (t) => t.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+  const drawChart = () => {
+    document.querySelectorAll('#segS [data-s]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.s === series));
+    document.querySelectorAll('#segP [data-p]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.p === period));
+    const src = period === 'days' ? daily : weekly;
+    const pts = src.map((r, i) => {
+      const t = day(period === 'days' ? r.day : r.week_start);
+      const tip = period === 'days' ? t.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }) : `Settimana dal ${short(t)}`;
+      return { v: Number(r[series] || 0), tip, lab: short(t) };
+    });
+    const box = $('#chart');
+    if (!pts.length) { box.innerHTML = '<p class="empty">Ancora nessun dato.</p>'; $('#chartSum').textContent = ''; return; }
+    const W = 800, H = 230, L = 34, R = 10, T = 14, B = 26;
+    const max = Math.max(1, ...pts.map((p) => p.v));
+    const step = Math.max(1, Math.ceil(max / 4));
+    const top = step * 4;
+    const x = (i) => L + (pts.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (pts.length - 1));
+    const y = (v) => T + (H - T - B) * (1 - v / top);
+    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+    const area = `${line} L${x(pts.length - 1).toFixed(1)},${y(0)} L${x(0).toFixed(1)},${y(0)} Z`;
+    const grid = [0, 1, 2, 3, 4].map((k) => `<line class="ax" x1="${L}" x2="${W - R}" y1="${y(k * step)}" y2="${y(k * step)}" stroke-dasharray="${k ? '2 5' : ''}"/><text class="lbl" x="${L - 8}" y="${y(k * step) + 4}" text-anchor="end">${k * step}</text>`).join('');
+    const every = period === 'days' ? 5 : 2;
+    const labs = pts.map((p, i) => ((pts.length - 1 - i) % every === 0) ? `<text class="lbl" x="${x(i)}" y="${H - 6}" text-anchor="middle">${i === pts.length - 1 ? (period === 'days' ? 'oggi' : 'questa sett.') : p.lab}</text>` : '').join('');
+    const hits = pts.map((p, i) => `<rect x="${x(i) - (W - L - R) / pts.length / 2}" y="${T}" width="${(W - L - R) / pts.length}" height="${H - T - B}" fill="transparent" data-i="${i}"/>`).join('');
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Grafico ${NAME[series]}">
+      <defs><linearGradient id="plGrad" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4fd8e8" stop-opacity=".35"/><stop offset="1" stop-color="#4fd8e8" stop-opacity="0"/></linearGradient></defs>
+      ${grid}<path class="area" d="${area}"/><path class="line" d="${line}" vector-effect="non-scaling-stroke"/>
+      <circle class="now" cx="${x(pts.length - 1)}" cy="${y(pts[pts.length - 1].v)}" r="4"/>${labs}${hits}</svg><div class="chart-tip" hidden></div>`;
+    const tip = box.querySelector('.chart-tip');
+    box.querySelector('svg').addEventListener('mousemove', (e) => {
+      const r = e.target.closest('rect[data-i]'); if (!r) { tip.hidden = true; return; }
+      const p = pts[Number(r.dataset.i)], bb = box.getBoundingClientRect(), sv = box.querySelector('svg').getBoundingClientRect();
+      tip.hidden = false; tip.innerHTML = `<b class="mono">${p.v}</b> ${NAME[series]} · ${esc(p.tip)}`;
+      tip.style.left = ((x(Number(r.dataset.i)) / W) * sv.width + sv.left - bb.left) + 'px';
+      tip.style.top = ((y(p.v) / H) * sv.height + sv.top - bb.top) + 'px';
+    });
+    box.querySelector('svg').addEventListener('mouseleave', () => { tip.hidden = true; });
+    const tot = pts.reduce((s, p) => s + p.v, 0);
+    $('#chartTitle').textContent = period === 'days' ? 'Crescita giorno per giorno' : 'Crescita settimana per settimana';
+    $('#chartSum').textContent = `Totale ${period === 'days' ? 'ultimi 30 giorni' : 'ultime 12 settimane'}: ${n(tot)} ${NAME[series]}.`;
+  };
+  document.querySelector('#segS').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { series = b.dataset.s; drawChart(); } });
+  document.querySelector('#segP').addEventListener('click', (e) => { const b = e.target.closest('[data-p]'); if (b) { period = b.dataset.p; drawChart(); } });
+
+  // ---------- Diario in diretta ----------
+  let lastId = 0, feedRows = [], liveOn = true;
+  const loadFeed = async () => {
+    try {
+      const rows = await PL.rpc('platform_audit_list', { p_limit: 30 }) || [];
+      const fresh = new Set(lastId ? rows.filter((r) => r.id > lastId).map((r) => r.id) : []);
+      if (rows.length) lastId = Math.max(lastId, rows[0].id);
+      feedRows = rows;
+      PL.renderLog($('#feed'), feedRows, { fresh });
+      $('#live').className = 'live';
+    } catch (e) {
+      $('#live').className = 'live off'; $('#live').lastChild.textContent = 'non attivo';
+      $('#feed').innerHTML = `<li class="note warn" style="display:block">${esc(e.missing ? 'Il diario di bordo si attiva con la patch 20: eseguila su Supabase.' : e.message)}</li>`;
+      liveOn = false;
+    }
+  };
+
+  // ---------- Percorso cliniche e nuovi arrivati ----------
+  const drawFunnel = (clinics, appStats) => {
+    const act = clinics.filter((c) => c.status !== 'suspended');
+    const k = (fn) => act.filter(fn).length;
+    const app = Object.fromEntries((appStats || []).map((r) => [r.clinic_id, r]));
+    const steps = [['Registrate', act.length, 'cliniche.html'], ['Con clienti', k((c) => Number(c.clients) > 0), 'cliniche.html?fase=started'],
+      ['Con visite', k((c) => Number(c.visits) > 0), 'cliniche.html?fase=active'], ['Stanza digitale', k((c) => (app[c.id]?.app_owners || 0) > 0), 'cliniche.html?fase=room']];
+    $('#funnel').innerHTML = steps.map(([l, v, h]) => `<div><a href="${h}" style="color:inherit;text-decoration:none"><b>${n(v)}</b><span>${l}</span></a></div>`).join('');
+  };
+  const drawNewest = async (users) => {
+    const codes = await PL.codes();
+    const rows = users.filter((u) => u.id !== PL.session.user.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 6);
+    $('#newest').innerHTML = rows.map((u) => {
+      const kind = u.is_staff ? '<span class="pill ok">Clinica</span>' : u.is_owner ? '<span class="pill info">Proprietario</span>' : '<span class="pill warn">A metà</span>';
+      return `<li><div class="grow"><a href="${PL.userHref(u.id, codes.users?.[u.id])}"><strong>${esc(u.full_name || u.email)}</strong></a> ${PL.chip(codes.users?.[u.id])}<span class="sub dim small" style="display:block">${esc(u.email || '')}</span></div><div style="text-align:right">${kind}<div class="small faint">${PL.ago(u.created_at)}</div></div></li>`;
+    }).join('') || '<li class="dim">Nessun iscritto.</li>';
+    return rows;
+  };
+
+  // ---------- Caricamento ----------
+  const load = async () => {
+    const [st, dy, wk, cl, ap, us] = await Promise.all([
+      PL.try('platform_stats', {}, {}), PL.try('platform_growth_daily', { p_days: 30 }, []), PL.try('platform_growth', { p_weeks: 12 }, []),
+      PL.try('platform_clinics', {}, []), PL.try('platform_clinic_app_stats', {}, []), PL.try('platform_users', { p_limit: 1000 }, [])
+    ]);
+    stats = st || {}; daily = dy || []; weekly = wk || [];
+    if (!daily.length) period = 'weeks';
+    drawGauges(); drawChart(); drawFunnel(cl || [], ap || []); await drawNewest(us || []);
+    const users = us || [], clinics = cl || [];
+    const nu = seenAt ? users.filter((u) => new Date(u.created_at) > new Date(seenAt)).length : 0;
+    const nc = seenAt ? clinics.filter((c) => new Date(c.created_at) > new Date(seenAt)).length : 0;
+    const news = [nu ? `${nu} ${nu === 1 ? 'nuovo iscritto' : 'nuovi iscritti'}` : '', nc ? `${nc} ${nc === 1 ? 'nuova clinica' : 'nuove cliniche'}` : ''].filter(Boolean);
+    $('#vsSub').textContent = `Aggiornato alle ${PL.hm(new Date())}.` + (seenAt ? (news.length ? ` Dalla tua ultima visita (${PL.dt(seenAt)}): ${news.join(', ')}.` : ' Nessuna novità dalla tua ultima visita.') : '');
+  };
+  await Promise.all([load(), loadFeed()]);
+  drawStatus(PL.alerts || []);
+  localStorage.setItem(SEEN, new Date().toISOString());
+  PL.$('#boot').remove(); PL.$('#page').hidden = false;
+  setInterval(() => { if (document.visibilityState === 'visible' && liveOn) loadFeed(); }, 15000);
+  setInterval(() => { if (document.visibilityState === 'visible') load(); }, 120000);
+})();
+</script>
+</body>
+</html>

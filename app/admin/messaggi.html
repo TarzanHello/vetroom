@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Messaggi · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="messaggi">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Messaggi</h1><p>Tutte le conversazioni della piattaforma. Nell'assistenza puoi rispondere; quelle fra clinica e proprietario le puoi leggere ma non scriverci, e ogni lettura resta registrata.</p></div>
+    <div class="actions"><button class="btn prim" id="new">Nuovo messaggio</button></div></div>
+  <section class="pn">
+    <div class="pn-h" style="margin-bottom:12px">
+      <div class="seg" role="group" aria-label="Filtro" id="filt"></div>
+      <div class="tools"><input type="search" class="search" id="q" placeholder="Clinica, nome o email"></div>
+    </div>
+    <div class="inbox" id="inbox">
+      <div class="convs" id="list"><p class="loader">Caricamento</p></div>
+      <div class="thread" id="thread">
+        <div class="thread-h"><button class="btn sm ghost only-m" id="back" style="margin-bottom:8px" hidden>Torna all'elenco</button><h2 id="tTitle">Scegli una conversazione</h2><p class="small dim" id="tNote" style="margin:4px 0 0"></p></div>
+        <div class="thread-b" id="tBody"></div>
+        <div class="thread-f" id="tFoot" hidden>
+          <label class="f" for="reply" style="margin-top:0">Rispondi come Assistenza Vetroom</label>
+          <textarea id="reply" rows="3"></textarea>
+          <div class="actions" style="margin-top:8px"><button class="btn prim" id="send">Invia</button><span class="small faint">Ctrl+Invio per inviare</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="pn">
+    <details><summary class="dim" style="cursor:pointer">Registro delle letture delle conversazioni fra clinica e proprietario</summary>
+      <div id="acc" style="margin-top:12px"></div></details>
+  </section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+  const qs = new URLSearchParams(location.search);
+  let filt = qs.get('f') || 'all', convs = [], cur = null;
+  const isAdm = (c) => c && String(c.kind).startsWith('admin');
+  const waiting = (c) => isAdm(c) && c.last_message_at && c.last_sender_role !== 'admin';
+  const title = (c) => c.kind === 'admin_user' ? 'Assistenza · ' + (c.owner_name || c.owner_email || 'utente')
+    : c.kind === 'admin_clinic' ? 'Assistenza · ' + (c.clinic_name || 'clinica')
+    : (c.clinic_name || 'Clinica') + ' ⇄ ' + (c.owner_name || 'proprietario');
+  const F = [['all', 'Tutte'], ['attesa', 'Da rispondere'], ['assist', 'Assistenza'], ['co', 'Clinica ⇄ proprietario']];
+  const pass = (c) => filt === 'all' || (filt === 'attesa' ? waiting(c) : filt === 'assist' ? isAdm(c) : c.kind === 'clinic_owner');
+  const drawList = () => {
+    $('#filt').innerHTML = F.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${filt === k}">${l}<span class="n">${convs.filter((c) => k === 'all' || (k === 'attesa' ? waiting(c) : k === 'assist' ? isAdm(c) : c.kind === 'clinic_owner')).length}</span></button>`).join('');
+    const rows = convs.filter(pass);
+    $('#list').innerHTML = rows.map((c) => `<button type="button" class="conv ${cur && cur.id === c.id ? 'on' : ''} ${waiting(c) ? 'wait' : ''}" data-c="${c.id}">
+      <span class="top"><strong>${esc(title(c))}</strong><time>${c.last_message_at ? PL.ago(c.last_message_at) : ''}</time></span>
+      <span class="pv">${c.last_sender_role ? esc({ owner: 'Proprietario', clinic: 'Clinica', admin: 'Tu' }[c.last_sender_role] || '') + ': ' : ''}${esc(c.last_preview || '—')}</span></button>`).join('')
+      || '<p class="empty">Nessuna conversazione.</p>';
+  };
+  const loadList = async () => {
+    try { convs = await PL.rpc('platform_conversations', { p_limit: 300, p_q: $('#q').value.trim() || null }) || []; }
+    catch (e) { $('#list').innerHTML = `<p class="note warn" style="margin:12px">${esc(e.message)}</p>`; return; }
+    drawList();
+  };
+  const open = async (c, quiet) => {
+    cur = c; drawList();
+    $('#inbox').classList.add('reading'); $('#back').hidden = false;
+    $('#tTitle').textContent = title(c);
+    $('#tNote').innerHTML = isAdm(c) ? (c.owner_email ? `<a href="mailto:${esc(c.owner_email)}">${esc(c.owner_email)}</a>` : 'Conversazione di assistenza')
+      : 'Puoi leggerla, non scriverci. Questa apertura resta nel registro delle letture.';
+    $('#tFoot').hidden = !isAdm(c);
+    if (!quiet) $('#tBody').innerHTML = '<p class="loader">Caricamento</p>';
+    try {
+      const msgs = (await PL.rpc('msg_thread', { p_conv: c.id, p_limit: 300 }) || []).slice().reverse();
+      $('#tBody').innerHTML = msgs.map((m) => `<div class="bub r-${m.sender_role} ${m.sender_role === 'admin' ? 'me' : ''}"><small>${esc(m.sender_name || '')}</small>${esc(m.body)}<time>${PL.dt(m.created_at)}</time></div>`).join('') || '<p class="dim">Nessun messaggio.</p>';
+      $('#tBody').scrollTop = $('#tBody').scrollHeight;
+    } catch (e) { $('#tBody').innerHTML = `<p class="note bad">${esc(e.message)}</p>`; }
+    if (!quiet) loadAcc();
+  };
+  const send = async () => {
+    const t = $('#reply').value.trim(); if (!t || !cur) return;
+    const r = await PL.run($('#send'), () => PL.rpc('msg_send', { p_conv: cur.id, p_body: t }), 'Risposta inviata.');
+    if (r !== undefined) { $('#reply').value = ''; await loadList(); open(convs.find((x) => x.id === cur.id) || cur, true); PL.refreshSignals(); }
+  };
+  const loadAcc = async () => {
+    const rows = await PL.try('platform_access_log', { p_limit: 100 }, []);
+    $('#acc').innerHTML = (rows || []).length ? `<div class="tw"><table class="t"><thead><tr><th>Quando</th><th>Chi</th><th>Conversazione</th></tr></thead><tbody>${rows.map((a) => `<tr><td class="nowrap">${PL.dt(a.at)}</td><td>${esc(a.admin_email || '')}</td><td>${esc([a.clinic_name, a.owner_email].filter(Boolean).join(' ⇄ ') || 'Assistenza')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="dim">Nessuna lettura registrata.</p>';
+  };
+
+  $('#list').addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) { const c = convs.find((x) => x.id === b.dataset.c); if (c) { open(c); history.replaceState(null, '', '?conv=' + c.id); } } });
+  $('#filt').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filt = b.dataset.f; drawList(); } });
+  let t; $('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadList, 300); });
+  $('#send').addEventListener('click', send);
+  $('#reply').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+  $('#back').addEventListener('click', () => { $('#inbox').classList.remove('reading'); $('#back').hidden = true; });
+  $('#new').addEventListener('click', async () => {
+    const v = await PL.ask({ title: 'A chi vuoi scrivere?', ok: 'Cerca', fields: [{ name: 'q', label: 'Codice (CL- / UT-), email o nome', required: true }] });
+    if (!v) return;
+    const res = (await PL.try('platform_find', { p_q: v.q.trim() }, []) || []).filter((x) => x.kind === 'clinic' || x.kind === 'user');
+    if (!res.length) { PL.toast('Nessun account trovato.', 'bad'); return; }
+    let pick = res[0];
+    if (res.length > 1) {
+      const w = await PL.ask({ title: 'Scegli il destinatario', ok: 'Continua', fields: [{ name: 'i', label: 'Destinatario', type: 'select', value: '0',
+        options: res.map((x, i) => [String(i), `${x.kind === 'clinic' ? 'Clinica' : 'Utente'} · ${x.name}${x.code ? ' · ' + x.code : ''}`]) }] });
+      if (!w) return; pick = res[Number(w.i)];
+    }
+    if (await PL.messageTo(pick.kind, pick.id, pick.name)) loadList();
+  });
+
+  await loadList();
+  const want = qs.get('conv');
+  if (want) { const c = convs.find((x) => x.id === want); if (c) open(c); }
+  setInterval(async () => {
+    if (document.visibilityState !== 'visible') return;
+    await loadList();
+    // si ricarica da sola solo l'assistenza: rileggere le altre lascerebbe una riga nel registro ogni volta
+    if (cur && isAdm(cur) && !$('#reply').value) open(convs.find((x) => x.id === cur.id) || cur, true);
+  }, 20000);
+})();
+</script>
+</body>
+</html>

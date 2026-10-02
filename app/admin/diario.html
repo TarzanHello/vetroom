@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Diario di bordo · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="diario">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Diario di bordo</h1><p>Chi ha fatto cosa, e quando. Registra le azioni (iscrizioni, visite, prenotazioni, messaggi, interventi dell'amministratore), mai il contenuto clinico o il testo dei messaggi. Si conserva per 13 mesi.</p></div>
+    <div class="actions"><span class="live" id="live"><i></i>in diretta</span><button class="btn sm ghost" id="pause">Pausa</button><button class="btn sm" id="csv">Esporta CSV</button></div></div>
+  <section class="pn">
+    <div class="pn-h" style="margin-bottom:8px"><div class="seg" role="group" aria-label="Chi" id="fWho"></div><div class="tools" id="focus"></div></div>
+    <div class="seg" role="group" aria-label="Categoria" id="fCat" style="margin-bottom:16px"></div>
+    <ul class="log wide" id="log"><li class="loader" style="display:block">Caricamento</li></ul>
+    <div class="actions" style="margin-top:12px"><button class="btn sm" id="more" hidden>Mostra le precedenti</button></div>
+  </section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc } = PL;
+  const qs = new URLSearchParams(location.search);
+  let who = qs.get('chi') || '', cat = qs.get('cat') || '', rows = [], paused = false;
+  const actor = qs.get('u'), clinic = qs.get('c');
+  const WHO = [['', 'Tutti'], ['user', 'Utenti'], ['admin', 'Amministratori'], ['system', 'Sistema']];
+  const CAT = [['', 'Tutto'], ['account', 'Account'], ['clinica', 'Cliniche'], ['team', 'Team'], ['anagrafica', 'Anagrafiche'], ['prenotazione', 'Prenotazioni'],
+    ['visita', 'Visite e referti'], ['documento', 'Documenti'], ['messaggio', 'Messaggi'], ['furrfinder', 'FurrFinder'], ['admin', 'Interventi admin']];
+  const segs = () => {
+    $('#fWho').innerHTML = WHO.map(([k, l]) => `<button type="button" data-w="${k}" aria-pressed="${who === k}">${l}</button>`).join('');
+    $('#fCat').innerHTML = CAT.map(([k, l]) => `<button type="button" data-c="${k}" aria-pressed="${cat === k}">${l}</button>`).join('');
+  };
+  const focusLabel = async () => {
+    if (!actor && !clinic) return;
+    let label = '';
+    if (actor) { const c = await PL.try('platform_user_card', { p_user: actor }, null); label = 'Solo: ' + (c?.user?.name || c?.user?.email || 'utente'); }
+    if (clinic) { const c = await PL.try('platform_clinic_card', { p_clinic: clinic }, null); label = 'Solo: ' + (c?.clinic?.name || 'clinica'); }
+    $('#focus').innerHTML = `<span class="pill info">${esc(label)}</span><a class="btn sm ghost" href="diario.html">Mostra tutto</a>`;
+  };
+  const args = (before) => ({ p_actor: actor || null, p_clinic: clinic || null, p_prefix: cat ? cat + '.' : null, p_kind: who || null, p_before: before || null, p_limit: 100 });
+  const load = async (more) => {
+    try {
+      const got = await PL.rpc('platform_audit_list', args(more && rows.length ? rows[rows.length - 1].id : null)) || [];
+      rows = more ? rows.concat(got) : got;
+      PL.renderLog($('#log'), rows, { wide: true });
+      $('#more').hidden = got.length < 100;
+    } catch (e) { $('#log').innerHTML = `<li class="note warn" style="display:block">${esc(e.missing ? 'Il diario di bordo si attiva con la patch 20: eseguila su Supabase.' : e.message)}</li>`; }
+    const u = new URL(location.href); who ? u.searchParams.set('chi', who) : u.searchParams.delete('chi'); cat ? u.searchParams.set('cat', cat) : u.searchParams.delete('cat');
+    history.replaceState(null, '', u); segs();
+  };
+  const poll = async () => {
+    if (paused || document.visibilityState !== 'visible' || !rows.length) return;
+    const got = await PL.try('platform_audit_list', args(null), null); if (!got) return;
+    const top = rows[0].id, fresh = got.filter((r) => r.id > top);
+    if (!fresh.length) return;
+    rows = fresh.concat(rows);
+    PL.renderLog($('#log'), rows, { wide: true, fresh: new Set(fresh.map((r) => r.id)) });
+  };
+  $('#fWho').addEventListener('click', (e) => { const b = e.target.closest('[data-w]'); if (b) { who = b.dataset.w; load(false); } });
+  $('#fCat').addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) { cat = b.dataset.c; load(false); } });
+  $('#more').addEventListener('click', () => load(true));
+  $('#pause').addEventListener('click', () => { paused = !paused; $('#pause').textContent = paused ? 'Riprendi' : 'Pausa'; $('#live').className = 'live' + (paused ? ' off' : ''); $('#live').lastChild.textContent = paused ? 'in pausa' : 'in diretta'; });
+  $('#csv').addEventListener('click', () => PL.csv(`vetroom-diario-${new Date().toISOString().slice(0, 10)}.csv`, rows, [
+    ['Quando', (r) => PL.dt(r.at)], ['Chi', (r) => r.actor_name || r.actor_email || 'Sistema'], ['Email', (r) => r.actor_email], ['Codice', (r) => r.actor_code], ['Tipo', (r) => r.actor_kind],
+    ['Azione', (r) => r.action], ['Riferimento', (r) => r.label], ['Clinica', (r) => r.clinic_name], ['Destinatario', (r) => r.target_name]]));
+  segs(); focusLabel(); load(false);
+  setInterval(poll, 15000);
+})();
+</script>
+</body>
+</html>

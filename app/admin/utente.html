@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Scheda utente · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="utenti">
+<main>
+  <p class="pl-crumb"><a href="utenti.html">Utenti</a> / scheda</p>
+  <p class="loader" id="boot">Apertura scheda</p>
+  <div id="page" hidden>
+    <section class="pn">
+      <div class="idcard">
+        <div class="avatar" id="av"></div>
+        <div class="meta"><h1 id="nm"></h1><div class="line" id="pills"></div><div class="line small dim" id="facts"></div></div>
+        <div class="actions" id="acts"></div>
+      </div>
+      <div id="banner" style="margin-top:14px"></div>
+    </section>
+
+    <nav class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-tab="profilo">Profilo</button>
+      <button role="tab" data-tab="accessi">Accessi e dispositivi <span class="n" id="nSess"></span></button>
+      <button role="tab" data-tab="attivita">Attività</button>
+      <button role="tab" data-tab="messaggi">Messaggi <span class="n" id="nConv"></span></button>
+      <button role="tab" data-tab="note">Note interne <span class="n" id="nNote"></span></button>
+    </nav>
+
+    <div data-panel="profilo">
+      <div class="cols">
+        <section class="pn c5"><div class="pn-h"><h2>Account</h2></div><dl class="kv" id="kv"></dl></section>
+        <section class="pn c7"><div class="pn-h"><h2>Cliniche</h2></div><ul class="list" id="clinics"></ul>
+          <div class="pn-h" style="margin:18px 0 10px"><h2>Animali</h2></div><ul class="list" id="pets"></ul></section>
+        <section class="pn c6"><div class="pn-h"><h2>Email inviate</h2></div><ul class="list" id="emails"></ul></section>
+        <section class="pn c6"><div class="pn-h"><h2>Errori che ha incontrato</h2></div><ul class="list" id="errs"></ul></section>
+      </div>
+    </div>
+    <div data-panel="accessi" hidden>
+      <section class="pn"><div class="pn-h"><h2>Dispositivi collegati adesso</h2><div class="tools"><button class="btn sm warn" data-act="logout">Scollega da tutti</button></div></div><div id="sess"></div></section>
+      <section class="pn"><div class="pn-h"><h2>Ultimi accessi</h2></div><div id="logins"></div></section>
+    </div>
+    <div data-panel="attivita" hidden><section class="pn"><div class="pn-h"><h2>Cosa ha fatto</h2><div class="tools"><a class="btn sm ghost" id="logAll">Apri nel diario</a></div></div>
+      <ul class="log wide" id="log"></ul><div class="actions" style="margin-top:12px"><button class="btn sm" id="more" hidden>Mostra le precedenti</button></div></section></div>
+    <div data-panel="messaggi" hidden><section class="pn"><div class="pn-h"><h2>Conversazioni</h2><div class="tools"><button class="btn sm prim" data-act="msg">Scrivi</button></div></div><ul class="list" id="convs"></ul></section></div>
+    <div data-panel="note" hidden><section class="pn"><div class="pn-h"><h2>Note interne</h2></div><div id="notes"></div></section></div>
+  </div>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+  const id = await PL.resolve('user');
+  if (!id) { $('#boot').outerHTML = '<div class="note bad">Utente non trovato: controlla il codice nell\'indirizzo.</div>'; return; }
+  let card, det = {}, code = '', codes = {};
+  const device = (ua) => {
+    ua = String(ua || '');
+    const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
+    const br = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+    return [br, os].filter(Boolean).join(' su ') || (ua ? ua.slice(0, 60) : 'Dispositivo sconosciuto');
+  };
+  const load = async () => {
+    try { card = await PL.rpc('platform_user_card', { p_user: id }); }
+    catch (e) { $('#boot').outerHTML = `<div class="note bad">${esc(e.message)}</div>`; return false; }
+    [det, codes] = await Promise.all([PL.try('platform_user_detail', { p_user: id }, {}), PL.codes()]);
+    det = det || {};
+    code = codes.users?.[id] || card.user?.code || '';
+    return true;
+  };
+  const draw = () => {
+    const u = card.user || {};
+    const name = u.name || u.email || 'Utente';
+    document.title = `${name} · Plancia Vetroom`;
+    $('#av').textContent = PL.initials(name);
+    $('#nm').textContent = name;
+    const susp = !!det.ban, trash = det.trash;
+    $('#pills').innerHTML = [PL.chip(code), u.is_staff ? '<span class="pill ok">Professionista</span>' : '', u.is_owner ? '<span class="pill info">Proprietario</span>' : '',
+      !u.is_staff && !u.is_owner ? '<span class="pill warn">Registrazione a metà</span>' : '', det.is_admin ? '<span class="pill vio">Amministratore piattaforma</span>' : '',
+      trash ? '<span class="pill bad">Nel cestino</span>' : susp ? '<span class="pill bad">Sospeso</span>' : '<span class="pill ok">Attivo</span>'].filter(Boolean).join(' ');
+    $('#facts').innerHTML = [`<a href="mailto:${esc(u.email || '')}">${esc(u.email || '')}</a>`, `Iscritto il ${PL.d(u.created_at)}`, `Ultimo accesso ${u.last_sign_in_at ? PL.ago(u.last_sign_in_at) : 'mai'}`].join(' · ');
+    const me = PL.session.user.id === id;
+    $('#acts').innerHTML = `<button class="btn prim" data-act="msg">Scrivi</button><button class="btn" data-act="mail">Email</button>
+      <button class="btn" data-act="export">Esporta dati</button>
+      ${me ? '' : trash ? '<button class="btn warn" data-act="restore">Ripristina</button>'
+        : `${susp ? '<button class="btn" data-act="unsuspend">Riattiva</button>' : '<button class="btn warn" data-act="suspend">Sospendi</button>'}<button class="btn danger" data-act="trash">Elimina…</button>`}`;
+    $('#banner').innerHTML = trash
+      ? `<div class="note bad" style="margin:0">Nel cestino dal ${PL.d(trash.deleted_at)}${trash.reason ? ` (“${esc(trash.reason)}”)` : ''}: non può entrare. Eliminabile definitivamente dal ${PL.d(trash.purge_after)} dal <a href="cestino.html">Cestino</a>.</div>`
+      : susp ? `<div class="note warn" style="margin:0">Account sospeso il ${PL.d(det.ban.at)}${det.ban.reason ? `: “${esc(det.ban.reason)}”` : ''}. Non può entrare finché non lo riattivi.</div>` : '';
+
+    $('#kv').innerHTML = [['Email', esc(u.email || '—')], ['Codice', code ? PL.chip(code) : '<span class="dim">non ancora assegnato</span>'],
+      ['Accesso con', esc((det.provider || 'google').replace(/^./, (c) => c.toUpperCase()))], ['Iscritto il', PL.dt(u.created_at)], ['Ultimo accesso', u.last_sign_in_at ? PL.dt(u.last_sign_in_at) : 'mai'],
+      ['Notifiche FurrFinder', u.push_devices ? n(u.push_devices) + (Number(u.push_devices) === 1 ? ' dispositivo' : ' dispositivi') : 'non attive'], ['ID tecnico', `<span class="mono small faint">${id}</span>`]]
+      .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    const mem = det.memberships || [];
+    $('#clinics').innerHTML = (mem.length ? mem.map((m) => `<li><div class="grow"><a href="${PL.clinicHref(m.clinic_id, codes.clinics?.[m.clinic_id])}"><strong>${esc(m.clinic_name)}</strong></a> ${PL.chip(codes.clinics?.[m.clinic_id])}
+        <span class="small dim" style="display:block">${esc(PL.ROLE[m.role] || m.role)} dal ${PL.d(m.since)}${m.is_code_owner ? ' · titolare' : ''}</span></div>
+        ${m.status === 'active' ? '<span class="pill ok">Attivo</span>' : '<span class="pill bad">Sospeso</span>'} ${m.clinic_status === 'suspended' ? '<span class="pill bad">Clinica sospesa</span>' : ''}</li>`)
+      : (card.clinics || []).map((c) => `<li><div class="grow"><strong>${esc(c.name)}</strong><span class="small dim" style="display:block">${esc(PL.ROLE[c.role] || c.role)}</span></div></li>`)).join('')
+      || '<li class="dim">Non fa parte di nessuna clinica.</li>';
+    $('#pets').innerHTML = (card.pets || []).map((p) => `<li><div class="grow"><strong>${esc(p.name)}</strong></div><span class="small dim">${n(p.clinics)} ${Number(p.clinics) === 1 ? 'clinica collegata' : 'cliniche collegate'}</span></li>`).join('') || '<li class="dim">Nessun animale.</li>';
+    $('#emails').innerHTML = (card.emails || []).map((e) => `<li><div class="grow">${esc(e.subject)}</div><span class="small dim nowrap">${PL.dt(e.at)} · ${esc(PL.mailStatus(e.status))}</span></li>`).join('') || '<li class="dim">Nessuna email inviata.</li>';
+    $('#errs').innerHTML = (card.errors || []).map((e) => `<li><div class="grow">${esc(e.message)}<span class="small faint" style="display:block">${esc(e.page || '')}${e.hits > 1 ? ' · ' + n(e.hits) + ' volte' : ''}</span></div><span class="small dim nowrap">${PL.ago(e.at)}</span></li>`).join('') || '<li class="dim">Nessun errore. 👍</li>';
+
+    const sess = det.sessions || [];
+    $('#nSess').textContent = sess.length || '';
+    $('#sess').innerHTML = sess.length ? `<div class="tw"><table class="t"><thead><tr><th>Dispositivo</th><th>Collegato dal</th><th>Ultimo uso</th><th class="hide-m">Indirizzo IP</th></tr></thead><tbody>${sess.map((s) => `
+      <tr><td><strong>${esc(device(s.user_agent))}</strong><span class="sub" title="${esc(s.user_agent || '')}">${esc((s.user_agent || '').slice(0, 70))}</span></td><td class="nowrap">${PL.dt(s.created_at)}</td><td class="nowrap">${PL.ago(s.seen_at)}</td><td class="hide-m mono small">${esc(s.ip || '—')}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="dim">Nessun dispositivo collegato in questo momento.</p>';
+    const LA = { login: 'Accesso', logout: 'Uscita', user_signedup: 'Iscrizione', user_deleted: 'Account eliminato' };
+    $('#logins').innerHTML = (det.logins || []).length ? `<div class="tw"><table class="t"><thead><tr><th>Quando</th><th>Evento</th><th>Con</th><th class="hide-m">Indirizzo IP</th></tr></thead><tbody>${det.logins.map((l) => `
+      <tr><td class="nowrap">${PL.dt(l.at)}</td><td>${esc(LA[l.action] || l.action)}</td><td>${esc(String(l.provider || '').replace(/^./, (c) => c.toUpperCase()))}</td><td class="hide-m mono small">${esc(l.ip || '—')}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="dim">Lo storico degli accessi non è disponibile: Supabase lo conserva solo se il registro di autenticazione è attivo. L\'ultimo accesso è comunque indicato nel profilo.</p>';
+
+    const convs = card.conversations || [];
+    $('#nConv').textContent = convs.length || '';
+    $('#convs').innerHTML = convs.map((cv) => `<li><div class="grow"><a href="messaggi.html?conv=${cv.id}"><strong>${esc(cv.with || 'Conversazione')}</strong></a><span class="small dim" style="display:block">${esc(cv.last_preview || '')}</span></div><span class="small dim nowrap">${n(cv.messages)} messaggi · ${PL.ago(cv.last_message_at)}</span></li>`).join('') || '<li class="dim">Nessuna conversazione.</li>';
+  };
+
+  let logMin = null, logLoaded = false;
+  const loadLog = async (more) => {
+    try {
+      const rows = await PL.rpc('platform_audit_list', { p_actor: id, p_limit: 60, p_before: more ? logMin : null }) || [];
+      if (rows.length) logMin = rows[rows.length - 1].id;
+      const el = $('#log');
+      if (more) { const tmp = document.createElement('ul'); PL.renderLog(tmp, rows, { wide: true }); el.insertAdjacentHTML('beforeend', tmp.innerHTML); }
+      else PL.renderLog(el, rows, { wide: true });
+      $('#more').hidden = rows.length < 60;
+    } catch (e) { $('#log').innerHTML = `<li class="note warn" style="display:block">${esc(e.message)}</li>`; }
+  };
+
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const u = card.user || {}, name = u.name || u.email, a = b.dataset.act;
+    const again = async () => { await load(); draw(); };
+    if (a === 'msg') { if (await PL.messageTo('user', id, name)) again(); }
+    if (a === 'mail') PL.compose({ to: u.email, subject: 'Vetroom', body: `Ciao ${String(u.name || '').split(' ')[0]},\n\n\n\nUn saluto,\nAureliano\nVetroom — www.vetroom.it`, name: u.name });
+    if (a === 'logout') {
+      if (await PL.ask({ title: `Scollegare ${name}?`, ok: 'Scollega', html: 'Esce da tutti i dispositivi: telefono, computer, app. Potrà rientrare subito con Google, a meno che tu non sospenda l\'account.' }) &&
+          await PL.run(b, () => PL.rpc('platform_user_logout', { p_user: id })) !== undefined) again();
+    }
+    if (a === 'suspend') {
+      const v = await PL.ask({ title: `Sospendere ${name}?`, ok: 'Sospendi', danger: true,
+        html: 'Non potrà più entrare, né in Vetroom né in FurrFinder, e viene scollegato subito da tutti i dispositivi. I suoi dati restano intatti.',
+        fields: [{ name: 'reason', label: 'Motivo (resta nel diario)', required: true }] });
+      if (v && await PL.run(b, () => PL.rpc('platform_user_suspend', { p_user: id, p_reason: v.reason })) !== undefined) again();
+    }
+    if (a === 'unsuspend') {
+      if (await PL.ask({ title: `Riattivare ${name}?`, ok: 'Riattiva' }) && await PL.run(b, () => PL.rpc('platform_user_unsuspend', { p_user: id })) !== undefined) again();
+    }
+    if (a === 'export') {
+      const data = await PL.run(b, () => PL.rpc('platform_user_export', { p_user: id }), 'File pronto: lo trovi tra i download.');
+      if (data) PL.download(`dati-${code || id}-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 2), 'application/json');
+    }
+    if (a === 'trash') {
+      const v = await PL.ask({ title: `Eliminare l'account di ${name}?`, danger: true, ok: 'Metti nel cestino', word: code || u.email,
+        html: 'Va nel <b>cestino per 30 giorni</b>: viene bloccato e scollegato subito, e puoi ripristinarlo in qualsiasi momento. Dopo i 30 giorni lo elimini definitivamente dal Cestino, con i suoi animali e i file caricati da lui.',
+        fields: [{ name: 'reason', label: 'Motivo (resta nel diario)', placeholder: 'Es. richiesta di cancellazione GDPR del 02/10' }] });
+      if (v && await PL.run(b, () => PL.rpc('platform_trash_user', { p_user: id, p_reason: v.reason, p_confirm: v.__word })) !== undefined) again();
+    }
+    if (a === 'restore') {
+      if (await PL.ask({ title: `Ripristinare ${name}?`, ok: 'Ripristina' }) && await PL.run(b, () => PL.rpc('platform_trash_restore', { p_id: det.trash.id })) !== undefined) again();
+    }
+  });
+
+  if (!(await load())) return;
+  draw();
+  $('#logAll').href = 'diario.html?u=' + id;
+  $('#more').addEventListener('click', () => loadLog(true));
+  PL.tabs($('#tabs'), (name) => { if (name === 'attivita' && !logLoaded) { logLoaded = true; loadLog(false); } });
+  PL.mountNotes($('#notes'), 'user', id).then((k) => { $('#nNote').textContent = k || ''; });
+  $('#boot').remove(); $('#page').hidden = false;
+})();
+</script>
+</body>
+</html>

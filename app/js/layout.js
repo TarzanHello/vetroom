@@ -28,7 +28,7 @@
       { k: 'impostazioni', l: 'Opzioni', h: 'clinica/impostazioni.html', i: 'options' },
       { k: 'team', l: 'Team', h: 'clinica/team.html', i: 'team', adminOnly: true },
       { k: 'guida', l: 'Guida', h: '/guida/', i: 'upload_document', blank: true },
-      { k: 'piattaforma', l: 'Pannello admin', h: 'piattaforma/', i: 'scan_code', platformOnly: true }
+      { k: 'piattaforma', l: 'Plancia admin', h: 'admin/', i: 'scan_code', platformOnly: true }
     ] }
   ];
 
@@ -80,7 +80,7 @@
       header.className = 'vr-header';
       header.innerHTML = `
         <div class="vr-header-left">
-          <a href="${VR.url(isPlat ? 'piattaforma/' : 'clinica/')}" class="vr-logo-link"><img class="vr-logo-img" src="${VR.url('img/logo-bianco.png')}" alt="Vetroom"></a>
+          <a href="${VR.url(isPlat ? 'admin/' : 'clinica/')}" class="vr-logo-link"><img class="vr-logo-img" src="${VR.url('img/logo-bianco.png')}" alt="Vetroom"></a>
           <div class="vr-logo-text">
             <div class="vr-logo-title" id="shellClinic">&nbsp;</div>
             <div class="vr-logo-sub" id="shellRole"></div>
@@ -191,6 +191,7 @@
       document.body.appendChild(bar);
     }
     if (VR.watchMessages) VR.watchMessages();
+    if (VR.checkNotices) VR.checkNotices();
   };
 
   const setLangLabels = () => document.querySelectorAll('[data-lang-toggle]').forEach((b) => { b.textContent = VR.lang === 'en' ? 'IT' : 'EN'; });
@@ -462,7 +463,7 @@
   const storeKey = (key) => `vetroom_intro_${key}_${(VR.ctx && VR.ctx.session && VR.ctx.session.user.id) || 'x'}`;
   VR.introSeen = (key) => localStorage.getItem(storeKey(key)) === 'no';
 
-  VR.intro = ({ key, slides, force = false }) => {
+  VR.intro = ({ key, slides, force = false, once = false }) => {
     if (!slides || !slides.length) return;
     if (!force && VR.introSeen(key)) return;
     let i = 0;
@@ -478,13 +479,13 @@
           <button class="btn btn-ghost" type="button" data-prev>Indietro</button>
           <button class="btn btn-primary" type="button" data-next>Avanti</button>
         </div>
-        <label class="intro-never"><input type="checkbox" ${VR.introSeen(key) ? 'checked' : ''}> Non mostrare più</label>
+        ${once ? '' : `<label class="intro-never"><input type="checkbox" ${VR.introSeen(key) ? 'checked' : ''}> Non mostrare più</label>`}
       </div>`;
     document.body.appendChild(dlg);
     const stage = dlg.querySelector('.intro-stage');
     const close = () => {
-      if (dlg.querySelector('.intro-never input').checked) localStorage.setItem(storeKey(key), 'no');
-      else localStorage.removeItem(storeKey(key));
+      const never = dlg.querySelector('.intro-never input');
+      if (never) { if (never.checked) localStorage.setItem(storeKey(key), 'no'); else localStorage.removeItem(storeKey(key)); }
       dlg.close(); dlg.remove();
     };
     const show = (k, dir = 1) => {
@@ -530,5 +531,51 @@
     show(0);
     dlg.showModal();
     dlg.querySelector('[data-next]').focus();
+  };
+})();
+
+// =============================================================
+//  AVVISI DELLA PIATTAFORMA (dalla Plancia): account sospeso,
+//  manutenzione in corso, annunci a colpo d'occhio
+// =============================================================
+(function () {
+  const VR = window.VR;
+  let done = false;
+  const wall = (title, html, buttons) => {
+    const d = document.createElement('dialog');
+    d.className = 'dlg';
+    d.innerHTML = `<h2 style="margin-top:0">${title}</h2><div>${html}</div><div class="actions-bar" style="margin-top:16px">${buttons}</div>`;
+    d.addEventListener('cancel', (e) => e.preventDefault());
+    document.body.appendChild(d);
+    d.showModal();
+    return d;
+  };
+  VR.checkNotices = async () => {
+    if (done || !VR.sb) return;
+    done = true;
+    let n;
+    try {
+      const { data, error } = await VR.sb.rpc('app_notices');
+      if (error || !data) return;
+      n = data;
+    } catch { return; }
+    if (n.blocked) {
+      wall('Account sospeso', '<p>Il tuo account non è al momento attivo. Per informazioni scrivi a <a href="mailto:info@vetroom.it">info@vetroom.it</a>.</p>',
+        '<button class="btn btn-primary" type="button" data-action="logout">Esci</button>');
+      setTimeout(() => VR.signOut(), 15000);
+      return;
+    }
+    if (n.maintenance && n.maintenance.on) {
+      const d = wall('Aggiornamento in corso', `<p>${VR.esc(n.maintenance.message || 'Torna fra qualche minuto.')}</p><p class="muted" style="font-size:14px">I tuoi dati sono al sicuro.</p>`,
+        '<button class="btn btn-primary" type="button" data-retry>Riprova</button><button class="btn btn-ghost" type="button" data-action="logout">Esci</button>');
+      d.querySelector('[data-retry]').addEventListener('click', () => location.reload());
+      return;
+    }
+    const a = (n.announcements || [])[0];
+    if (a && VR.intro) {
+      VR.intro({ key: 'annuncio_' + a.id, force: true, once: true, slides: [{ kicker: 'Novità', title: a.title, text: a.body, cta: 'Ho capito', icon: document.body.dataset.shell === 'owner' ? 'img/furrfinder-192.png' : 'img/vetroom-192.png' }] });
+      // un annuncio si mostra una volta sola
+      VR.sb.rpc('app_notice_seen', { p_id: a.id }).then(() => {}, () => {});
+    }
   };
 })();

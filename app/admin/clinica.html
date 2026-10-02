@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Scheda clinica · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="cliniche">
+<main>
+  <p class="pl-crumb"><a href="cliniche.html">Cliniche</a> / scheda</p>
+  <p class="loader" id="boot">Apertura scheda</p>
+  <div id="page" hidden>
+    <section class="pn">
+      <div class="idcard">
+        <div class="avatar" id="av"></div>
+        <div class="meta">
+          <h1 id="nm"></h1>
+          <div class="line" id="pills"></div>
+          <div class="line small dim" id="facts"></div>
+        </div>
+        <div class="actions" id="acts"></div>
+      </div>
+      <div id="banner" style="margin-top:14px"></div>
+    </section>
+
+    <nav class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-tab="panoramica">Panoramica</button>
+      <button role="tab" data-tab="team">Team <span class="n" id="nTeam"></span></button>
+      <button role="tab" data-tab="attivita">Attività</button>
+      <button role="tab" data-tab="prenotazioni">Prenotazioni</button>
+      <button role="tab" data-tab="messaggi">Messaggi <span class="n" id="nConv"></span></button>
+      <button role="tab" data-tab="note">Note interne <span class="n" id="nNote"></span></button>
+    </nav>
+
+    <div data-panel="panoramica">
+      <div class="cols">
+        <section class="pn c7"><div class="pn-h"><h2>Numeri</h2></div><div class="nums" id="nums"></div></section>
+        <section class="pn c5"><div class="pn-h"><h2>Dati</h2></div><dl class="kv" id="kv"></dl></section>
+        <section class="pn c6"><div class="pn-h"><h2>Email inviate</h2></div><ul class="list" id="emails"></ul></section>
+        <section class="pn c6"><div class="pn-h"><h2>Errori recenti</h2></div><ul class="list" id="errs"></ul></section>
+      </div>
+    </div>
+    <div data-panel="team" hidden><section class="pn"><div class="pn-h"><h2>Team della clinica</h2></div>
+      <p class="small dim" style="margin-top:-6px">Ogni professionista ha il suo codice personale, che resta suo anche se cambia studio. La clinica è identificata dal codice del <b>titolare</b>.</p>
+      <div id="team"></div></section></div>
+    <div data-panel="attivita" hidden><section class="pn"><div class="pn-h"><h2>Attività della clinica</h2><div class="tools"><a class="btn sm ghost" id="logAll">Apri nel diario</a></div></div>
+      <ul class="log wide" id="log"></ul><div class="actions" style="margin-top:12px"><button class="btn sm" id="more" hidden>Mostra le precedenti</button></div></section></div>
+    <div data-panel="prenotazioni" hidden><section class="pn"><div class="pn-h"><h2>Prenotazioni</h2><div class="tools"><a class="btn sm ghost" id="bkAll">Cerca fra tutte</a></div></div><div id="bk"></div></section></div>
+    <div data-panel="messaggi" hidden><section class="pn"><div class="pn-h"><h2>Conversazioni</h2><div class="tools"><button class="btn sm prim" data-act="msg">Scrivi alla clinica</button></div></div><ul class="list" id="convs"></ul></section></div>
+    <div data-panel="note" hidden><section class="pn"><div class="pn-h"><h2>Note interne</h2></div><div id="notes"></div></section></div>
+  </div>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+  const id = await PL.resolve('clinic');
+  if (!id) { $('#boot').outerHTML = '<div class="note bad">Clinica non trovata: controlla il codice nell\'indirizzo.</div>'; return; }
+  let card, members = [], trash = null, code = '';
+
+  const load = async () => {
+    try { card = await PL.rpc('platform_clinic_card', { p_clinic: id }); }
+    catch (e) { $('#boot').outerHTML = `<div class="note bad">${esc(e.message)}</div>`; return false; }
+    const [m, tr, codes] = await Promise.all([PL.try('platform_clinic_members', { p_clinic: id }, null), PL.try('platform_trash_list', {}, []), PL.codes()]);
+    members = m || (card.team || []).map((t) => ({ ...t, user_id: null }));
+    trash = (tr || []).find((t) => t.kind === 'clinic' && t.target_id === id && t.status === 'waiting') || null;
+    code = codes.clinics?.[id] || card.clinic?.public_code || '';
+    return true;
+  };
+
+  const draw = () => {
+    const c = card.clinic || {}, num = card.numbers || {};
+    document.title = `${c.name || 'Clinica'} · Plancia Vetroom`;
+    $('#av').textContent = PL.initials(c.name);
+    $('#nm').textContent = c.name || 'Clinica';
+    const suspended = c.status === 'suspended';
+    $('#pills').innerHTML = [PL.chip(code),
+      trash ? '<span class="pill bad">Nel cestino</span>' : suspended ? '<span class="pill bad">Sospesa</span>' : '<span class="pill ok">Operativa</span>',
+      Number(num.clients) === 0 ? '<span class="pill">Vuota</span>' : Number(num.visits) === 0 ? '<span class="pill info">Avviata</span>' : Number(num.clients_app) ? '<span class="pill vio">Stanza digitale</span>' : '<span class="pill ok">Attiva</span>'].join(' ');
+    const owner = members.find((m) => m.is_code_owner) || members.find((m) => m.role === 'admin');
+    $('#facts').innerHTML = [owner ? `Titolare: <a href="${PL.userHref(owner.user_id, owner.code)}">${esc(owner.name || owner.email)}</a>` : '',
+      `Iscritta il ${PL.d(c.created_at)}`, `Ultima attività ${PL.ago(card.last_activity)}`].filter(Boolean).join(' · ');
+    $('#acts').innerHTML = `<button class="btn prim" data-act="msg">Scrivi</button>
+      ${owner?.email ? '<button class="btn" data-act="mail">Email</button>' : ''}
+      ${trash ? '<button class="btn warn" data-act="restore">Ripristina</button>'
+        : suspended ? '<button class="btn" data-act="resume">Riattiva</button><button class="btn danger" data-act="trash">Elimina…</button>'
+        : '<button class="btn warn" data-act="suspend">Sospendi</button><button class="btn danger" data-act="trash">Elimina…</button>'}`;
+    $('#banner').innerHTML = trash
+      ? `<div class="note bad" style="margin:0">Nel cestino dal ${PL.d(trash.deleted_at)}${trash.reason ? ` (“${esc(trash.reason)}”)` : ''}. La clinica è sospesa. ${trash.due ? 'Il periodo di attesa è finito: puoi eliminarla definitivamente dal <a href="cestino.html">Cestino</a>.' : `Eliminabile definitivamente dal ${PL.d(trash.purge_after)}.`}</div>`
+      : suspended ? `<div class="note warn" style="margin:0">Sospesa${c.suspended_reason ? `: “${esc(c.suspended_reason)}”` : ''}. I membri non vedono i dati finché non la riattivi.</div>` : '';
+
+    const L = { clients: 'proprietari', clients_app: 'su FurrFinder', pets: 'animali', visits: 'visite', visits_final: 'referti definitivi', appointments: 'appuntamenti', reminders_open: 'richiami aperti', invites_open: 'inviti aperti', invites_used: 'inviti usati' };
+    $('#nums').innerHTML = Object.entries(num).map(([k, v]) => `<div><b>${n(v)}</b><span>${esc(L[k] || k)}</span></div>`).join('');
+    const kv = [['Codice dello studio', code ? PL.chip(code) : '—'], ['Codice per i clienti', c.affiliation_code ? `<span class="mono">${esc(c.affiliation_code)}</span>` : '—'],
+      ['Indirizzo', esc(c.header_address || '—')], ['Telefono', esc(c.header_phone || '—')], ['Email', esc(c.header_email || '—')],
+      ['Termini e accordo GDPR', c.terms_accepted_at ? 'accettati il ' + PL.dt(c.terms_accepted_at) : '<span class="pill warn">non ancora</span>'], ['ID tecnico', `<span class="mono small faint">${id}</span>`]];
+    $('#kv').innerHTML = kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    $('#emails').innerHTML = (card.emails || []).map((e) => `<li><div class="grow">${esc(e.subject)}</div><span class="small dim nowrap">${PL.dt(e.at)} · ${esc(PL.mailStatus(e.status))}</span></li>`).join('') || '<li class="dim">Nessuna email inviata.</li>';
+    $('#errs').innerHTML = (card.errors || []).map((e) => `<li><div class="grow">${esc(e.message)}<span class="small faint" style="display:block">${esc(e.page || '')}${e.hits > 1 ? ' · ' + n(e.hits) + ' volte' : ''}</span></div><span class="small dim nowrap">${PL.ago(e.at)}</span></li>`).join('') || '<li class="dim">Nessun errore. 👍</li>';
+
+    // Team
+    $('#nTeam').textContent = members.length || '';
+    $('#team').innerHTML = `<div class="tw"><table class="t"><thead><tr><th>Persona</th><th>Ruolo</th><th>Stato</th><th class="hide-m">Ultimo accesso</th><th></th></tr></thead><tbody>${members.map((m) => `
+      <tr><td><a href="${m.user_id ? PL.userHref(m.user_id, m.code) : '#'}"><strong>${esc(m.name || m.email)}</strong></a> ${PL.chip(m.code)} ${m.is_code_owner ? '<span class="pill vio">Titolare</span>' : ''}<span class="sub">${esc(m.email || '')}</span></td>
+        <td>${esc(PL.ROLE[m.role] || m.role)}</td>
+        <td>${m.status === 'active' ? '<span class="pill ok">Attivo</span>' : '<span class="pill bad">Sospeso</span>'}</td>
+        <td class="hide-m nowrap">${PL.ago(m.last_sign_in_at)}</td>
+        <td><div class="actions" style="justify-content:flex-end">${m.user_id ? `<button class="btn sm" data-m="edit" data-u="${m.user_id}">Ruolo</button>
+          ${m.role === 'admin' && !m.is_code_owner && m.status === 'active' ? `<button class="btn sm ghost" data-m="owner" data-u="${m.user_id}">Rendi titolare</button>` : ''}
+          <button class="btn sm danger" data-m="remove" data-u="${m.user_id}">Togli</button>` : ''}</div></td></tr>`).join('')
+      || '<tr><td colspan="5" class="empty">Nessun membro.</td></tr>'}</tbody></table></div>`;
+
+    // Conversazioni
+    const convs = card.conversations || [];
+    $('#nConv').textContent = convs.length || '';
+    $('#convs').innerHTML = convs.map((cv) => `<li><div class="grow"><a href="messaggi.html?conv=${cv.id}"><strong>${esc(cv.with || 'Conversazione')}</strong></a><span class="small dim" style="display:block">${esc(cv.last_preview || '')}</span></div><span class="small dim nowrap">${n(cv.messages)} messaggi · ${PL.ago(cv.last_message_at)}</span></li>`).join('') || '<li class="dim">Nessuna conversazione.</li>';
+  };
+
+  // ---------- Attività e prenotazioni (caricate quando apri la linguetta) ----------
+  let logMin = null, logLoaded = false, bkLoaded = false;
+  const loadLog = async (more) => {
+    try {
+      const rows = await PL.rpc('platform_audit_list', { p_clinic: id, p_limit: 60, p_before: more ? logMin : null }) || [];
+      if (rows.length) logMin = rows[rows.length - 1].id;
+      const el = $('#log');
+      if (more) { const tmp = document.createElement('ul'); PL.renderLog(tmp, rows, { wide: true }); el.insertAdjacentHTML('beforeend', tmp.innerHTML); }
+      else PL.renderLog(el, rows, { wide: true });
+      $('#more').hidden = rows.length < 60;
+    } catch (e) { $('#log').innerHTML = `<li class="note warn" style="display:block">${esc(e.message)}</li>`; }
+  };
+  const loadBk = async () => {
+    try {
+      const rows = await PL.rpc('platform_bookings', { p_clinic: id, p_limit: 200 }) || [];
+      PL.table({ el: $('#bk'), sortKey: 'when', sortDir: -1, empty: 'Nessuna prenotazione.', cols: [
+        { k: 'ref', l: 'Numero', render: (r) => `<span class="mono">${esc(r.ref_code || '—')}</span>` },
+        { k: 'when', l: 'Quando', sort: (r) => new Date(r.starts_at).getTime(), render: (r) => `<span class="nowrap">${PL.dt(r.starts_at)}</span>` },
+        { k: 'who', l: 'Animale e proprietario', render: (r) => `${esc(r.pet_name || '—')}<span class="sub">${esc(r.owner_name || '')}</span>` },
+        { k: 'st', l: 'Stato', render: (r) => statusPill(r.status) + (r.online ? ' <span class="pill info">online</span>' : '') }], rows });
+    } catch (e) { $('#bk').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
+  };
+  const statusPill = (s) => ({ requested: '<span class="pill warn">Richiesta</span>', confirmed: '<span class="pill ok">Confermata</span>', cancelled: '<span class="pill">Annullata</span>', done: '<span class="pill info">Svolta</span>', no_show: '<span class="pill bad">Assente</span>' }[s] || esc(s));
+
+  // ---------- Azioni ----------
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]');
+    const c = card?.clinic || {};
+    if (b) {
+      const a = b.dataset.act;
+      if (a === 'msg') { if (await PL.messageTo('clinic', id, c.name)) { await load(); draw(); } }
+      if (a === 'mail') { const o = members.find((m) => m.is_code_owner) || members.find((m) => m.role === 'admin'); PL.compose({ to: o?.email, subject: 'Vetroom', body: 'Buongiorno,\n\n\n\nUn saluto,\nAureliano\nVetroom — www.vetroom.it', name: c.name }); }
+      if (a === 'suspend') {
+        const v = await PL.ask({ title: `Sospendere ${c.name}?`, ok: 'Sospendi', danger: true,
+          html: 'I membri non potranno più vedere i dati finché non la riattivi. I dati restano intatti.',
+          fields: [{ name: 'reason', label: 'Motivo (lo vede la clinica)', required: true, placeholder: 'Es. verifica in corso sull\'account' }] });
+        if (v && await PL.run(b, () => PL.rpc('platform_set_clinic_status', { p_clinic: id, p_status: 'suspended', p_reason: v.reason }), 'Clinica sospesa.') !== undefined) { await load(); draw(); }
+      }
+      if (a === 'resume') {
+        if (await PL.ask({ title: `Riattivare ${c.name}?`, ok: 'Riattiva' }) && await PL.run(b, () => PL.rpc('platform_set_clinic_status', { p_clinic: id, p_status: 'active', p_reason: null }), 'Clinica riattivata.') !== undefined) { await load(); draw(); }
+      }
+      if (a === 'trash') {
+        const v = await PL.ask({ title: `Eliminare ${c.name}?`, danger: true, ok: 'Metti nel cestino', word: code || c.name,
+          html: 'Va nel <b>cestino per 30 giorni</b>: viene sospesa subito e puoi ripristinarla in qualsiasi momento. Dopo i 30 giorni la elimini definitivamente dal Cestino, con tutti i suoi dati (clienti, animali, visite, referti, file).',
+          fields: [{ name: 'reason', label: 'Motivo (resta nel diario)', placeholder: 'Es. richiesta del titolare via email del 02/10' }] });
+        if (v && await PL.run(b, () => PL.rpc('platform_trash_clinic', { p_clinic: id, p_reason: v.reason, p_confirm: v.__word })) !== undefined) { await load(); draw(); }
+      }
+      if (a === 'restore') {
+        if (await PL.ask({ title: `Ripristinare ${c.name}?`, ok: 'Ripristina', html: 'Torna com\'era prima di finire nel cestino.' }) &&
+            await PL.run(b, () => PL.rpc('platform_trash_restore', { p_id: trash.id })) !== undefined) { await load(); draw(); }
+      }
+      return;
+    }
+    const m = e.target.closest('[data-m]'); if (!m) return;
+    const mem = members.find((x) => x.user_id === m.dataset.u); if (!mem) return;
+    const who = mem.name || mem.email;
+    if (m.dataset.m === 'edit') {
+      const v = await PL.ask({ title: `Ruolo di ${who}`, ok: 'Salva',
+        fields: [{ name: 'role', label: 'Ruolo', type: 'select', value: mem.role, options: [['admin', 'Amministratore'], ['vet', 'Veterinario'], ['secretary', 'Segreteria']] },
+                 { name: 'status', label: 'Stato nella clinica', type: 'select', value: mem.status, options: [['active', 'Attivo'], ['suspended', 'Sospeso (non vede i dati della clinica)']] }] });
+      if (v && await PL.run(m, () => PL.rpc('platform_member_set', { p_clinic: id, p_user: mem.user_id, p_role: v.role, p_status: v.status }), 'Ruolo aggiornato.') !== undefined) { await load(); draw(); }
+    }
+    if (m.dataset.m === 'owner') {
+      if (await PL.ask({ title: `Rendere ${who} titolare?`, ok: 'Conferma',
+        html: `Da ora la clinica sarà identificata dal codice di ${esc(who)} (${esc(mem.code || 'assegnato adesso')}). Serve quando lo studio cambia titolare. Il codice del titolare precedente resta suo.` }) &&
+          await PL.run(m, () => PL.rpc('platform_set_clinic_code_owner', { p_clinic: id, p_user: mem.user_id })) !== undefined) { location.reload(); }
+    }
+    if (m.dataset.m === 'remove') {
+      if (await PL.ask({ title: `Togliere ${who} dalla clinica?`, ok: 'Togli', danger: true, html: 'Smette di vedere i dati della clinica. Il suo account e il suo codice restano.' }) &&
+          await PL.run(m, () => PL.rpc('platform_member_remove', { p_clinic: id, p_user: mem.user_id })) !== undefined) { await load(); draw(); }
+    }
+  });
+
+  if (!(await load())) return;
+  draw();
+  $('#logAll').href = 'diario.html?c=' + id;
+  $('#bkAll').href = 'prenotazioni.html';
+  $('#more').addEventListener('click', () => loadLog(true));
+  PL.tabs($('#tabs'), (name) => {
+    if (name === 'attivita' && !logLoaded) { logLoaded = true; loadLog(false); }
+    if (name === 'prenotazioni' && !bkLoaded) { bkLoaded = true; loadBk(); }
+  });
+  PL.mountNotes($('#notes'), 'clinic', id).then((k) => { $('#nNote').textContent = k || ''; });
+  $('#boot').remove(); $('#page').hidden = false;
+})();
+</script>
+</body>
+</html>

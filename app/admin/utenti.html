@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Utenti · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="utenti">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Utenti</h1><p>Tutti gli account: professionisti, proprietari e chi si è fermato a metà registrazione. Clicca una riga per la scheda completa.</p></div>
+    <div class="actions"><button class="btn" type="button" id="csv">Esporta CSV</button></div></div>
+  <section class="pn">
+    <div class="pn-h" style="margin-bottom:10px">
+      <div class="seg" role="group" aria-label="Tipo di account" id="fTipo"></div>
+      <div class="tools"><input type="search" class="search" id="q" placeholder="Nome, email, codice o clinica"></div>
+    </div>
+    <div id="tbl"><p class="loader">Caricamento</p></div>
+  </section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+  let tipo = new URLSearchParams(location.search).get('tipo') || 'all';
+  const [users, codes, flags] = await Promise.all([PL.try('platform_users', { p_limit: 1000 }, []), PL.codes(), PL.try('platform_user_flags', {}, [])]);
+  const fl = Object.fromEntries((flags || []).map((f) => [f.user_id, f]));
+  const rows = (users || []).map((u) => ({ ...u, code: codes.users?.[u.id] || '', f: fl[u.id] || {},
+    kind: u.is_staff ? 'clinic' : u.is_owner ? 'owner' : 'half' }));
+  const match = (r, k) => k === 'all' || (k === 'suspended' ? r.f.suspended : k === 'trash' ? r.f.trashed : k === 'admin' ? r.f.is_admin : k === 'owner' ? r.is_owner : r.kind === k);
+  const TIPI = [['all', 'Tutti'], ['clinic', 'Professionisti'], ['owner', 'Proprietari'], ['half', 'A metà'], ['suspended', 'Sospesi'], ['trash', 'Nel cestino'], ['admin', 'Amministratori']];
+  const segs = () => { $('#fTipo').innerHTML = TIPI.map(([k, l]) => `<button type="button" data-t="${k}" aria-pressed="${tipo === k}">${l}<span class="n">${rows.filter((r) => match(r, k)).length}</span></button>`).join(''); };
+  const how = (u) => {
+    const out = [];
+    if (u.is_staff) out.push((Array.isArray(u.clinics) && u.clinics.length) ? u.clinics.map((c) => `<span class="pill ok">${esc(PL.ROLE[c.role] || c.role)}</span> <a href="${PL.clinicHref(c.id, codes.clinics?.[c.id])}">${esc(c.name)}</a>`).join('<br>') : '<span class="pill">Professionista</span> <span class="dim">senza clinica attiva</span>');
+    if (u.is_owner) out.push(`<span class="pill info">Proprietario</span> ${n(u.pets)} ${Number(u.pets) === 1 ? 'animale' : 'animali'}${u.push_devices ? ' · 🔔' : ''}`);
+    if (!out.length) out.push('<span class="pill warn">A metà</span> <span class="dim small">non ha scelto clinica o proprietario</span>');
+    return out.join('<br>');
+  };
+  const T = PL.table({
+    el: $('#tbl'), sortKey: 'created', sortDir: -1, pageSize: 30,
+    onRow: (r) => PL.userHref(r.id, r.code),
+    rowClass: (r) => (r.f.suspended || r.f.trashed) ? 'is-bad' : '',
+    empty: 'Nessun utente con questi criteri.',
+    cols: [
+      { k: 'name', l: 'Persona', sort: (r) => (r.full_name || r.email || '').toLowerCase(), render: (r) => `<a href="${PL.userHref(r.id, r.code)}"><strong>${esc(r.full_name || '—')}</strong></a> ${PL.chip(r.code)}${r.f.is_admin ? ' <span class="pill vio">Admin</span>' : ''}<span class="sub">${esc(r.email || '')}</span>` },
+      { k: 'how', l: 'Come usa Vetroom', render: how },
+      { k: 'created', l: 'Iscritto', hideM: true, sort: (r) => new Date(r.created_at).getTime(), render: (r) => `<span class="nowrap">${PL.d(r.created_at)}</span>` },
+      { k: 'last', l: 'Ultimo accesso', sort: (r) => r.last_sign_in_at ? new Date(r.last_sign_in_at).getTime() : null, render: (r) => `<span class="nowrap">${PL.ago(r.last_sign_in_at)}</span>` },
+      { k: 'st', l: 'Stato', sort: (r) => (r.f.trashed ? 2 : r.f.suspended ? 1 : 0), render: (r) => r.f.trashed ? '<span class="pill bad">Nel cestino</span>' : r.f.suspended ? '<span class="pill bad">Sospeso</span>' : '<span class="pill ok">Attivo</span>' }
+    ]
+  });
+  const apply = () => {
+    const t = $('#q').value.toLowerCase().trim();
+    T.set(rows.filter((r) => match(r, tipo) && (!t || [r.full_name, r.email, r.code, ...(Array.isArray(r.clinics) ? r.clinics.map((c) => c.name) : [])].join(' ').toLowerCase().includes(t))));
+    segs();
+    const u = new URL(location.href); u.searchParams.set('tipo', tipo); history.replaceState(null, '', u);
+  };
+  $('#fTipo').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) { tipo = b.dataset.t; apply(); } });
+  $('#q').addEventListener('input', apply);
+  $('#csv').addEventListener('click', () => PL.csv(`vetroom-utenti-${new Date().toISOString().slice(0, 10)}.csv`, T.rows, [
+    ['Codice', (r) => r.code], ['Nome', (r) => r.full_name], ['Email', (r) => r.email],
+    ['Tipo', (r) => [r.is_staff ? 'Professionista' : '', r.is_owner ? 'Proprietario' : ''].filter(Boolean).join(' + ') || 'A metà'],
+    ['Cliniche', (r) => (Array.isArray(r.clinics) ? r.clinics.map((c) => c.name + ' (' + (PL.ROLE[c.role] || c.role) + ')').join(', ') : '')],
+    ['Animali', (r) => r.pets], ['Iscritto il', (r) => PL.dt(r.created_at)], ['Ultimo accesso', (r) => PL.dt(r.last_sign_in_at)],
+    ['Stato', (r) => r.f.trashed ? 'Nel cestino' : r.f.suspended ? 'Sospeso' : 'Attivo']]));
+  apply();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Cestino · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="cestino">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Cestino</h1><p>Cliniche e account eliminati restano qui 30 giorni, bloccati ma recuperabili. Poi li elimini definitivamente, file compresi. Per una richiesta di cancellazione GDPR puoi eliminare subito.</p></div>
+    <div class="actions"><button class="btn danger" id="purgeDue" hidden>Elimina tutti gli scaduti</button><label class="check small"><input type="checkbox" id="hist"> Mostra lo storico</label></div></div>
+  <section class="pn"><div id="tbl"><p class="loader">Caricamento</p></div></section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc } = PL;
+  let rows = [];
+  const left = (t) => { const d = Math.ceil((new Date(t) - new Date()) / 864e5); return d <= 0 ? 'scaduto' : d === 1 ? 'domani' : `fra ${d} giorni`; };
+  const T = PL.table({ el: $('#tbl'), pageSize: 50, empty: 'Il cestino è vuoto.', rowClass: (r) => r.due ? 'is-bad' : '', cols: [
+    { k: 'what', l: 'Cosa', render: (r) => `<span class="pill ${r.kind === 'clinic' ? 'ok' : 'info'}">${r.kind === 'clinic' ? 'Clinica' : 'Account'}</span> ${r.status === 'waiting'
+        ? `<a href="${r.kind === 'clinic' ? PL.clinicHref(r.target_id) : PL.userHref(r.target_id)}"><strong>${esc(r.label || '—')}</strong></a>` : `<strong>${esc(r.label || '—')}</strong>`} ${PL.chip(r.code)}
+        ${r.reason ? `<span class="sub">“${esc(r.reason)}”</span>` : ''}${r.last_error ? `<span class="sub" style="color:var(--red)">Ultimo tentativo non riuscito: ${esc(r.last_error)}</span>` : ''}` },
+    { k: 'when', l: 'Nel cestino dal', sort: (r) => new Date(r.deleted_at).getTime(), render: (r) => `<span class="nowrap">${PL.d(r.deleted_at)}</span><span class="sub">${esc(r.deleted_by_email || '')}</span>` },
+    { k: 'purge', l: 'Eliminazione', sort: (r) => new Date(r.purge_after).getTime(), render: (r) => r.status === 'waiting'
+        ? `<span class="pill ${r.due ? 'bad' : 'warn'}">${left(r.purge_after)}</span><span class="sub">${PL.d(r.purge_after)}</span>`
+        : r.status === 'purged' ? `<span class="pill">Eliminato</span><span class="sub">${PL.d(r.closed_at)}</span>` : `<span class="pill ok">Ripristinato</span><span class="sub">${PL.d(r.closed_at)}</span>` },
+    { k: 'act', l: '', render: (r) => r.status !== 'waiting' ? '' : `<div class="actions" style="justify-content:flex-end"><button class="btn sm" data-restore="${r.id}">Ripristina</button>
+        <button class="btn sm danger" data-purge="${r.id}">${r.due ? 'Elimina definitivamente' : 'Elimina subito'}</button></div>` }] });
+  const load = async () => {
+    try { rows = await PL.rpc('platform_trash_list', { p_all: $('#hist').checked }) || []; }
+    catch (e) { $('#tbl').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; return; }
+    T.set(rows);
+    const due = rows.filter((r) => r.due).length;
+    $('#purgeDue').hidden = !due; $('#purgeDue').textContent = `Elimina tutti gli scaduti (${due})`;
+  };
+
+  // Eliminazione definitiva: prima i file (come fa l'app), poi i dati
+  const purge = async (r) => {
+    const files = await PL.rpc('platform_trash_files', { p_id: r.id });
+    let removed = 0, failed = 0;
+    for (const [bucket, list] of Object.entries(files || {})) {
+      for (let i = 0; i < (list || []).length; i += 100) {
+        const chunk = list.slice(i, i + 100);
+        const { data, error } = await VR.sb.storage.from(bucket).remove(chunk);
+        if (error) failed += chunk.length; else removed += (data || []).length;
+      }
+    }
+    try { await PL.rpc('platform_trash_purge', { p_id: r.id, p_confirm: r.code }); }
+    catch (e) { await PL.try('platform_trash_note_error', { p_id: r.id, p_error: e.message }); throw e; }
+    return failed ? `Eliminato. ${removed} file tolti, ${failed} non rimossi: puoi toglierli a mano da Supabase → Storage.` : `Eliminato definitivamente${removed ? ` (${removed} file tolti)` : ''}.`;
+  };
+  $('#tbl').addEventListener('click', async (e) => {
+    const rs = e.target.closest('[data-restore]'), pg = e.target.closest('[data-purge]');
+    if (rs) {
+      const r = rows.find((x) => x.id === rs.dataset.restore);
+      if (await PL.ask({ title: `Ripristinare ${r.label}?`, ok: 'Ripristina', html: 'Torna com\'era prima: sbloccato e utilizzabile.' }) &&
+          await PL.run(rs, () => PL.rpc('platform_trash_restore', { p_id: r.id })) !== undefined) { load(); PL.refreshSignals(); }
+    }
+    if (pg) {
+      const r = rows.find((x) => x.id === pg.dataset.purge);
+      const v = await PL.ask({ title: `Eliminare per sempre ${r.label}?`, danger: true, ok: 'Elimina per sempre', word: r.code,
+        html: (r.due ? '' : '<b>Il periodo di attesa non è finito.</b> Fallo solo se c\'è una richiesta di cancellazione. ') +
+          (r.kind === 'clinic' ? 'Spariscono la clinica e tutti i suoi dati: clienti, animali creati dalla clinica, visite, referti, appuntamenti, documenti, loghi.' : 'Spariscono l\'account, i suoi animali, i file caricati da lui e le sue conversazioni. Le schede che le cliniche hanno di lui restano alle cliniche.') +
+          ' <b>Non si può annullare.</b>' });
+      if (v && await PL.run(pg, () => purge(r)) !== undefined) { load(); PL.refreshSignals(); }
+    }
+  });
+  $('#purgeDue').addEventListener('click', async (e) => {
+    const due = rows.filter((r) => r.due);
+    const v = await PL.ask({ title: `Eliminare per sempre ${due.length} elementi?`, danger: true, ok: 'Elimina tutti', word: 'ELIMINA',
+      html: due.map((r) => esc(r.label) + ' ' + esc(r.code || '')).join('<br>') + '<br><br><b>Non si può annullare.</b>' });
+    if (!v) return;
+    let ok = 0, ko = 0;
+    for (const r of due) { try { await purge(r); ok++; } catch { ko++; } }
+    PL.toast(`${ok} eliminati${ko ? `, ${ko} non riusciti: vedi il motivo nella riga` : ''}.`, ko ? 'bad' : 'ok');
+    load(); PL.refreshSignals();
+  });
+  $('#hist').addEventListener('change', load);
+  load();
+})();
+</script>
+</body>
+</html>

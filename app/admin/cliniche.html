@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Cliniche · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="cliniche">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Cliniche</h1><p>Ogni struttura iscritta, con la fase in cui si trova. Clicca una riga per aprire la scheda completa.</p></div>
+    <div class="actions"><button class="btn" type="button" id="csv">Esporta CSV</button></div></div>
+  <section class="pn">
+    <div class="pn-h" style="margin-bottom:10px">
+      <div class="seg" role="group" aria-label="Fase" id="fFase"></div>
+      <div class="seg" role="group" aria-label="Stato" id="fStato"></div>
+      <div class="tools"><input type="search" class="search" id="q" placeholder="Nome, email o codice"></div>
+    </div>
+    <div id="tbl"><p class="loader">Caricamento</p></div>
+    <p class="small faint" style="margin:12px 0 0"><b>Fasi:</b> Vuota = nessun cliente · Avviata = clienti ma nessuna visita · Attiva = registra visite · Stanza digitale = almeno un cliente usa FurrFinder.</p>
+  </section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+  const qs = new URLSearchParams(location.search);
+  let fase = qs.get('fase') || 'all', stato = qs.get('stato') || 'all';
+  const [clinics, app, codes, trash] = await Promise.all([PL.try('platform_clinics', {}, []), PL.try('platform_clinic_app_stats', {}, []), PL.codes(), PL.try('platform_trash_list', {}, [])]);
+  const appBy = Object.fromEntries((app || []).map((r) => [r.clinic_id, r]));
+  const inTrash = new Set((trash || []).filter((t) => t.kind === 'clinic' && t.status === 'waiting').map((t) => t.target_id));
+  const stage = (c) => Number(c.clients) === 0 ? ['empty', 'Vuota', ''] : Number(c.visits) === 0 ? ['started', 'Avviata', 'info'] : !(appBy[c.id]?.app_owners) ? ['active', 'Attiva', 'ok'] : ['room', 'Stanza digitale', 'vio'];
+  const stOf = (c) => inTrash.has(c.id) ? 'trash' : c.status === 'suspended' ? 'suspended' : 'active';
+  const rows = (clinics || []).map((c) => ({ ...c, code: codes.clinics?.[c.id] || '', stg: stage(c), st: stOf(c), app: appBy[c.id]?.app_owners || 0, push: appBy[c.id]?.push_owners || 0 }));
+
+  const FASI = [['all', 'Tutte'], ['empty', 'Vuote'], ['started', 'Avviate'], ['active', 'Attive'], ['room', 'Stanza digitale']];
+  const STATI = [['all', 'Ogni stato'], ['active', 'Operative'], ['suspended', 'Sospese'], ['trash', 'Nel cestino']];
+  const segs = () => {
+    $('#fFase').innerHTML = FASI.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${fase === k}">${l}<span class="n">${rows.filter((r) => k === 'all' || r.stg[0] === k).length}</span></button>`).join('');
+    $('#fStato').innerHTML = STATI.map(([k, l]) => `<button type="button" data-s="${k}" aria-pressed="${stato === k}">${l}<span class="n">${rows.filter((r) => k === 'all' || r.st === k).length}</span></button>`).join('');
+  };
+  const T = PL.table({
+    el: $('#tbl'), sortKey: 'created', sortDir: -1,
+    onRow: (r) => PL.clinicHref(r.id, r.code),
+    rowClass: (r) => r.st !== 'active' ? 'is-bad' : '',
+    empty: 'Nessuna clinica con questi criteri.',
+    cols: [
+      { k: 'name', l: 'Clinica', sort: (r) => r.name.toLowerCase(), render: (r) => `<a href="${PL.clinicHref(r.id, r.code)}"><strong>${esc(r.name)}</strong></a> ${PL.chip(r.code)}<span class="sub">${esc(r.admin_email || '')}${Number(r.members) > 1 ? ' · team di ' + n(r.members) : ''}</span>` },
+      { k: 'stage', l: 'Fase', sort: (r) => ['empty', 'started', 'active', 'room'].indexOf(r.stg[0]), render: (r) => `<span class="pill ${r.stg[2]}">${r.stg[1]}</span>` },
+      { k: 'app', l: 'In app', cls: 'num', sort: (r) => r.app, render: (r) => n(r.app) + (r.push ? ` <span class="faint" title="con notifiche attive">· ${n(r.push)}🔔</span>` : '') },
+      { k: 'clients', l: 'Proprietari', cls: 'num', sort: (r) => Number(r.clients), render: (r) => n(r.clients) },
+      { k: 'pets', l: 'Animali', cls: 'num', hideM: true, sort: (r) => Number(r.pets), render: (r) => n(r.pets) },
+      { k: 'visits', l: 'Visite', cls: 'num', sort: (r) => Number(r.visits), render: (r) => n(r.visits) },
+      { k: 'appts', l: 'Appunt.', cls: 'num', hideM: true, sort: (r) => Number(r.appointments), render: (r) => n(r.appointments) },
+      { k: 'created', l: 'Iscritta', hideM: true, sort: (r) => new Date(r.created_at).getTime(), render: (r) => `<span class="nowrap">${PL.d(r.created_at)}</span>` },
+      { k: 'last', l: 'Ultima attività', sort: (r) => r.last_activity ? new Date(r.last_activity).getTime() : null, render: (r) => `<span class="nowrap">${PL.ago(r.last_activity)}</span>` },
+      { k: 'st', l: 'Stato', sort: (r) => r.st, render: (r) => r.st === 'trash' ? '<span class="pill bad">Nel cestino</span>' : r.st === 'suspended' ? `<span class="pill bad" title="${esc(r.suspended_reason || '')}">Sospesa</span>` : '<span class="pill ok">Operativa</span>' }
+    ]
+  });
+  const apply = () => {
+    const t = $('#q').value.toLowerCase().trim();
+    T.set(rows.filter((r) => (fase === 'all' || r.stg[0] === fase) && (stato === 'all' || r.st === stato) &&
+      (!t || [r.name, r.admin_email, r.code].join(' ').toLowerCase().includes(t))));
+    segs();
+    const u = new URL(location.href); u.searchParams.set('fase', fase); u.searchParams.set('stato', stato); history.replaceState(null, '', u);
+  };
+  $('#fFase').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { fase = b.dataset.f; apply(); } });
+  $('#fStato').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { stato = b.dataset.s; apply(); } });
+  $('#q').addEventListener('input', apply);
+  $('#csv').addEventListener('click', () => PL.csv(`vetroom-cliniche-${new Date().toISOString().slice(0, 10)}.csv`, T.rows, [
+    ['Codice', (r) => r.code], ['Clinica', (r) => r.name], ['Email amministratore', (r) => r.admin_email], ['Fase', (r) => r.stg[1]], ['Stato', (r) => r.st],
+    ['Clienti in app', (r) => r.app], ['Proprietari', (r) => r.clients], ['Animali', (r) => r.pets], ['Visite', (r) => r.visits], ['Appuntamenti', (r) => r.appointments],
+    ['Team', (r) => r.members], ['Iscritta il', (r) => PL.d(r.created_at)], ['Ultima attività', (r) => PL.dt(r.last_activity)]]));
+  apply();
+})();
+</script>
+</body>
+</html>

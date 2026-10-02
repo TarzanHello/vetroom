@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Prenotazioni · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-02a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-02a"></script>
+  <script src="../js/app.js?v=2026-10-02a"></script>
+  <script src="plancia.js?v=2026-10-02a"></script>
+</head>
+<body class="pl" data-station="prenotazioni">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Prenotazioni</h1><p>Tutti gli appuntamenti della piattaforma, dal più recente. Cerca per numero (P-…, anche solo alcune cifre) o per nome della clinica.</p></div>
+    <div class="actions"><button class="btn" type="button" id="csv">Esporta CSV</button></div></div>
+  <section class="pn">
+    <div class="pn-h" style="margin-bottom:10px">
+      <div class="seg" role="group" aria-label="Quali" id="fAmb"></div>
+      <div class="seg" role="group" aria-label="Stato" id="fSt"></div>
+      <div class="tools"><input type="search" class="search" id="q" placeholder="Numero o clinica"></div>
+    </div>
+    <div id="tbl"><p class="loader">Caricamento</p></div>
+    <div class="actions" style="margin-top:12px"><button class="btn sm" id="more" hidden>Carica le precedenti</button></div>
+  </section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc } = PL;
+  const qs = new URLSearchParams(location.search);
+  let amb = qs.get('ambito') || 'all', st = qs.get('stato') || '', rows = [];
+  $('#q').value = qs.get('q') || '';
+  const AMB = [['all', 'Tutte'], ['online', 'Prenotate online'], ['future', 'Future']];
+  const STS = [['', 'Ogni stato'], ['requested', 'Richieste'], ['confirmed', 'Confermate'], ['done', 'Svolte'], ['cancelled', 'Annullate'], ['no_show', 'Assenti']];
+  const pill = (s) => ({ requested: '<span class="pill warn">Richiesta</span>', confirmed: '<span class="pill ok">Confermata</span>', cancelled: '<span class="pill">Annullata</span>', done: '<span class="pill info">Svolta</span>', no_show: '<span class="pill bad">Assente</span>' }[s] || esc(s));
+  const codes = await PL.codes();
+  const T = PL.table({ el: $('#tbl'), pageSize: 50, empty: 'Nessuna prenotazione con questi criteri.', cols: [
+    { k: 'ref', l: 'Numero', sort: (r) => r.ref_code || '', render: (r) => `<span class="mono">${esc(r.ref_code || '—')}</span>${r.online ? '<span class="sub">online</span>' : ''}` },
+    { k: 'when', l: 'Appuntamento', sort: (r) => new Date(r.starts_at).getTime(), render: (r) => `<span class="nowrap">${PL.dt(r.starts_at)}</span>${r.type ? `<span class="sub">${esc(r.type)}</span>` : ''}` },
+    { k: 'clinic', l: 'Clinica', sort: (r) => r.clinic_name, render: (r) => `<a href="${PL.clinicHref(r.clinic_id, codes.clinics?.[r.clinic_id])}">${esc(r.clinic_name)}</a>` },
+    { k: 'who', l: 'Animale e proprietario', render: (r) => `${esc(r.pet_name || '—')}<span class="sub">${esc(r.owner_name || '')}</span>` },
+    { k: 'st', l: 'Stato', sort: (r) => r.status, render: (r) => pill(r.status) },
+    { k: 'made', l: 'Creata', hideM: true, sort: (r) => new Date(r.created_at).getTime(), render: (r) => `<span class="nowrap">${PL.ago(r.created_at)}</span>` }] });
+  const segs = () => {
+    $('#fAmb').innerHTML = AMB.map(([k, l]) => `<button type="button" data-a="${k}" aria-pressed="${amb === k}">${l}</button>`).join('');
+    $('#fSt').innerHTML = STS.map(([k, l]) => `<button type="button" data-s="${k}" aria-pressed="${st === k}">${l}</button>`).join('');
+  };
+  const load = async (more) => {
+    try {
+      const got = await PL.rpc('platform_bookings', { p_q: $('#q').value.trim() || null, p_status: st || null, p_scope: amb, p_limit: 200,
+        p_before: more && rows.length ? rows[rows.length - 1].created_at : null }) || [];
+      rows = more ? rows.concat(got) : got;
+      T.set(rows);
+      $('#more').hidden = got.length < 200;
+    } catch (e) { $('#tbl').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
+    const u = new URL(location.href); u.searchParams.set('ambito', amb); if (st) u.searchParams.set('stato', st); else u.searchParams.delete('stato');
+    if ($('#q').value.trim()) u.searchParams.set('q', $('#q').value.trim()); else u.searchParams.delete('q');
+    history.replaceState(null, '', u); segs();
+  };
+  let t; $('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => load(false), 300); });
+  $('#fAmb').addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); if (b) { amb = b.dataset.a; load(false); } });
+  $('#fSt').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { st = b.dataset.s; load(false); } });
+  $('#more').addEventListener('click', () => load(true));
+  $('#csv').addEventListener('click', () => PL.csv(`vetroom-prenotazioni-${new Date().toISOString().slice(0, 10)}.csv`, T.rows, [
+    ['Numero', (r) => r.ref_code], ['Appuntamento', (r) => PL.dt(r.starts_at)], ['Tipo', (r) => r.type], ['Clinica', (r) => r.clinic_name],
+    ['Animale', (r) => r.pet_name], ['Proprietario', (r) => r.owner_name], ['Stato', (r) => r.status], ['Online', (r) => r.online ? 'sì' : 'no'], ['Creata', (r) => PL.dt(r.created_at)]]));
+  segs(); load(false);
+})();
+</script>
+</body>
+</html>
