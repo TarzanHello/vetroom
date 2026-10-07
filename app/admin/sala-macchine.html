@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Sala macchine · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-07a">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-07b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07a"></script>
-  <script src="../js/app.js?v=2026-10-07a"></script>
-  <script src="plancia.js?v=2026-10-07a"></script>
+  <script src="../js/config.js?v=2026-10-07b"></script>
+  <script src="../js/app.js?v=2026-10-07b"></script>
+  <script src="plancia.js?v=2026-10-07b"></script>
 </head>
 <body class="pl" data-station="sala">
 <main>
@@ -150,9 +150,8 @@
     } catch (e) { $('#errs').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
   };
   $('#clearErr').addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
     if (await PL.ask({ title: 'Svuotare l\'elenco degli errori?', ok: 'Svuota', html: 'Fallo dopo averli letti o sistemati.' }) &&
-        await PL.run(btn, () => PL.rpc('platform_clear_errors'), 'Elenco svuotato.') !== undefined) { loadErr(); PL.refreshSignals(); }
+        await PL.run(e.currentTarget, () => PL.rpc('platform_clear_errors'), 'Elenco svuotato.') !== undefined) { loadErr(); PL.refreshSignals(); }
   });
 
   // ---------- Il tuo account ----------

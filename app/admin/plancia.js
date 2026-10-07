@@ -30,7 +30,7 @@
   const STATIONS = [
     { g: 'Comando', items: [
       { k: 'ponte', l: 'Ponte di comando', h: './' },
-      { k: 'cliniche', l: 'Cliniche', h: 'cliniche.html' },
+      { k: 'cliniche', l: 'Strutture', h: 'cliniche.html' },
       { k: 'utenti', l: 'Utenti', h: 'utenti.html' },
       { k: 'prenotazioni', l: 'Prenotazioni', h: 'prenotazioni.html' }
     ] },
@@ -87,6 +87,8 @@
     return data;
   };
   PL.try = async (name, args, fallback = null) => { try { return await PL.rpc(name, args); } catch { return fallback; } };
+  PL.KIND = { ambulatorio: 'Ambulatorio', clinica: 'Clinica', studio_associato: 'Studio associato', ospedale: 'Ospedale veterinario', domicilio: 'A domicilio', altro: 'Altro' };
+  PL.BILLING = { struttura: 'Fattura la struttura', individuale: 'Ognuno a nome proprio', misto: 'Misto' };
 
   // Codici: id ⇄ codice, per indirizzi leggibili (clinica.html?c=CL-XXXXX)
   let codesP = null;
@@ -100,6 +102,12 @@
     if (id) return id;
     const code = (q.get(kind === 'clinic' ? 'c' : 'u') || '').trim().toUpperCase();
     if (!code) return null;
+    if (kind === 'clinic' && /^ST-?[A-Z0-9]{5}$/.test(code)) {
+      const st = await PL.try('platform_clinic_codes', {}, {}) || {};
+      const k = code.replace('-', '');
+      const hit = Object.entries(st).find(([, c]) => String(c).replace('-', '') === k);
+      return hit ? hit[0] : null;
+    }
     const codes = await PL.codes();
     const map = kind === 'clinic' ? codes.clinics : codes.users;
     const hit = Object.entries(map || {}).find(([, c]) => String(c).toUpperCase() === code);
@@ -153,10 +161,6 @@
       e.preventDefault();
       const v = {};
       for (const el of form.elements) { if (!el.name) continue; v[el.name] = el.type === 'checkbox' ? el.checked : el.value; }
-      if (o.word) {
-        if (String(v.__word || '').trim().toUpperCase() !== String(o.word).toUpperCase()) return;
-        v.__word = String(o.word);
-      }
       for (const f of o.fields || []) {
         if (f.required && !String(v[f.name] || '').trim()) { PL.say(d.querySelector('[data-err]'), `Compila il campo "${f.label}".`, 'bad'); return; }
       }
@@ -237,7 +241,7 @@
     const role = (r) => esc(PL.ROLE[r] || r || '');
     const map = {
       'account.creato': 'ha creato il suo account',
-      'account.ruolo_clinica': 'ha scelto “Lavoro in una clinica”',
+      'account.ruolo_clinica': 'ha scelto di lavorare in una struttura veterinaria',
       'account.ruolo_proprietario': 'ha scelto “Ho un animale”',
       'clinica.creata': `ha creato la clinica ${esc(a.label || '')}`,
       'clinica.sospesa': `ha sospeso la clinica ${esc(a.label || '')}`,
@@ -259,6 +263,13 @@
       'cassa.fattura': `ha emesso la fattura ${L}`,
       'cassa.incasso': `ha registrato l'incasso della fattura ${L}`,
       'cassa.nota_credito': `ha emesso la nota di credito ${L}`,
+      'struttura.creata': `ha creato la struttura ${esc(a.label || '')}${m.tipo ? ' (' + esc(PL.KIND[m.tipo] || m.tipo) + ')' : ''}`,
+      'struttura.cessione_proposta': `ha proposto di cedere la titolarità a ${T}`,
+      'struttura.ceduta': 'ha accettato ed è diventato titolare della struttura',
+      'team.richiesta': `ha chiesto di unirsi alla struttura come ${m.ruolo === 'vet' ? 'veterinario' : 'personale'}`,
+      'team.richiesta_approvata': `ha approvato la richiesta di adesione di ${T} come ${role(m.ruolo)}`,
+      'admin.albo_verificato': `ha segnato come verificata l'iscrizione all'Ordine di ${T}`,
+      'admin.albo_non_verificato': `ha tolto la verifica dell'iscrizione all'Ordine di ${T}`,
       'cassa.invio_ts': `ha inviato ${Number(m.inviati || 0)} documenti al Sistema TS (${Number(m.accolti || 0)} accolti${Number(m.scartati) ? ', ' + Number(m.scartati) + ' scartati' : ''})`,
       'messaggio.inviato': m.tipo === 'clinic_owner' ? 'ha scritto un messaggio (clinica ⇄ proprietario)' : 'ha scritto all\'assistenza',
       'admin.nota': `ha aggiunto una nota interna su ${a.target_kind === 'clinic' ? esc(a.target_name || 'una clinica') : T}`,
@@ -307,7 +318,7 @@
     const back = document.createElement('div');
     back.className = 'k-back';
     back.innerHTML = `<div class="k-box" role="dialog" aria-label="Cerca nella piattaforma">
-      <input type="search" placeholder="Codice CL- / UT-, numero di prenotazione, nome, email…" aria-label="Cerca" autocomplete="off" spellcheck="false">
+      <input type="search" placeholder="Codice ST- / CL- / UT-, numero di prenotazione, nome, email…" aria-label="Cerca" autocomplete="off" spellcheck="false">
       <div class="k-res" role="listbox"></div>
       <div class="k-help">Invio per aprire · frecce per scegliere · Esc per chiudere</div></div>`;
     document.body.appendChild(back);
@@ -331,7 +342,9 @@
       if (q.length < 2) { draw([{ title: 'Postazioni', items: navHits }]); return; }
       draw([{ title: 'Cerco…', items: [] }, { title: 'Postazioni', items: navHits }]);
       let data = [];
-      try { data = await PL.rpc('platform_find', { p_q: q }) || []; } catch (e) { data = []; }
+      let sts = [];
+      [data, sts] = await Promise.all([PL.rpc('platform_find', { p_q: q }).catch(() => []), /^st/i.test(q) ? PL.try('platform_find_structure', { p_q: q }, []) : Promise.resolve([])]);
+      data = data || [];
       if (inp.value.trim() !== q) return;
       const codes = await PL.codes();
       const found = data.map((x) => {
@@ -339,6 +352,7 @@
         if (x.kind === 'user') return { t: x.name, d: x.detail || 'Utente', code: x.code, href: PL.userHref(x.id, x.code) };
         return { t: x.name, d: x.detail || 'Prenotazione', href: 'prenotazioni.html?q=' + encodeURIComponent(q) };
       });
+      for (const x of (sts || [])) if (!found.some((f) => f.href.includes(x.id))) found.unshift({ t: x.name, d: (PL.KIND[x.kind] || 'Struttura') + ' · ' + x.code, code: x.code, href: 'clinica.html?id=' + x.id });
       if (/^[A-Z]{0,3}-?\d{4,}$/i.test(q)) found.push({ t: `Cerca "${q}" fra le prenotazioni`, d: '', href: 'prenotazioni.html?q=' + encodeURIComponent(q) });
       found.push({ t: `Cerca "${q}" nel diario di bordo`, d: '', href: 'diario.html' });
       draw([{ title: 'Risultati', items: found }, { title: 'Postazioni', items: navHits }]);
@@ -386,7 +400,7 @@
     tab.className = 'pl-tab';
     tab.setAttribute('aria-label', 'Menu rapido');
     const t = (k, h, l, badge) => `<a href="${h}" class="${k === active ? 'on' : ''}">${I[k]}<span>${l}</span>${badge ? `<span class="pl-badge" data-badge="${badge}" hidden></span>` : ''}</a>`;
-    tab.innerHTML = t('ponte', './', 'Ponte') + t('cliniche', 'cliniche.html', 'Cliniche') + t('utenti', 'utenti.html', 'Utenti') + t('messaggi', 'messaggi.html', 'Messaggi', 'support')
+    tab.innerHTML = t('ponte', './', 'Ponte') + t('cliniche', 'cliniche.html', 'Strutture') + t('utenti', 'utenti.html', 'Utenti') + t('messaggi', 'messaggi.html', 'Messaggi', 'support')
       + `<button type="button" data-rail>${I.menu}<span>Altro</span></button>`;
     const back = document.createElement('div'); back.className = 'rail-back';
     const main = $('main');

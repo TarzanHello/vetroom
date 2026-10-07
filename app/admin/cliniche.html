@@ -5,23 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#050a14">
   <meta name="robots" content="noindex, nofollow">
-  <title>Cliniche · Plancia Vetroom</title>
+  <title>Strutture · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-07a">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-07b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07a"></script>
-  <script src="../js/app.js?v=2026-10-07a"></script>
-  <script src="plancia.js?v=2026-10-07a"></script>
+  <script src="../js/config.js?v=2026-10-07b"></script>
+  <script src="../js/app.js?v=2026-10-07b"></script>
+  <script src="plancia.js?v=2026-10-07b"></script>
 </head>
 <body class="pl" data-station="cliniche">
 <main>
-  <div class="pl-head"><div class="grow"><h1>Cliniche</h1><p>Ogni struttura iscritta, con la fase in cui si trova. Clicca una riga per aprire la scheda completa.</p></div>
+  <div class="pl-head"><div class="grow"><h1>Strutture</h1><p>Ogni struttura iscritta (cliniche, ambulatori, studi, veterinari a domicilio), con la fase in cui si trova. Clicca una riga per aprire la scheda completa.</p></div>
     <div class="actions"><button class="btn" type="button" id="csv">Esporta CSV</button></div></div>
   <section class="pn">
     <div class="pn-h" style="margin-bottom:10px">
       <div class="seg" role="group" aria-label="Fase" id="fFase"></div>
       <div class="seg" role="group" aria-label="Stato" id="fStato"></div>
-      <div class="tools"><input type="search" class="search" id="q" placeholder="Nome, email o codice"></div>
+      <div class="seg" role="group" aria-label="Tipo" id="fTipo"></div>
+      <div class="tools"><input type="search" class="search" id="q" placeholder="Nome, titolare, email o codice ST-"></div>
     </div>
     <div id="tbl"><p class="loader">Caricamento</p></div>
     <p class="small faint" style="margin:12px 0 0"><b>Fasi:</b> Vuota = nessun cliente · Avviata = clienti ma nessuna visita · Attiva = registra visite · Stanza digitale = almeno un cliente usa FurrFinder.</p>
@@ -33,26 +34,31 @@
   const { $, esc, n } = PL;
   const qs = new URLSearchParams(location.search);
   let fase = qs.get('fase') || 'all', stato = qs.get('stato') || 'all';
-  const [clinics, app, codes, trash] = await Promise.all([PL.try('platform_clinics', {}, []), PL.try('platform_clinic_app_stats', {}, []), PL.codes(), PL.try('platform_trash_list', {}, [])]);
+  const [clinics, app, codes, trash, structs] = await Promise.all([PL.try('platform_clinics', {}, []), PL.try('platform_clinic_app_stats', {}, []), PL.codes(), PL.try('platform_trash_list', {}, []), PL.try('platform_structures', {}, [])]);
   const appBy = Object.fromEntries((app || []).map((r) => [r.clinic_id, r]));
+  const stBy = Object.fromEntries((structs || []).map((r) => [r.id, r]));
+  let tipo = qs.get('tipo') || 'all';
   const inTrash = new Set((trash || []).filter((t) => t.kind === 'clinic' && t.status === 'waiting').map((t) => t.target_id));
   const stage = (c) => Number(c.clients) === 0 ? ['empty', 'Vuota', ''] : Number(c.visits) === 0 ? ['started', 'Avviata', 'info'] : !(appBy[c.id]?.app_owners) ? ['active', 'Attiva', 'ok'] : ['room', 'Stanza digitale', 'vio'];
   const stOf = (c) => inTrash.has(c.id) ? 'trash' : c.status === 'suspended' ? 'suspended' : 'active';
-  const rows = (clinics || []).map((c) => ({ ...c, code: codes.clinics?.[c.id] || '', stg: stage(c), st: stOf(c), app: appBy[c.id]?.app_owners || 0, push: appBy[c.id]?.push_owners || 0 }));
+  const rows = (clinics || []).map((c) => ({ ...c, code: codes.clinics?.[c.id] || '', stg: stage(c), st: stOf(c), app: appBy[c.id]?.app_owners || 0, push: appBy[c.id]?.push_owners || 0, s: stBy[c.id] || {} }));
+  const TIPI = [['all', 'Ogni tipo'], ...Object.entries(PL.KIND)];
 
   const FASI = [['all', 'Tutte'], ['empty', 'Vuote'], ['started', 'Avviate'], ['active', 'Attive'], ['room', 'Stanza digitale']];
   const STATI = [['all', 'Ogni stato'], ['active', 'Operative'], ['suspended', 'Sospese'], ['trash', 'Nel cestino']];
   const segs = () => {
     $('#fFase').innerHTML = FASI.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${fase === k}">${l}<span class="n">${rows.filter((r) => k === 'all' || r.stg[0] === k).length}</span></button>`).join('');
+    if (structs?.length) $('#fTipo').innerHTML = TIPI.filter(([k]) => k === 'all' || rows.some((r) => r.s.kind === k)).map(([k, l]) => `<button type="button" data-t="${k}" aria-pressed="${tipo === k}">${l}<span class="n">${rows.filter((r) => k === 'all' || r.s.kind === k).length}</span></button>`).join('');
     $('#fStato').innerHTML = STATI.map(([k, l]) => `<button type="button" data-s="${k}" aria-pressed="${stato === k}">${l}<span class="n">${rows.filter((r) => k === 'all' || r.st === k).length}</span></button>`).join('');
   };
   const T = PL.table({
     el: $('#tbl'), sortKey: 'created', sortDir: -1,
     onRow: (r) => PL.clinicHref(r.id, r.code),
     rowClass: (r) => r.st !== 'active' ? 'is-bad' : '',
-    empty: 'Nessuna clinica con questi criteri.',
+    empty: 'Nessuna struttura con questi criteri.',
     cols: [
-      { k: 'name', l: 'Clinica', sort: (r) => r.name.toLowerCase(), render: (r) => `<a href="${PL.clinicHref(r.id, r.code)}"><strong>${esc(r.name)}</strong></a> ${PL.chip(r.code)}<span class="sub">${esc(r.admin_email || '')}${Number(r.members) > 1 ? ' · team di ' + n(r.members) : ''}</span>` },
+      { k: 'name', l: 'Struttura', sort: (r) => r.name.toLowerCase(), render: (r) => `<a href="${PL.clinicHref(r.id, r.code)}"><strong>${esc(r.name)}</strong></a> ${r.s.code ? `<span class="chip mono">${esc(r.s.code)}</span>` : PL.chip(r.code)}<span class="sub">${r.s.kind ? esc(PL.KIND[r.s.kind] || r.s.kind) + ' · ' : ''}${esc(r.s.owner_name ? 'titolare ' + r.s.owner_name : (r.admin_email || ''))}${Number(r.members) > 1 ? ' · team di ' + n(r.members) : ''}</span>${Number(r.s.joins_pending) ? ` <span class="pill warn">${n(r.s.joins_pending)} ${Number(r.s.joins_pending) === 1 ? 'richiesta' : 'richieste'}</span>` : ''}${r.s.transfer_pending ? ' <span class="pill info">cessione in corso</span>' : ''}` },
+      { k: 'bill', l: 'Fattura', hideM: true, sort: (r) => r.s.billing_mode || '', render: (r) => r.s.billing_mode ? `<span class="small">${esc(PL.BILLING[r.s.billing_mode] || '')}</span>${Number(r.s.bills_own) ? `<span class="sub">${n(r.s.bills_own)} a nome proprio</span>` : ''}` : '—' },
       { k: 'stage', l: 'Fase', sort: (r) => ['empty', 'started', 'active', 'room'].indexOf(r.stg[0]), render: (r) => `<span class="pill ${r.stg[2]}">${r.stg[1]}</span>` },
       { k: 'app', l: 'In app', cls: 'num', sort: (r) => r.app, render: (r) => n(r.app) + (r.push ? ` <span class="faint" title="con notifiche attive">· ${n(r.push)}🔔</span>` : '') },
       { k: 'clients', l: 'Proprietari', cls: 'num', sort: (r) => Number(r.clients), render: (r) => n(r.clients) },
@@ -66,16 +72,17 @@
   });
   const apply = () => {
     const t = $('#q').value.toLowerCase().trim();
-    T.set(rows.filter((r) => (fase === 'all' || r.stg[0] === fase) && (stato === 'all' || r.st === stato) &&
-      (!t || [r.name, r.admin_email, r.code].join(' ').toLowerCase().includes(t))));
+    T.set(rows.filter((r) => (fase === 'all' || r.stg[0] === fase) && (stato === 'all' || r.st === stato) && (tipo === 'all' || r.s.kind === tipo) &&
+      (!t || [r.name, r.admin_email, r.code, r.s.code, r.s.code?.replace('-', ''), r.s.owner_name].join(' ').toLowerCase().includes(t))));
     segs();
-    const u = new URL(location.href); u.searchParams.set('fase', fase); u.searchParams.set('stato', stato); history.replaceState(null, '', u);
+    const u = new URL(location.href); u.searchParams.set('fase', fase); u.searchParams.set('stato', stato); u.searchParams.set('tipo', tipo); history.replaceState(null, '', u);
   };
   $('#fFase').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { fase = b.dataset.f; apply(); } });
   $('#fStato').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { stato = b.dataset.s; apply(); } });
+  $('#fTipo').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) { tipo = b.dataset.t; apply(); } });
   $('#q').addEventListener('input', apply);
   $('#csv').addEventListener('click', () => PL.csv(`vetroom-cliniche-${new Date().toISOString().slice(0, 10)}.csv`, T.rows, [
-    ['Codice', (r) => r.code], ['Clinica', (r) => r.name], ['Email amministratore', (r) => r.admin_email], ['Fase', (r) => r.stg[1]], ['Stato', (r) => r.st],
+    ['Codice struttura', (r) => r.s.code || ''], ['Codice (vecchio)', (r) => r.code], ['Struttura', (r) => r.name], ['Tipo', (r) => PL.KIND[r.s.kind] || ''], ['Titolare', (r) => r.s.owner_name || ''], ['Come fattura', (r) => PL.BILLING[r.s.billing_mode] || ''], ['Email amministratore', (r) => r.admin_email], ['Fase', (r) => r.stg[1]], ['Stato', (r) => r.st],
     ['Clienti in app', (r) => r.app], ['Proprietari', (r) => r.clients], ['Animali', (r) => r.pets], ['Visite', (r) => r.visits], ['Appuntamenti', (r) => r.appointments],
     ['Team', (r) => r.members], ['Iscritta il', (r) => PL.d(r.created_at)], ['Ultima attività', (r) => PL.dt(r.last_activity)]]));
   apply();

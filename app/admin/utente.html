@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Scheda utente · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-07a">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-07b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07a"></script>
-  <script src="../js/app.js?v=2026-10-07a"></script>
-  <script src="plancia.js?v=2026-10-07a"></script>
+  <script src="../js/config.js?v=2026-10-07b"></script>
+  <script src="../js/app.js?v=2026-10-07b"></script>
+  <script src="plancia.js?v=2026-10-07b"></script>
 </head>
 <body class="pl" data-station="utenti">
 <main>
@@ -38,7 +38,7 @@
     <div data-panel="profilo">
       <div class="cols">
         <section class="pn c5"><div class="pn-h"><h2>Account</h2></div><dl class="kv" id="kv"></dl></section>
-        <section class="pn c7"><div class="pn-h"><h2>Cliniche</h2></div><ul class="list" id="clinics"></ul>
+        <section class="pn c7"><div class="pn-h"><h2>Strutture</h2></div><ul class="list" id="clinics"></ul>
           <div class="pn-h" style="margin:18px 0 10px"><h2>Animali</h2></div><ul class="list" id="pets"></ul></section>
         <section class="pn c6"><div class="pn-h"><h2>Email inviate</h2></div><ul class="list" id="emails"></ul></section>
         <section class="pn c6"><div class="pn-h"><h2>Errori che ha incontrato</h2></div><ul class="list" id="errs"></ul></section>
@@ -60,7 +60,7 @@
   const { $, esc, n } = PL;
   const id = await PL.resolve('user');
   if (!id) { $('#boot').outerHTML = '<div class="note bad">Utente non trovato: controlla il codice nell\'indirizzo.</div>'; return; }
-  let card, det = {}, code = '', codes = {};
+  let card, det = {}, code = '', codes = {}, pro = null;
   const device = (ua) => {
     ua = String(ua || '');
     const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
@@ -70,7 +70,7 @@
   const load = async () => {
     try { card = await PL.rpc('platform_user_card', { p_user: id }); }
     catch (e) { $('#boot').outerHTML = `<div class="note bad">${esc(e.message)}</div>`; return false; }
-    [det, codes] = await Promise.all([PL.try('platform_user_detail', { p_user: id }, {}), PL.codes()]);
+    [det, codes, pro] = await Promise.all([PL.try('platform_user_detail', { p_user: id }, {}), PL.codes(), PL.try('platform_user_pro', { p_user: id }, null)]);
     det = det || {};
     code = codes.users?.[id] || card.user?.code || '';
     return true;
@@ -82,7 +82,8 @@
     $('#av').textContent = PL.initials(name);
     $('#nm').textContent = name;
     const susp = !!det.ban, trash = det.trash;
-    $('#pills').innerHTML = [PL.chip(code), u.is_staff ? '<span class="pill ok">Professionista</span>' : '', u.is_owner ? '<span class="pill info">Proprietario</span>' : '',
+    $('#pills').innerHTML = [PL.chip(code), u.is_staff ? `<span class="pill ok">${pro?.staff_kind === 'vet' ? 'Veterinario' : pro?.staff_kind === 'staff' ? 'Personale di struttura' : 'Professionista'}</span>` : '',
+      pro?.albo_verified_at ? '<span class="pill ok">Ordine verificato</span>' : '', u.is_owner ? '<span class="pill info">Proprietario</span>' : '',
       !u.is_staff && !u.is_owner ? '<span class="pill warn">Registrazione a metà</span>' : '', det.is_admin ? '<span class="pill vio">Amministratore piattaforma</span>' : '',
       trash ? '<span class="pill bad">Nel cestino</span>' : susp ? '<span class="pill bad">Sospeso</span>' : '<span class="pill ok">Attivo</span>'].filter(Boolean).join(' ');
     $('#facts').innerHTML = [`<a href="mailto:${esc(u.email || '')}">${esc(u.email || '')}</a>`, `Iscritto il ${PL.d(u.created_at)}`, `Ultimo accesso ${u.last_sign_in_at ? PL.ago(u.last_sign_in_at) : 'mai'}`].join(' · ');
@@ -97,6 +98,9 @@
 
     $('#kv').innerHTML = [['Email', esc(u.email || '—')], ['Codice', code ? PL.chip(code) : '<span class="dim">non ancora assegnato</span>'],
       ['Accesso con', esc((det.provider || 'google').replace(/^./, (c) => c.toUpperCase()))], ['Iscritto il', PL.dt(u.created_at)], ['Ultimo accesso', u.last_sign_in_at ? PL.dt(u.last_sign_in_at) : 'mai'],
+      ...(pro && (pro.staff_kind === 'vet' || pro.albo_numero) ? [['Iscrizione all\'Ordine', pro.albo_numero
+        ? `${esc(pro.albo_provincia || '')} n. ${esc(pro.albo_numero)} ${pro.albo_verified_at ? `<span class="pill ok">verificata il ${PL.d(pro.albo_verified_at)}</span> <button class="btn sm ghost" data-act="unverify">Togli</button>` : '<span class="pill warn">non verificata</span> <button class="btn sm" data-act="verify">Segna come verificata</button>'}`
+        : '<span class="dim">non indicata</span>']] : []),
       ['Notifiche FurrFinder', u.push_devices ? n(u.push_devices) + (Number(u.push_devices) === 1 ? ' dispositivo' : ' dispositivi') : 'non attive'], ['ID tecnico', `<span class="mono small faint">${id}</span>`]]
       .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
     const mem = det.memberships || [];
@@ -104,7 +108,16 @@
         <span class="small dim" style="display:block">${esc(PL.ROLE[m.role] || m.role)} dal ${PL.d(m.since)}${m.is_code_owner ? ' · titolare' : ''}</span></div>
         ${m.status === 'active' ? '<span class="pill ok">Attivo</span>' : '<span class="pill bad">Sospeso</span>'} ${m.clinic_status === 'suspended' ? '<span class="pill bad">Clinica sospesa</span>' : ''}</li>`)
       : (card.clinics || []).map((c) => `<li><div class="grow"><strong>${esc(c.name)}</strong><span class="small dim" style="display:block">${esc(PL.ROLE[c.role] || c.role)}</span></div></li>`)).join('')
-      || '<li class="dim">Non fa parte di nessuna clinica.</li>';
+      || '<li class="dim">Non fa parte di nessuna struttura.</li>';
+    if (pro) {
+      const req = (pro.requests || []).filter((r) => r.status === 'pending');
+      $('#clinics').insertAdjacentHTML('beforeend', req.map((r) => `<li><div class="grow"><a href="clinica.html?id=${r.clinic_id}"><strong>${esc(r.name)}</strong></a> <span class="chip mono">${esc(r.code || '')}</span>
+        <span class="small dim" style="display:block">ha chiesto di entrare come ${r.role === 'vet' ? 'veterinario' : 'personale'} il ${PL.d(r.created_at)}</span></div><span class="pill warn">In attesa</span></li>`).join(''));
+      (pro.structures || []).forEach((x) => {
+        const li = [...$('#clinics').querySelectorAll('a')].find((a) => a.textContent.trim() === x.name);
+        if (li && x.code) li.insertAdjacentHTML('afterend', ` <span class="chip mono" title="Codice della struttura">${esc(x.code)}</span>${x.is_owner ? ' <span class="pill vio">Titolare</span>' : ''}${x.bills_own ? ' <span class="pill">fattura a nome proprio</span>' : ''}`);
+      });
+    }
     $('#pets').innerHTML = (card.pets || []).map((p) => `<li><div class="grow"><strong>${esc(p.name)}</strong></div><span class="small dim">${n(p.clinics)} ${Number(p.clinics) === 1 ? 'clinica collegata' : 'cliniche collegate'}</span></li>`).join('') || '<li class="dim">Nessun animale.</li>';
     $('#emails').innerHTML = (card.emails || []).map((e) => `<li><div class="grow">${esc(e.subject)}</div><span class="small dim nowrap">${PL.dt(e.at)} · ${esc(PL.mailStatus(e.status))}</span></li>`).join('') || '<li class="dim">Nessuna email inviata.</li>';
     $('#errs').innerHTML = (card.errors || []).map((e) => `<li><div class="grow">${esc(e.message)}<span class="small faint" style="display:block">${esc(e.page || '')}${e.hits > 1 ? ' · ' + n(e.hits) + ' volte' : ''}</span></div><span class="small dim nowrap">${PL.ago(e.at)}</span></li>`).join('') || '<li class="dim">Nessun errore. 👍</li>';
@@ -142,6 +155,13 @@
     const again = async () => { await load(); draw(); };
     if (a === 'msg') { if (await PL.messageTo('user', id, name)) again(); }
     if (a === 'mail') PL.compose({ to: u.email, subject: 'Vetroom', body: `Ciao ${String(u.name || '').split(' ')[0]},\n\n\n\nUn saluto,\nAureliano\nVetroom — www.vetroom.it`, name: u.name });
+    if (a === 'verify' || a === 'unverify') {
+      const ok = a === 'verify';
+      if (await PL.ask({ title: ok ? 'Iscrizione all\'Ordine verificata?' : 'Togliere la verifica?', html: ok
+          ? `Hai controllato sull'albo dell'Ordine dei Medici Veterinari di <b>${esc(pro?.albo_provincia || '')}</b> che <b>${esc(name)}</b> risulta iscritto con il numero <b>${esc(pro?.albo_numero || '')}</b>? Per ora è solo un'annotazione: non cambia cosa può fare in Vetroom.`
+          : 'L\'iscrizione tornerà “non verificata”.', ok: ok ? 'Sì, è verificata' : 'Togli' })
+          && await PL.run(b, () => PL.rpc('platform_albo_verify', { p_user: id, p_verified: ok })) !== undefined) again();
+    }
     if (a === 'logout') {
       if (await PL.ask({ title: `Scollegare ${name}?`, ok: 'Scollega', html: 'Esce da tutti i dispositivi: telefono, computer, app. Potrà rientrare subito con Google, a meno che tu non sospenda l\'account.' }) &&
           await PL.run(b, () => PL.rpc('platform_user_logout', { p_user: id })) !== undefined) again();

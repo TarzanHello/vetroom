@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Ponte di comando · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-07a">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-07b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07a"></script>
-  <script src="../js/app.js?v=2026-10-07a"></script>
-  <script src="plancia.js?v=2026-10-07a"></script>
+  <script src="../js/config.js?v=2026-10-07b"></script>
+  <script src="../js/app.js?v=2026-10-07b"></script>
+  <script src="plancia.js?v=2026-10-07b"></script>
 </head>
 <body class="pl" data-station="ponte">
 <main>
@@ -28,7 +28,7 @@
         <div class="pn-h"><h2 id="chartTitle">Crescita</h2>
           <div class="tools">
             <div class="seg" role="group" aria-label="Cosa mostrare" id="segS">
-              <button type="button" data-s="users" aria-pressed="true">Iscritti</button><button type="button" data-s="clinics" aria-pressed="false">Cliniche</button><button type="button" data-s="visits" aria-pressed="false">Visite</button><button type="button" data-s="appointments" aria-pressed="false">Appuntamenti</button>
+              <button type="button" data-s="users" aria-pressed="true">Iscritti</button><button type="button" data-s="clinics" aria-pressed="false">Strutture</button><button type="button" data-s="visits" aria-pressed="false">Visite</button><button type="button" data-s="appointments" aria-pressed="false">Appuntamenti</button>
             </div>
             <div class="seg" role="group" aria-label="Periodo" id="segP">
               <button type="button" data-p="days" aria-pressed="true">30 giorni</button><button type="button" data-p="weeks" aria-pressed="false">12 settimane</button>
@@ -48,9 +48,14 @@
       </section>
       <div class="c5" style="display:grid;gap:18px;align-content:start">
         <section class="pn" style="margin:0">
-          <div class="pn-h"><h2>Percorso delle cliniche</h2></div>
+          <div class="pn-h"><h2>Percorso delle strutture</h2></div>
           <div class="nums" id="funnel" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>
-          <p class="small dim" style="margin:10px 0 0">Una clinica diventa la “stanza digitale dello studio” quando almeno un suo cliente usa FurrFinder.</p>
+          <p class="small dim" style="margin:10px 0 0">Una struttura diventa la “stanza digitale dello studio” quando almeno un suo cliente usa FurrFinder.</p>
+        </section>
+        <section class="pn" style="margin:0" id="adesioni" hidden>
+          <div class="pn-h"><h2>Richieste di adesione</h2></div>
+          <p class="small dim" style="margin:-6px 0 8px">Professionisti che aspettano che il titolare li approvi. Se una richiesta è ferma da giorni, conviene scrivere al titolare.</p>
+          <ul class="list" id="joinsList"></ul>
         </section>
         <section class="pn" style="margin:0">
           <div class="pn-h"><h2>Ultimi arrivati</h2><div class="tools"><a class="btn sm ghost" href="utenti.html">Tutti</a></div></div>
@@ -84,8 +89,8 @@
     const g = (href, val, label, extra, extraTitle) => `<a class="gauge" href="${href}"><b>${n(val)}</b><span>${label}</span>${extra != null ? `<em class="${Number(extra) ? '' : 'zero'}" title="${extraTitle || ''}">+${n(extra)}</em>` : ''}</a>`;
     $('#gauges').innerHTML =
       g('utenti.html', s.utenti, 'Iscritti', s.nuovi_utenti_30gg, 'nuovi negli ultimi 30 giorni') +
-      g('cliniche.html', s.cliniche, 'Cliniche', s.nuove_cliniche_30gg, 'nuove negli ultimi 30 giorni') +
-      g('cliniche.html?fase=active', s.cliniche_attive_30gg, 'Cliniche attive (30 gg)') +
+      g('cliniche.html', s.cliniche, 'Strutture', s.nuove_cliniche_30gg, 'nuove negli ultimi 30 giorni') +
+      g('cliniche.html?fase=active', s.cliniche_attive_30gg, 'Strutture attive (30 gg)') +
       g('utenti.html?tipo=owner', s.proprietari, 'Proprietari su FurrFinder') +
       g('diario.html?cat=visita', s.visite, 'Visite registrate') +
       g('prenotazioni.html?ambito=online', s.prenotazioni_online, 'Prenotazioni online');
@@ -187,10 +192,20 @@
     const users = us || [], clinics = cl || [];
     const nu = seenAt ? users.filter((u) => new Date(u.created_at) > new Date(seenAt)).length : 0;
     const nc = seenAt ? clinics.filter((c) => new Date(c.created_at) > new Date(seenAt)).length : 0;
-    const news = [nu ? `${nu} ${nu === 1 ? 'nuovo iscritto' : 'nuovi iscritti'}` : '', nc ? `${nc} ${nc === 1 ? 'nuova clinica' : 'nuove cliniche'}` : ''].filter(Boolean);
+    const news = [nu ? `${nu} ${nu === 1 ? 'nuovo iscritto' : 'nuovi iscritti'}` : '', nc ? `${nc} ${nc === 1 ? 'nuova struttura' : 'nuove strutture'}` : ''].filter(Boolean);
     $('#vsSub').textContent = `Aggiornato alle ${PL.hm(new Date())}.` + (seenAt ? (news.length ? ` Dalla tua ultima visita (${PL.dt(seenAt)}): ${news.join(', ')}.` : ' Nessuna novità dalla tua ultima visita.') : '');
   };
-  await Promise.all([load(), loadFeed()]);
+  const loadJoins = async () => {
+    const rows = await PL.try('platform_join_requests', {}, null);
+    if (!rows || !rows.length) { $('#adesioni').hidden = true; return; }
+    const days = (d) => Math.floor((Date.now() - new Date(d).getTime()) / 864e5);
+    $('#joinsList').innerHTML = rows.slice(0, 8).map((r) => `<li><div class="grow"><a href="${PL.userHref(r.user_id)}"><strong>${esc(r.name || r.email)}</strong></a>
+        <span class="small dim" style="display:block">${r.role === 'vet' ? 'veterinario' : 'personale'} → <a href="clinica.html?id=${r.clinic_id}">${esc(r.clinic_name)}</a> <span class="mono">${esc(r.clinic_code || '')}</span></span></div>
+        <div style="text-align:right">${days(r.created_at) >= 3 ? `<span class="pill warn">${days(r.created_at)} giorni</span>` : `<span class="small faint">${PL.ago(r.created_at)}</span>`}</div></li>`).join('')
+      + (rows.length > 8 ? `<li class="dim">…e altre ${rows.length - 8}.</li>` : '');
+    $('#adesioni').hidden = false;
+  };
+  await Promise.all([load(), loadFeed(), loadJoins()]);
   drawStatus(PL.alerts || []);
   localStorage.setItem(SEEN, new Date().toISOString());
   PL.$('#boot').remove(); PL.$('#page').hidden = false;

@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Utenti · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-07a">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-07b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07a"></script>
-  <script src="../js/app.js?v=2026-10-07a"></script>
-  <script src="plancia.js?v=2026-10-07a"></script>
+  <script src="../js/config.js?v=2026-10-07b"></script>
+  <script src="../js/app.js?v=2026-10-07b"></script>
+  <script src="plancia.js?v=2026-10-07b"></script>
 </head>
 <body class="pl" data-station="utenti">
 <main>
@@ -68,7 +68,7 @@
   $('#csv').addEventListener('click', () => PL.csv(`vetroom-utenti-${new Date().toISOString().slice(0, 10)}.csv`, T.rows, [
     ['Codice', (r) => r.code], ['Nome', (r) => r.full_name], ['Email', (r) => r.email],
     ['Tipo', (r) => [r.is_staff ? 'Professionista' : '', r.is_owner ? 'Proprietario' : ''].filter(Boolean).join(' + ') || 'A metà'],
-    ['Cliniche', (r) => (Array.isArray(r.clinics) ? r.clinics.map((c) => c.name + ' (' + (PL.ROLE[c.role] || c.role) + ')').join(', ') : '')],
+    ['Strutture', (r) => (Array.isArray(r.clinics) ? r.clinics.map((c) => c.name + ' (' + (PL.ROLE[c.role] || c.role) + ')').join(', ') : '')],
     ['Animali', (r) => r.pets], ['Iscritto il', (r) => PL.dt(r.created_at)], ['Ultimo accesso', (r) => PL.dt(r.last_sign_in_at)],
     ['Stato', (r) => r.f.trashed ? 'Nel cestino' : r.f.suspended ? 'Sospeso' : 'Attivo']]));
   apply();
