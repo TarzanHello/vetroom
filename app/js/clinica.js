@@ -183,7 +183,7 @@
     return `https://wa.me/${n || ''}?text=${encodeURIComponent(text)}`;
   };
   VR.mailLink = (email, subject, text) => `mailto:${encodeURIComponent(email || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
-  VR.OWNER_PORTAL = 'https://www.vetroom.it/app/?per=proprietario';
+  VR.OWNER_PORTAL = 'https://vetroom.it/app/?per=proprietario';
   VR.fmtWhen = (d) => new Date(d).toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   VR.apptMessage = ({ pet, startsAt, clinic }) =>
     `Buongiorno, le ricordiamo l'appuntamento${pet ? ' per ' + pet : ''} ${VR.fmtWhen(startsAt).replace(',', ' alle')} presso ${clinic}. ` +

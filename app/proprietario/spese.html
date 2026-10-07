@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0b2545">
+  <title>Spese veterinarie – FurrFinder</title>
+  <link rel="manifest" href="/app/manifest-furrfinder.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/furrfinder-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FurrFinder">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07h">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../vendor/jspdf-2.5.2.min.js"></script>
+  <script src="../js/config.js?v=2026-10-07h"></script>
+  <script src="../js/app.js?v=2026-10-07h"></script>
+  <script src="../js/i18n.js?v=2026-10-07h"></script>
+  <script src="../js/layout.js?v=2026-10-07h"></script>
+  <script src="../js/clinica.js?v=2026-10-07h"></script>
+  <script src="../js/proprietario.js?v=2026-10-07h"></script>
+  <script src="../js/fatture.js?v=2026-10-07h"></script>
+</head>
+<body data-shell="owner" data-nav="profilo">
+  <main>
+    <h1>Spese veterinarie</h1>
+    <p class="muted">Le fatture delle cliniche che usano Vetroom, anno per anno, pronte per la dichiarazione dei redditi.</p>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <div class="chips year-chips" id="years"></div>
+
+      <section class="panel tax-card" id="sum"></section>
+
+      <section class="panel">
+        <h2 id="listTitle">Fatture</h2>
+        <ul class="exp-list" id="list"></ul>
+      </section>
+
+      <details class="panel tax-help">
+        <summary><strong>Come funziona la detrazione</strong></summary>
+        <p>Le spese veterinarie per gli animali da compagnia si detraggono al <strong>19%</strong> nel 730, sulla parte che supera <strong>129,11 €</strong> e fino a <strong>550 €</strong> di spese nell'anno. Valgono solo se hai pagato con un mezzo <strong>tracciabile</strong> (carta, bancomat, bonifico): i pagamenti in contanti non si detraggono.</p>
+        <p>La clinica invia queste spese al <strong>Sistema Tessera Sanitaria</strong>: l'Agenzia delle Entrate te le fa trovare già inserite nel 730 precompilato. Quando una fattura risulta <em>inviata</em>, non devi fare nulla.</p>
+        <p class="hint-small">La stima qui sopra è indicativa: considera solo le fatture delle cliniche che usano Vetroom. Se hai altre spese veterinarie, la franchigia di 129,11 € si applica una volta sola al totale. Per il calcolo esatto fanno fede il 730 precompilato e il tuo CAF o commercialista.</p>
+      </details>
+
+      <div class="empty" id="empty" hidden>
+        <p><strong>Nessuna fattura, per ora.</strong></p>
+        <p class="muted">Quando una clinica che usa Vetroom ti fa una fattura, la trovi qui da sola, insieme al totale da portare nel 730.</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadOwnerContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const I = VR.inv;
+    const eur = (x) => I.money(x);
+    const { data: years, error } = await VR.sb.rpc('owner_expense_years');
+    VR.hide(loading);
+    if (error) {
+      VR.say(msg, /Could not find the function|PGRST202/.test(error.message || '') ? 'Questa sezione sarà disponibile a breve.' : VR.errorText(error), /PGRST202|Could not find/.test(error.message || '') ? 'info' : 'error');
+      return;
+    }
+    VR.show(VR.$('#page'));
+    if (!years || !years.length) { VR.show(VR.$('#empty')); VR.hide(VR.$('#sum')); VR.hide(VR.$('#list').closest('.panel')); return; }
+
+    const thisYear = new Date().getFullYear();
+    let year = Number(VR.param('anno')) || (years.some((y) => y.year === thisYear - 1) && new Date().getMonth() < 6 ? thisYear - 1 : years[0].year);
+    if (!years.some((y) => y.year === year)) year = years[0].year;
+    let rows = [];
+
+    // stima: 19% della parte tra 129,11 € e 550 €
+    const estimate = (traced) => Math.max(0, Math.min(Number(traced), 550) - 129.11) * 0.19;
+
+    const draw = () => {
+      VR.$('#years').innerHTML = years.map((y) => `<button type="button" class="chip ${y.year === year ? 'is-on' : ''}" data-y="${y.year}">${y.year}</button>`).join('');
+      const y = years.find((x) => x.year === year) || { paid: 0, traced: 0, unpaid: 0 };
+      const cash = Number(y.paid) - Number(y.traced);
+      const allSent = rows.filter((r) => r.paid_on && r.doc_type === 'FT').every((r) => r.sent_to_ts);
+      VR.$('#sum').innerHTML = `
+        <div class="tax-head"><span class="muted">Spese veterinarie pagate nel ${year}</span><strong class="tax-big">${eur(y.paid)}</strong></div>
+        <div class="tax-grid">
+          <div><span>Detraibili (pagate in modo tracciabile)</span><b>${eur(y.traced)}</b></div>
+          <div><span>Detrazione stimata nel 730</span><b class="tax-green">${eur(estimate(y.traced))}</b>${Number(y.traced) > 0 && Number(y.traced) <= 129.11 ? '<span>sotto la franchigia di 129,11 €: si somma alle altre spese veterinarie dell\'anno</span>' : Number(y.traced) > 550 ? '<span>calcolata sul massimo di 550 €</span>' : ''}</div>
+          ${cash > 0.009 ? `<div><span>Pagate in contanti (non detraibili)</span><b>${eur(cash)}</b></div>` : ''}
+          ${Number(y.unpaid) > 0.009 ? `<div><span>Fatture ancora da pagare</span><b>${eur(y.unpaid)}</b></div>` : ''}
+        </div>
+        <p class="hint-small" style="margin:10px 0 0">${allSent ? '✓ Le cliniche hanno inviato queste spese al Sistema Tessera Sanitaria: le ritroverai nel 730 precompilato.' : 'Alcune fatture non risultano ancora inviate al Sistema Tessera Sanitaria: la clinica le invia periodicamente.'}</p>`;
+      VR.$('#listTitle').textContent = `Fatture del ${year}`;
+      VR.$('#list').innerHTML = rows.map((r) => {
+        const nc = r.doc_type === 'NC';
+        const st = nc ? 'Nota di credito' : r.paid_on ? `Pagata il ${I.date(r.paid_on)} · ${VR.esc(I.PAY[r.payment_method] || r.payment_method || '')}${r.traced === false ? ' (non detraibile)' : ''}` : 'Da pagare';
+        return `<li>
+          <div class="exp-main"><strong translate="no">${VR.esc(r.clinic_name || 'Clinica')}</strong>
+            <span>${nc ? 'Nota di credito' : 'Fattura'} n. ${VR.esc(r.doc_number)} del ${I.date(r.issued_on)}${r.pet_name ? ' · <span translate="no">' + VR.esc(r.pet_name) + '</span>' : ''}</span>
+            <span class="exp-st">${st}${r.sent_to_ts ? ' · <span class="exp-ts">inviata al Sistema TS ✓</span>' : ''}</span></div>
+          <div class="exp-side"><b class="${nc ? 'exp-neg' : ''}">${nc ? '−' : ''}${eur(Math.abs(Number(r.total)))}</b>
+            <button type="button" class="btn btn-ghost btn-small" data-pdf="${r.id}">PDF</button></div>
+        </li>`;
+      }).join('') || '<li class="muted" style="padding:12px">Nessuna fattura in questo anno.</li>';
+    };
+    const load = async () => {
+      const { data, error: e } = await VR.sb.rpc('owner_expenses', { p_year: year });
+      if (e) { VR.say(msg, VR.errorText(e), 'error'); return; }
+      rows = data || [];
+      draw();
+      const u = new URL(location.href); u.searchParams.set('anno', year); history.replaceState(null, '', u);
+    };
+    VR.$('#years').addEventListener('click', (e) => { const b = e.target.closest('[data-y]'); if (b) { year = Number(b.dataset.y); load(); } });
+    VR.$('#list').addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-pdf]'); if (!b) return;
+      const r = rows.find((x) => x.id === b.dataset.pdf); if (!r) return;
+      b.disabled = true;
+      try { I.buildPdf(r).save(I.pdfName(r)); } catch (err) { VR.say(msg, 'PDF non generato: ' + VR.errorText(err), 'error'); }
+      b.disabled = false;
+    });
+    await load();
+  })();
+  </script>
+</body>
+</html>

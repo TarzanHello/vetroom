@@ -4,6 +4,12 @@ DirectoryIndex index.html
 
 <IfModule mod_rewrite.c>
 RewriteEngine On
+# Un solo indirizzo per Google: sempre https://vetroom.it (con www → senza www, come già fa Hostinger)
+RewriteCond %{HTTP_HOST} ^www\.vetroom\.it$ [NC]
+RewriteRule ^ https://vetroom.it%{REQUEST_URI} [L,R=301]
+# /index.html e /guida/index.html → indirizzo della cartella (niente pagine doppie)
+RewriteCond %{THE_REQUEST} \s/+(guida/)?index\.html[\s?] [NC]
+RewriteRule ^(guida/)?index\.html$ https://vetroom.it/$1 [L,R=301]
 # Forza HTTPS
 RewriteCond %{HTTPS} !=on
 RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
