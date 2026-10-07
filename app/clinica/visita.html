@@ -544,7 +544,7 @@
       } else {
         const { data, error } = await VR.sb.from('visits').insert({
           ...v, clinic_id: ctx.clinicId, pet_id: petId, client_id: acc?.client_id || null,
-          created_by: ctx.session.user.id
+          created_by: ctx.session.user.id, ...(VR.param('apt') ? { appointment_id: VR.param('apt') } : {})
         }).select('id').single();
         if (error) { btn.disabled = false; VR.say(msg2, VR.errorText(error), 'error'); return false; }
         newId = data.id;

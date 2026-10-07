@@ -153,6 +153,10 @@
       e.preventDefault();
       const v = {};
       for (const el of form.elements) { if (!el.name) continue; v[el.name] = el.type === 'checkbox' ? el.checked : el.value; }
+      if (o.word) {
+        if (String(v.__word || '').trim().toUpperCase() !== String(o.word).toUpperCase()) return;
+        v.__word = String(o.word);
+      }
       for (const f of o.fields || []) {
         if (f.required && !String(v[f.name] || '').trim()) { PL.say(d.querySelector('[data-err]'), `Compila il campo "${f.label}".`, 'bad'); return; }
       }

@@ -150,8 +150,9 @@
     } catch (e) { $('#errs').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
   };
   $('#clearErr').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
     if (await PL.ask({ title: 'Svuotare l\'elenco degli errori?', ok: 'Svuota', html: 'Fallo dopo averli letti o sistemati.' }) &&
-        await PL.run(e.currentTarget, () => PL.rpc('platform_clear_errors'), 'Elenco svuotato.') !== undefined) { loadErr(); PL.refreshSignals(); }
+        await PL.run(btn, () => PL.rpc('platform_clear_errors'), 'Elenco svuotato.') !== undefined) { loadErr(); PL.refreshSignals(); }
   });
 
   // ---------- Il tuo account ----------
