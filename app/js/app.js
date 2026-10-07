@@ -48,7 +48,7 @@
   // ---------- Monitoraggio errori ----------
   // Ogni errore mostrato all'utente (e ogni errore imprevisto del codice) viene registrato
   // per l'amministratore della piattaforma. Nessun servizio esterno: finisce nel database Vetroom.
-  VR.VERSION = '2026-10-07h';
+  VR.VERSION = '2026-10-08a';
   const IGNORE = /Failed to fetch|NetworkError|Load failed|network error|JWT|not authenticated|Accesso richiesto|AbortError|ResizeObserver loop|Area riservata|earlier share has not yet completed|Share canceled|^(redirect|noclinic|suspended)$/i;
   const sent = new Set();
   VR.reportError = (e, where) => {
@@ -143,6 +143,21 @@
   };
 
   // Dove deve andare un utente in base al suo profilo
+  VR.CLINIC_KEY = 'vetroom_clinica';   // struttura scelta (anche benvenuto.html la imposta)
+  // Amministratore della piattaforma? Serve a tutte le pagine (anche benvenuto.html):
+  // mostra la voce "Piattaforma" e decide dove mandare chi non ha una struttura.
+  VR.checkPlatformAdmin = async () => {
+    let v = null;
+    try { v = sessionStorage.getItem('vetroom_is_platform'); } catch (e) { /* niente memoria di sessione */ }
+    if (v === null) {
+      const { data, error } = await VR.sb.rpc('is_platform_admin');
+      if (error) return false;                 // in caso di errore non ricordare un "no" sbagliato
+      v = data ? '1' : '0';
+      try { sessionStorage.setItem('vetroom_is_platform', v); } catch (e) { /* ok */ }
+    }
+    if (v === '1') document.querySelectorAll('[data-platform-only]').forEach((x) => x.removeAttribute('hidden'));
+    return v === '1';
+  };
   VR.homeFor = (p) => (p.is_staff ? 'clinica/' : p.is_owner ? 'proprietario/' : 'benvenuto.html');
 
   VR.firstName = (p, session) =>

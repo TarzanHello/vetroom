@@ -80,17 +80,6 @@
     return { clientId, petId };
   };
 
-  // Mostra la voce "Piattaforma" solo agli amministratori della piattaforma
-  VR.checkPlatformAdmin = async () => {
-    let v = sessionStorage.getItem('vetroom_is_platform');
-    if (v === null) {
-      const { data } = await VR.sb.rpc('is_platform_admin');
-      v = data ? '1' : '0';
-      sessionStorage.setItem('vetroom_is_platform', v);
-    }
-    if (v === '1') document.querySelectorAll('[data-platform-only]').forEach((x) => x.removeAttribute('hidden'));
-    return v === '1';
-  };
 
   // Legge un modulo: campi vuoti → null, caselle → vero/falso, numeri → numero
   VR.formValues = (form) => {
