@@ -21,6 +21,7 @@
     comunicazioni: '<svg viewBox="0 0 24 24"><path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
     diario: '<svg viewBox="0 0 24 24"><path d="M6 3.5h11l2 2v15H6z"/><path d="M9 8h7M9 11.5h7M9 15h4"/></svg>',
     sala: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
+    collaudo: '<svg viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
     cestino: '<svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
     cerca: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg>',
     menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>'
@@ -40,6 +41,7 @@
     ] },
     { g: 'Controllo', items: [
       { k: 'diario', l: 'Diario di bordo', h: 'diario.html' },
+      { k: 'collaudo', l: 'Collaudo', h: 'collaudo.html', badge: 'health' },
       { k: 'sala', l: 'Sala macchine', h: 'sala-macchine.html', badge: 'errors' },
       { k: 'cestino', l: 'Cestino', h: 'cestino.html', badge: 'trash' }
     ] }
@@ -163,6 +165,11 @@
       for (const el of form.elements) { if (!el.name) continue; v[el.name] = el.type === 'checkbox' ? el.checked : el.value; }
       for (const f of o.fields || []) {
         if (f.required && !String(v[f.name] || '').trim()) { PL.say(d.querySelector('[data-err]'), `Compila il campo "${f.label}".`, 'bad'); return; }
+      }
+      if (o.word) {
+        // Il controllo accetta maiuscole/minuscole e spazi ai lati: al server va sempre la parola esatta
+        if (String(v.__word || '').trim().toUpperCase() !== String(o.word).toUpperCase()) { PL.say(d.querySelector('[data-err]'), `Per confermare scrivi ${o.word}.`, 'bad'); return; }
+        v.__word = String(o.word);
       }
       done(v);
     });
@@ -435,7 +442,18 @@
     set('errors', by.errors?.n || 0, by.errors?.level === 'bad');
     set('trash', by.trash?.n || 0);
     const m = $('#plMaint'); if (m) { m.hidden = !by.maintenance; m.className = 'pl-light hide-m bad'; }
-    PL.alerts = alerts || [];
+    // Spia del Collaudo: problemi dell'ultimo controllo (rossa se ce ne sono di gravi)
+    const hc = await PL.try('platform_health_history', { p_limit: 1 }, null);
+    const last = hc && hc[0] && hc[0].summary;
+    if (last) set('health', Number(last.bad) + Number(last.err) + Number(last.warn), Number(last.bad) + Number(last.err) > 0);
+    PL.alerts = (alerts || []).slice();
+    if (hc) {
+      const gravi = last ? Number(last.bad) + Number(last.err) : 0, guardare = last ? Number(last.warn) : 0;
+      const age = hc[0] ? (Date.now() - new Date(hc[0].at).getTime()) / 864e5 : Infinity;
+      if (gravi) PL.alerts.push({ kind: 'health', level: 'bad', n: gravi, text: `Collaudo: ${gravi} ${gravi === 1 ? 'problema grave' : 'problemi gravi'}`, href: 'collaudo.html' });
+      else if (guardare) PL.alerts.push({ kind: 'health', level: 'warn', n: guardare, text: `Collaudo: ${guardare} ${guardare === 1 ? 'cosa' : 'cose'} da guardare`, href: 'collaudo.html' });
+      if (age > 7) PL.alerts.push({ kind: 'health', level: 'info', n: 0, text: hc[0] ? 'Ultimo collaudo più vecchio di una settimana: rifallo' : 'Fai il primo collaudo completo della piattaforma', href: 'collaudo.html#avvia' });
+    }
     document.dispatchEvent(new CustomEvent('pl:signals', { detail: PL.alerts }));
     return PL.alerts;
   };
