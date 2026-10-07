@@ -12,13 +12,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-07b">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07c">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07b"></script>
-  <script src="../js/app.js?v=2026-10-07b"></script>
-  <script src="../js/i18n.js?v=2026-10-07b"></script>
-  <script src="../js/layout.js?v=2026-10-07b"></script>
-  <script src="../js/clinica.js?v=2026-10-07b"></script>
+  <script src="../js/config.js?v=2026-10-07c"></script>
+  <script src="../js/app.js?v=2026-10-07c"></script>
+  <script src="../js/i18n.js?v=2026-10-07c"></script>
+  <script src="../js/layout.js?v=2026-10-07c"></script>
+  <script src="../js/clinica.js?v=2026-10-07c"></script>
 </head>
 <body data-shell="clinic" data-nav="team">
 
@@ -117,7 +117,13 @@
     const ownerId = ctx.clinic.code_owner_id || null;
     const mixed = ctx.billingMode === 'misto';
     const hasP26 = 'code' in ctx.clinic;
-    let members = [];
+    let members = [], memberRows = [];
+    const lastAdmin = (uid) => {
+      const r = memberRows.find((x) => x.user_id === uid);
+      return !!r && r.role === 'admin' && r.status === 'active' &&
+        !memberRows.some((x) => x.user_id !== uid && x.role === 'admin' && x.status === 'active');
+    };
+    const LAST_ADMIN = 'La struttura deve avere almeno un amministratore attivo: prima nomina amministratore un altro membro, poi cambia questo ruolo.';
     if (mixed) { VR.$('#billHint').textContent = 'In questa struttura alcuni veterinari fatturano a nome proprio: spunta chi è abilitato. Il modello si cambia in Cassa → Impostazioni.'; VR.show(VR.$('#billHint')); }
 
     // ---------- Codice della struttura ----------
@@ -230,6 +236,10 @@
       const { data: profs } = await VR.sb.from('profiles').select('id, full_name, first_name, last_name, email').in('id', ids);
       const P = Object.fromEntries((profs || []).map((p) => [p.id, p]));
       members = [];
+      memberRows = rows;
+      // Una struttura non può restare senza amministratore attivo (il database lo impedisce):
+      // se sei l'unico, il tuo ruolo resta bloccato finché non nomini un altro amministratore
+      const otherAdmins = (uid) => rows.some((x) => x.user_id !== uid && x.role === 'admin' && x.status === 'active');
       VR.$('#members').innerHTML = rows.map((r) => {
         const p = P[r.user_id] || {};
         const name = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.full_name || p.email || 'Utente';
@@ -243,8 +253,8 @@
         else if (vetRow && r.status === 'active') members.push({ id: r.user_id, name, vet: true });
         const controls = isOwnerRow ? `<div class="member-ctl">${billCtl}<span class="pill pill-ok">Titolare</span></div>` : isAdmin ? `
           <div class="member-ctl">
-            <select data-role="${r.user_id}" aria-label="Ruolo di ${VR.esc(name)}">
-              ${Object.entries(VR.ROLE).map(([k, l]) => `<option value="${k}" ${k === r.role ? 'selected' : ''}>${l}</option>`).join('')}
+            <select data-role="${r.user_id}" aria-label="Ruolo di ${VR.esc(name)}" ${r.role === 'admin' && r.status === 'active' && !otherAdmins(r.user_id) ? 'disabled title="È l\'unico amministratore attivo: prima nominane un altro"' : ''}>
+              ${['admin', 'vet', 'secretary'].map((k) => `<option value="${k}" ${k === r.role ? 'selected' : ''}>${VR.ROLE[k]}</option>`).join('')}
             </select>
             ${self ? '' : `<button type="button" class="btn btn-ghost btn-small" data-status="${r.user_id}" data-to="${r.status === 'active' ? 'suspended' : 'active'}">${r.status === 'active' ? 'Sospendi' : 'Riattiva'}</button>
             <button type="button" class="btn btn-danger btn-small" data-remove="${r.user_id}" data-name="${VR.esc(name)}">Rimuovi</button>`}
@@ -306,6 +316,7 @@
       }
       const s = ev.target.closest('[data-role]'); if (!s) return;
       VR.hide(msg);
+      if (s.value !== 'admin' && lastAdmin(s.dataset.role)) { VR.say(msg, LAST_ADMIN, 'error'); s.value = 'admin'; return; }
       const { error } = await VR.sb.from('clinic_members').update({ role: s.value })
         .eq('clinic_id', ctx.clinicId).eq('user_id', s.dataset.role);
       if (error) { VR.say(msg, VR.errorText(error), 'error'); }
@@ -315,6 +326,8 @@
     VR.$('#members').addEventListener('click', async (ev) => {
       const st = ev.target.closest('[data-status]'), rm = ev.target.closest('[data-remove]');
       VR.hide(msg);
+      if (st && st.dataset.to === 'suspended' && lastAdmin(st.dataset.status)) { VR.say(msg, LAST_ADMIN, 'error'); return; }
+      if (rm && lastAdmin(rm.dataset.remove)) { VR.say(msg, LAST_ADMIN, 'error'); return; }
       if (st) {
         const { error } = await VR.sb.from('clinic_members').update({ status: st.dataset.to })
           .eq('clinic_id', ctx.clinicId).eq('user_id', st.dataset.status);

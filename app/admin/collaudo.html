@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Collaudo · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-07c">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-07c"></script>
+  <script src="../js/app.js?v=2026-10-07c"></script>
+  <script src="plancia.js?v=2026-10-07c"></script>
+  <style>
+    .hc-areas { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); margin-top: 22px; border-top: 1px solid var(--edge); border-left: 1px solid var(--edge); }
+    .hc-area { background: #0a1424; padding: 12px 14px; border-right: 1px solid var(--edge); border-bottom: 1px solid var(--edge); color: inherit; text-decoration: none !important; display: block; }
+    a.hc-area:hover { background: #0e1b30; }
+    .hc-area b { display: flex; align-items: center; gap: 8px; font: 600 14px var(--display); letter-spacing: .02em; }
+    .hc-area span { display: block; color: var(--dim); font-size: 12.5px; margin-top: 4px; font-family: var(--mono); }
+    .lamp { width: 9px; height: 9px; flex: none; transform: rotate(45deg); background: var(--green); box-shadow: 0 0 8px var(--green); display: inline-block; }
+    .lamp.warn { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+    .lamp.bad, .lamp.err { background: var(--red); box-shadow: 0 0 8px var(--red); }
+    .lamp.info { background: var(--signal); box-shadow: 0 0 6px var(--signal); }
+    .lamp.wait { background: var(--faint); box-shadow: none; }
+    .hc-list { list-style: none; margin: 0; padding: 0; }
+    .hc-list > li { border-bottom: 1px solid rgba(31, 49, 80, .55); }
+    .hc-list details > summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 11px 6px; cursor: pointer; }
+    .hc-list details > summary::-webkit-details-marker { display: none; }
+    .hc-list details > summary:hover { background: rgba(79, 216, 232, .045); }
+    .hc-list details[open] > summary { background: rgba(79, 216, 232, .06); }
+    .hc-list .ttl { flex: 1; min-width: 0; }
+    .hc-list .n { font: 600 14px var(--mono); min-width: 3ch; text-align: right; }
+    .hc-list .chg { font: 12px var(--mono); color: var(--faint); min-width: 5ch; text-align: right; }
+    .hc-list .chg.up { color: var(--red); } .hc-list .chg.down { color: var(--green); }
+    .hc-body { padding: 4px 6px 16px 27px; font-size: 14px; }
+    .hc-body p { margin: 0 0 6px; }
+    .hc-body .todo { color: var(--text); }
+    .hc-body .todo::before { content: "Cosa fare: "; color: var(--amber); font-weight: 600; }
+    .hc-sample { list-style: none; margin: 10px 0 0; padding: 0; border-left: 1px solid var(--edge); }
+    .hc-sample li { padding: 5px 10px; font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+    .hc-sample .d { color: var(--dim); font-family: var(--mono); font-size: 12.5px; word-break: break-word; }
+    .hc-area-h { margin: 26px 0 6px; display: flex; align-items: center; gap: 10px; font: 600 15px var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+    .hc-area-h:first-child { margin-top: 0; }
+    .hc-progress { height: 4px; background: var(--hull-3); margin-top: 14px; overflow: hidden; }
+    .hc-progress i { display: block; height: 100%; width: 0; background: var(--signal); box-shadow: 0 0 8px var(--signal); transition: width .2s; }
+    .hc-file-sum { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 10px; font-size: 14px; }
+    .spark { display: flex; align-items: flex-end; gap: 3px; height: 46px; margin: 4px 0 12px; }
+    .spark i { flex: 1; max-width: 18px; min-height: 2px; background: var(--edge-hi); position: relative; }
+    .spark i.bad { background: var(--red); } .spark i.warn { background: var(--amber); } .spark i.ok { background: var(--green); }
+  </style>
+</head>
+<body class="pl" data-station="collaudo">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Collaudo</h1><p>Il controllo completo della piattaforma: sicurezza, dati, cassa, agenda, notifiche e file sul server. Legge e basta, non modifica nulla.</p></div></div>
+
+  <section class="viewscreen" aria-label="Esito del collaudo">
+    <div class="vs-status"><span class="vs-dot" id="vsDot"></span><span class="big" id="vsTitle">Nessun collaudo ancora eseguito</span></div>
+    <p class="vs-sub" id="vsSub">Premi “Avvia il collaudo completo”: ci vogliono pochi secondi.</p>
+    <div class="actions" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
+      <button class="btn prim" type="button" id="run">Avvia il collaudo completo</button>
+      <button class="btn" type="button" id="copy" disabled>Copia il rapporto per Claude</button>
+      <button class="btn ghost" type="button" id="dl" disabled>Scarica il rapporto</button>
+    </div>
+    <div class="hc-progress" id="prog" hidden><i></i></div>
+    <div class="hc-areas" id="areas" hidden></div>
+  </section>
+
+  <div class="cols">
+    <section class="pn c12" id="esiti">
+      <div class="pn-h"><h2>Controlli sul database</h2>
+        <div class="tools"><div class="seg" role="group" aria-label="Cosa mostrare" id="filt">
+          <button type="button" data-f="todo" aria-pressed="true">Da sistemare<span class="n" id="nTodo"></span></button><button type="button" data-f="info" aria-pressed="false">Informazioni<span class="n" id="nInfo"></span></button><button type="button" data-f="ok" aria-pressed="false">In regola<span class="n" id="nOk"></span></button><button type="button" data-f="all" aria-pressed="false">Tutti</button>
+        </div></div></div>
+      <div id="checks"><p class="dim">Il risultato compare qui.</p></div>
+    </section>
+
+    <section class="pn c12" id="file">
+      <div class="pn-h"><h2>File sul server</h2><div class="tools"><span class="small dim" id="fileAt"></span></div></div>
+      <p class="small dim" style="margin-top:-6px">Apre una per una le pagine di Vetroom, FurrFinder e della guida e controlla che esistano, che i file collegati (script, stili, librerie) ci siano e che siano tutte della stessa versione. Serve soprattutto dopo un caricamento con FileZilla: se un file è rimasto indietro lo trovi qui.</p>
+      <div id="files"><p class="dim">Il risultato compare qui.</p></div>
+    </section>
+
+    <section class="pn c6" id="errori">
+      <div class="pn-h"><h2>Errori per versione dell'app</h2></div>
+      <div id="errs"><p class="loader">Lettura</p></div>
+    </section>
+
+    <section class="pn c6" id="storico">
+      <div class="pn-h"><h2>Storico dei collaudi</h2></div>
+      <div id="hist"><p class="loader">Lettura</p></div>
+    </section>
+  </div>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, $$, esc, n } = PL;
+  const LV = { bad: 'Grave', err: 'Non eseguito', warn: 'Da guardare', info: 'Informazione', ok: 'In regola' };
+  const RANK = { err: 4, bad: 3, warn: 2, info: 1, ok: 0 };
+  const PILL = { bad: 'bad', err: 'bad', warn: 'warn', info: 'info', ok: 'ok' };
+  const VERSION = VR.VERSION;
+
+  let health = null, prev = null, files = null, filter = 'todo';
+
+  // ---------- Pagine da controllare ----------
+  const PAGES = ['app/index.html', 'app/benvenuto.html', 'app/piattaforma/index.html',
+    ...['index', 'agenda', 'animale', 'animali', 'backup', 'cassa', 'cliente', 'clienti', 'compensi', 'fattura', 'fatturazione', 'furrfinder', 'importa', 'impostazioni', 'messaggi', 'moduli', 'modulo', 'orari', 'team', 'visita'].map((p) => `app/clinica/${p}.html`),
+    ...['index', 'animale', 'animali', 'cliniche', 'messaggi', 'prenota', 'profilo', 'visita'].map((p) => `app/proprietario/${p}.html`),
+    ...['index', 'cestino', 'clinica', 'cliniche', 'collaudo', 'comunicazioni', 'diario', 'messaggi', 'prenotazioni', 'sala-macchine', 'utente', 'utenti'].map((p) => `app/admin/${p}.html`)];
+  const PUBLIC = ['index.html', 'privacy.html', 'termini.html', 'robots.txt', 'sitemap.xml', 'llms.txt', 'app/sw.js', 'app/manifest-vetroom.webmanifest', 'app/manifest-furrfinder.webmanifest',
+    ...['index', 'agenda-veterinaria-online', 'backup-privacy-gdpr-veterinario', 'cartella-clinica-veterinaria', 'fatture-veterinarie-cassa', 'furrfinder-app-clienti', 'importare-clienti-da-excel',
+      'iniziare-con-vetroom', 'invio-spese-veterinarie-sistema-ts', 'moduli-visita-consenso-certificato', 'referto-veterinario-pdf', 'registrare-nuovo-paziente', 'richiami-vaccinali-promemoria'].map((p) => `guida/${p}.html`)];
+
+  // ---------- Disegno dei risultati del database ----------
+  const sampleHtml = (c) => {
+    if (!c.sample || !c.sample.length) return '';
+    const items = c.sample.map((s) => {
+      const links = [s.c ? `<a href="${PL.clinicHref(s.c)}">struttura</a>` : '', s.u ? `<a href="${PL.userHref(s.u)}">utente</a>` : ''].filter(Boolean).join(' · ');
+      return `<li><span>${esc(s.t || '')}</span>${s.d ? `<span class="d">${esc(s.d)}</span>` : ''}${links ? `<span class="small">${links}</span>` : ''}</li>`;
+    }).join('');
+    const more = c.n > c.sample.length ? `<li class="faint small">… e altri ${n(c.n - c.sample.length)}</li>` : '';
+    return `<ul class="hc-sample">${items}${more}</ul>`;
+  };
+  const change = (c) => {
+    if (!prev) return '';
+    const before = Number(prev.problems?.[c.id] || 0), now = c.level === 'ok' ? 0 : Number(c.n || 0);
+    if (before === now) return '<span class="chg"></span>';
+    return `<span class="chg ${now > before ? 'up' : 'down'}" title="Rispetto al collaudo precedente">${now > before ? '+' : '−'}${n(Math.abs(now - before))}</span>`;
+  };
+  const drawChecks = () => {
+    if (!health) return;
+    const all = health.checks;
+    const pick = (c) => filter === 'all' || (filter === 'todo' ? ['bad', 'err', 'warn'].includes(c.level) : c.level === filter);
+    $('#nTodo').textContent = all.filter((c) => ['bad', 'err', 'warn'].includes(c.level)).length;
+    $('#nInfo').textContent = all.filter((c) => c.level === 'info').length;
+    $('#nOk').textContent = all.filter((c) => c.level === 'ok').length;
+    $$('#filt button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.f === filter));
+    const areas = [...new Set(all.map((c) => c.area))];
+    const html = areas.map((a) => {
+      const list = all.filter((c) => c.area === a && pick(c)).sort((x, y) => RANK[y.level] - RANK[x.level] || Number(y.n) - Number(x.n));
+      if (!list.length) return '';
+      return `<h3 class="hc-area-h" id="a-${esc(slug(a))}">${esc(a)}</h3><ul class="hc-list">${list.map((c) => `
+        <li><details>
+          <summary><span class="lamp ${c.level}"></span><span class="ttl">${esc(c.title)}</span>${change(c)}<span class="n">${c.level === 'ok' || c.level === 'err' ? '' : n(c.n)}</span><span class="pill ${PILL[c.level]}">${LV[c.level]}</span></summary>
+          <div class="hc-body"><p class="dim">${esc(c.why)}</p>${c.level === 'ok' ? '<p class="small faint">Nessun problema trovato.</p>' : `<p class="todo">${esc(c.todo)}</p>${sampleHtml(c)}`}</div>
+        </details></li>`).join('')}</ul>`;
+    }).join('');
+    $('#checks').innerHTML = html || `<p class="note ok" style="margin:0">${filter === 'todo' ? 'Niente da sistemare: tutti i controlli sono in regola o solo informativi.' : 'Niente in questo elenco.'}</p>`;
+  };
+  const slug = (s) => String(s).toLowerCase().replace(/[^a-z]+/g, '-');
+
+  const drawSummary = () => {
+    const s = health ? health.summary : null;
+    const fb = files ? files.bad : 0, fw = files ? files.warn : 0;
+    const bad = (s ? Number(s.bad) + Number(s.err) : 0) + fb, warn = (s ? Number(s.warn) : 0) + fw;
+    $('#vsDot').className = 'vs-dot' + (bad ? ' bad' : warn ? ' warn' : '');
+    $('#vsTitle').textContent = bad ? `${bad} ${bad === 1 ? 'problema grave' : 'problemi gravi'}` : warn ? `${warn} ${warn === 1 ? 'cosa da guardare' : 'cose da guardare'}` : 'Tutto in regola';
+    const parts = [];
+    if (s) parts.push(`${n(s.total)} controlli sul database in ${health.ms < 1000 ? 'meno di un secondo' : (health.ms / 1000).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' secondi'}: ${n(s.ok)} in regola, ${n(s.warn)} da guardare, ${n(s.info)} informazioni${Number(s.bad) ? `, ${n(s.bad)} gravi` : ''}${Number(s.err) ? `, ${n(s.err)} non eseguiti` : ''}`);
+    if (files) parts.push(`${n(files.total)} file sul server: ${files.bad || files.warn ? `${n(files.bad)} mancanti o rotti, ${n(files.warn)} non aggiornati` : 'tutti a posto'}`);
+    if (health) parts.push('eseguito ' + PL.ago(health.checked_at));
+    $('#vsSub').textContent = parts.join(' · ') + '.';
+    if (health) {
+      const areas = [...new Set(health.checks.map((c) => c.area))];
+      const tiles = areas.map((a) => {
+        const list = health.checks.filter((c) => c.area === a);
+        const worst = list.reduce((w, c) => (RANK[c.level] > RANK[w] ? c.level : w), 'ok');
+        const todo = list.filter((c) => ['bad', 'err', 'warn'].includes(c.level)).length;
+        return `<a class="hc-area" href="#a-${esc(slug(a))}" data-area="${esc(a)}"><b><span class="lamp ${worst}"></span>${esc(a)}</b><span>${todo ? todo + ' da sistemare' : 'in regola'} · ${list.length} controlli</span></a>`;
+      });
+      if (files) {
+        const worst = files.bad ? 'bad' : files.warn ? 'warn' : 'ok';
+        tiles.push(`<a class="hc-area" href="#file"><b><span class="lamp ${worst}"></span>File sul server</b><span>${files.bad + files.warn ? (files.bad + files.warn) + ' da sistemare' : 'in regola'} · ${files.total} file</span></a>`);
+      }
+      $('#areas').innerHTML = tiles.join('');
+      VR.show($('#areas'));
+    }
+    $('#copy').disabled = $('#dl').disabled = !health && !files;
+  };
+  $('#areas').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-area]'); if (!a) return;
+    // se l'area è tutta in regola, mostro anche i controlli superati
+    const list = health.checks.filter((c) => c.area === a.dataset.area);
+    if (!list.some((c) => ['bad', 'err', 'warn'].includes(c.level)) && filter === 'todo') { filter = 'all'; drawChecks(); }
+  });
+  $('#filt').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; drawChecks(); } });
+
+  // ---------- Controllo dei file sul server ----------
+  const base = new URL('/', location.href);
+  const get = async (path) => {
+    const url = new URL(path, base).href;
+    try {
+      const r = await fetch(url, { cache: 'no-store', redirect: 'follow' });
+      const type = r.headers.get('content-type') || '';
+      const text = /text|javascript|json|xml|manifest/.test(type) || /\.(html|js|css|txt|xml|webmanifest)(\?|$)/.test(path) ? await r.text() : '';
+      return { ok: r.ok, status: r.status, text, redirected: r.redirected, finalUrl: r.url };
+    } catch (e) { return { ok: false, status: 0, text: '', error: e.message }; }
+  };
+  const pool = async (items, size, fn, onStep) => {
+    const out = new Array(items.length); let i = 0, done = 0;
+    await Promise.all(Array.from({ length: size }, async () => {
+      while (i < items.length) { const k = i++; out[k] = await fn(items[k]); done++; if (onStep) onStep(done, items.length); }
+    }));
+    return out;
+  };
+  const checkFiles = async (onStep) => {
+    // la versione vera è quella scritta in app.js sul server (non quella in memoria del browser)
+    const appJs = await get('app/js/app.js?nocache=' + Date.now());
+    const serverVersion = (appJs.text.match(/VR\.VERSION\s*=\s*'([^']+)'/) || [])[1] || null;
+    const rows = [];
+    const assets = new Map(); // percorso → pagine che lo usano
+    const pageList = [...PAGES, ...PUBLIC];
+    const pageRes = await pool(pageList, 6, async (p) => ({ p, r: await get(p) }), (d) => onStep(d, pageList.length + 30));
+    for (const { p, r } of pageRes) {
+      const row = { file: p, kind: PAGES.includes(p) ? 'pagina' : 'sito', level: 'ok', note: '' };
+      if (!r.ok) { row.level = 'bad'; row.note = r.status ? `non trovato (errore ${r.status})` : 'non raggiungibile'; rows.push(row); continue; }
+      if (p.endsWith('.html')) {
+        const vs = [...r.text.matchAll(/\?v=([0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]?)/g)].map((m) => m[1]);
+        const uniq = [...new Set(vs)];
+        row.version = uniq.join(', ');
+        if (PAGES.includes(p) && p !== 'app/piattaforma/index.html') {
+          if (!vs.length) { row.level = 'warn'; row.note = 'nessun numero di versione nei collegamenti'; }
+          else if (uniq.length > 1) { row.level = 'warn'; row.note = 'collegamenti con versioni diverse: ' + uniq.join(', '); }
+          else if (serverVersion && uniq[0] !== serverVersion) { row.level = 'warn'; row.note = `pagina della versione ${uniq[0]}, il resto è ${serverVersion}: ricaricala con FileZilla`; }
+        }
+        // file collegati dalla pagina (solo quelli del sito)
+        const dir = new URL(p, base);
+        for (const m of r.text.matchAll(/<(?:script[^>]+src|link[^>]+href)="([^"#]+)"/g)) {
+          const ref = m[1];
+          if (/^(https?:)?\/\//.test(ref) || ref.startsWith('data:')) continue;
+          const u = new URL(ref, dir);
+          if (u.origin !== base.origin) continue;
+          const key = u.pathname.replace(/^\//, '');
+          if (!/\.(js|css|webmanifest)$/.test(key)) continue;
+          if (!assets.has(key)) assets.set(key, []);
+          assets.get(key).push(p);
+        }
+      }
+      rows.push(row);
+    }
+    const keys = [...assets.keys()].sort();
+    const assetRes = await pool(keys, 6, async (k) => ({ k, r: await get(k) }), (d, t) => onStep(pageList.length + d, pageList.length + t));
+    for (const { k, r } of assetRes) {
+      const row = { file: k, kind: 'collegato', level: 'ok', note: '', used: assets.get(k).length };
+      if (!r.ok) { row.level = 'bad'; row.note = `manca sul server (errore ${r.status || 'rete'}) · lo usano ${assets.get(k).slice(0, 3).join(', ')}${assets.get(k).length > 3 ? '…' : ''}`; }
+      else if (k === 'app/js/app.js') row.version = serverVersion || '?';
+      else if (k.endsWith('.js') && /^\s*<(!doctype|html)/i.test(r.text)) { row.level = 'bad'; row.note = 'al posto dello script il server restituisce una pagina HTML'; }
+      rows.push(row);
+    }
+    return { rows, serverVersion, total: rows.length, bad: rows.filter((r) => r.level === 'bad').length, warn: rows.filter((r) => r.level === 'warn').length, at: new Date().toISOString() };
+  };
+  const drawFiles = () => {
+    if (!files) return;
+    $('#fileAt').textContent = 'Controllati alle ' + PL.hm(files.at);
+    const off = files.rows.filter((r) => r.level !== 'ok');
+    const sum = `<div class="hc-file-sum"><span>Versione sul server: <span class="chip">${esc(files.serverVersion || 'sconosciuta')}</span></span>
+      ${files.serverVersion && files.serverVersion !== VERSION ? `<span class="pill warn">questa pagina usa ${esc(VERSION)}: ricarica la pagina (Ctrl+F5)</span>` : ''}
+      <span>${n(files.total)} file controllati</span><span class="${files.bad ? 'pill bad' : 'pill ok'}">${files.bad ? n(files.bad) + ' mancanti o rotti' : 'nessuno mancante'}</span>
+      <span class="${files.warn ? 'pill warn' : 'pill ok'}">${files.warn ? n(files.warn) + ' non aggiornati' : 'versioni allineate'}</span></div>`;
+    $('#files').innerHTML = sum + (off.length ? `<div class="tw"><table class="t"><thead><tr><th>File</th><th>Esito</th><th>Cosa succede</th></tr></thead><tbody>${off.map((r) => `
+      <tr class="${r.level === 'bad' ? 'is-bad' : ''}"><td class="mono small"><a href="/${esc(r.file)}" target="_blank" rel="noopener">${esc(r.file)}</a></td><td><span class="pill ${PILL[r.level]}">${r.level === 'bad' ? 'Rotto' : 'Da aggiornare'}</span></td><td class="small">${esc(r.note)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="note ok" style="margin:0">Tutte le pagine e i file collegati ci sono e sono della stessa versione.</p>')
+      + `<details style="margin-top:12px"><summary class="small dim" style="cursor:pointer">Elenco completo (${n(files.total)})</summary><div class="tw" style="margin-top:8px"><table class="t"><tbody>${files.rows.map((r) => `
+        <tr><td class="mono small">${esc(r.file)}</td><td class="small dim">${esc(r.kind)}${r.used ? ' · in ' + r.used + ' pagine' : ''}</td><td class="small mono">${esc(r.version || '')}</td><td><span class="lamp ${r.level}"></span></td></tr>`).join('')}</tbody></table></div></details>`;
+  };
+
+  // ---------- Avvio del collaudo ----------
+  const progress = (done, total) => { $('#prog i').style.width = Math.min(100, Math.round(done / Math.max(1, total) * 100)) + '%'; };
+  $('#run').addEventListener('click', async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true; b.textContent = 'Collaudo in corso…';
+    VR.show($('#prog')); progress(0, 1);
+    $('#vsTitle').textContent = 'Collaudo in corso';
+    $('#vsDot').className = 'vs-dot warn';
+    $('#vsSub').textContent = 'Controllo del database e delle pagine…';
+    try {
+      const hist = await PL.try('platform_health_history', { p_limit: 1 }, []);
+      prev = (hist && hist[0]) || null;
+      const [h, f] = await Promise.all([
+        PL.rpc('platform_health').catch((err) => { PL.toast(err.message, 'bad'); return null; }),
+        checkFiles(progress).catch((err) => { PL.toast('Controllo dei file non riuscito: ' + err.message, 'bad'); return null; })
+      ]);
+      health = h; files = f;
+      if (health) filter = health.checks.some((c) => ['bad', 'err', 'warn'].includes(c.level)) ? 'todo' : 'all';
+      drawSummary(); drawChecks(); drawFiles(); loadHist(); loadErr();
+      PL.refreshSignals();
+    } finally {
+      b.disabled = false; b.textContent = 'Ripeti il collaudo';
+      setTimeout(() => VR.hide($('#prog')), 400);
+    }
+  });
+
+  // ---------- Rapporto (da incollare nella chat con Claude) ----------
+  const report = () => {
+    const L = [`RAPPORTO DI COLLAUDO VETROOM · ${new Date().toLocaleString('it-IT')}`, `Versione app sul server: ${files?.serverVersion || '?'} · versione di questa pagina: ${VERSION}`];
+    if (health) {
+      const s = health.summary;
+      L.push(`Database: ${s.total} controlli · ${s.bad} gravi · ${s.err} non eseguiti · ${s.warn} da guardare · ${s.info} informazioni · ${s.ok} in regola`);
+      for (const lv of ['err', 'bad', 'warn', 'info']) {
+        const list = health.checks.filter((c) => c.level === lv);
+        if (!list.length) continue;
+        L.push('', `== ${LV[lv].toUpperCase()} ==`);
+        for (const c of list) {
+          L.push(`- [${c.id}] ${c.area} · ${c.title}${lv === 'err' ? '' : ' (' + c.n + ')'}`);
+          if (lv === 'err') L.push(`    ${c.todo}`);
+          for (const x of c.sample || []) L.push(`    · ${x.t || ''}${x.d ? ' — ' + x.d : ''}${x.c ? ' [struttura ' + x.c + ']' : ''}${x.u ? ' [utente ' + x.u + ']' : ''}`);
+          if (c.n > (c.sample || []).length) L.push(`    · … e altri ${c.n - c.sample.length}`);
+        }
+      }
+    }
+    if (files) {
+      L.push('', `== FILE SUL SERVER == ${files.total} controllati · ${files.bad} rotti · ${files.warn} non aggiornati`);
+      for (const r of files.rows.filter((x) => x.level !== 'ok')) L.push(`- ${r.file}: ${r.note}`);
+    }
+    if (errRows && errRows.length) {
+      L.push('', '== ERRORI DELL\'APP (ultimi) ==');
+      for (const r of errRows.slice(0, 25)) L.push(`- ${PL.dt(r.last_seen)} · ${r.hits}× · ${(r.page || '').replace('/app/', '')} · v${r.app_version || '?'} · ${r.message}${r.detail ? ' | ' + String(r.detail).split('\n').slice(0, 3).join(' | ') : ''}`);
+    }
+    return L.join('\n');
+  };
+  $('#copy').addEventListener('click', async () => {
+    const t = report();
+    try { await navigator.clipboard.writeText(t); PL.toast('Rapporto copiato: incollalo nella chat con Claude.'); }
+    catch { PL.download('collaudo-vetroom.txt', t); PL.toast('Copia non riuscita: ho scaricato il rapporto come file.', 'info'); }
+  });
+  $('#dl').addEventListener('click', () => PL.download(`collaudo-vetroom-${new Date().toISOString().slice(0, 10)}.txt`, report()));
+
+  // ---------- Errori per versione ----------
+  let errRows = [];
+  const loadErr = async () => {
+    try { errRows = await PL.rpc('platform_errors', { p_limit: 500 }) || []; }
+    catch (e) { $('#errs').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; return; }
+    if (!errRows.length) { $('#errs').innerHTML = '<p class="note ok" style="margin:0">Nessun errore registrato.</p>'; return; }
+    const by = {};
+    for (const r of errRows) {
+      const v = r.app_version || 'sconosciuta';
+      by[v] ||= { v, rows: 0, hits: 0, last: null };
+      by[v].rows++; by[v].hits += Number(r.hits || 1);
+      if (!by[v].last || r.last_seen > by[v].last) by[v].last = r.last_seen;
+    }
+    const list = Object.values(by).sort((a, b) => (a.v < b.v ? 1 : -1));
+    const old = list.filter((x) => x.v === 'sconosciuta' || x.v < VERSION);
+    $('#errs').innerHTML = `<div class="tw"><table class="t"><thead><tr><th>Versione</th><th class="num">Errori</th><th class="num">Volte</th><th>Ultimo</th></tr></thead><tbody>${list.map((x) => `
+      <tr class="${x.v >= VERSION ? 'is-bad' : ''}"><td><span class="chip">${esc(x.v)}</span>${x.v === VERSION ? ' <span class="pill warn">attuale</span>' : x.v > VERSION ? ' <span class="pill vio">più nuova</span>' : ''}</td><td class="num">${n(x.rows)}</td><td class="num">${n(x.hits)}</td><td class="small nowrap">${PL.ago(x.last)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="small dim" style="margin:10px 0">Gli errori delle versioni precedenti alla ${esc(VERSION)} riguardano codice già sostituito: se il problema era stato corretto, non torneranno. Archiviandoli resta in vista solo quello che succede adesso.</p>
+      ${old.length ? `<div class="actions"><button class="btn sm" id="arch">Archivia ${n(old.reduce((s, x) => s + x.rows, 0))} errori delle versioni vecchie</button><a class="btn sm ghost" href="sala-macchine.html#errori">Vedi tutti gli errori</a></div>` : '<a class="btn sm ghost" href="sala-macchine.html#errori">Vedi tutti gli errori</a>'}`;
+    $('#arch')?.addEventListener('click', async (e) => {
+      const b = e.currentTarget;
+      if (!(await PL.ask({ title: 'Archiviare gli errori delle versioni vecchie?', ok: 'Archivia', html: `Si tolgono gli errori registrati con versioni dell'app precedenti alla <b>${esc(VERSION)}</b> (e quelli oltre 90 giorni). Se un problema si ripresenta, ricompare qui con la versione nuova.` }))) return;
+      const k = await PL.run(b, () => PL.rpc('platform_errors_archive', { p_version: VERSION }), (k) => `Archiviati ${n(k)} errori.`);
+      if (k !== undefined) { loadErr(); PL.refreshSignals(); }
+    });
+  };
+
+  // ---------- Storico ----------
+  const loadHist = async () => {
+    let rows;
+    try { rows = await PL.rpc('platform_health_history', { p_limit: 30 }) || []; }
+    catch (e) { $('#hist').innerHTML = `<p class="note warn">${esc(e.missing ? 'Per i controlli sul database va eseguita la patch 28 su Supabase. Il controllo dei file funziona già.' : e.message)}</p>`; return; }
+    if (!rows.length) { $('#hist').innerHTML = '<p class="dim">Ancora nessun collaudo.</p>'; return; }
+    const max = Math.max(1, ...rows.map((r) => Number(r.summary.bad) + Number(r.summary.warn) + Number(r.summary.err)));
+    const spark = rows.slice().reverse().map((r) => {
+      const v = Number(r.summary.bad) + Number(r.summary.warn) + Number(r.summary.err);
+      const cls = Number(r.summary.bad) + Number(r.summary.err) ? 'bad' : v ? 'warn' : 'ok';
+      return `<i class="${cls}" style="height:${Math.max(4, (v / max) * 100)}%" title="${PL.dt(r.at)}: ${v} da sistemare"></i>`;
+    }).join('');
+    $('#hist').innerHTML = `<div class="spark" aria-label="Problemi da sistemare nei collaudi recenti">${spark}</div>
+      <div class="tw"><table class="t"><thead><tr><th>Quando</th><th class="num">Gravi</th><th class="num">Da guardare</th><th class="num">Info</th><th class="hide-m">Chi</th></tr></thead><tbody>${rows.slice(0, 10).map((r) => `
+        <tr><td class="small nowrap">${PL.dt(r.at)}</td><td class="num">${n(Number(r.summary.bad) + Number(r.summary.err))}</td><td class="num">${n(r.summary.warn)}</td><td class="num">${n(r.summary.info)}</td><td class="small dim hide-m">${esc(r.by_email || '—')}</td></tr>`).join('')}</tbody></table></div>`;
+  };
+
+  loadHist(); loadErr();
+  if (location.hash === '#avvia') $('#run').click();
+})();
+</script>
+</body>
+</html>
