@@ -15,7 +15,7 @@
     await VR.requireTerms({ profile });
     // Chi lavora in una clinica vede anche il link al gestionale
     const staffLink = document.getElementById('staffLink');
-    if (staffLink && profile.is_staff) VR.show(staffLink);
+    if (staffLink && profile.is_staff) { VR.show(staffLink); const pl = document.getElementById('proLink'); if (pl) pl.hidden = true; }
     return { session, profile, uid: session.user.id };
   };
 

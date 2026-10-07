@@ -5,7 +5,8 @@
   const VR = window.VR;
 
   VR.CLINIC_KEY = 'vetroom_clinica';
-  VR.ROLE = { admin: 'Amministratore', vet: 'Veterinario', secretary: 'Segreteria' };
+  VR.ROLE = { owner: 'Titolare', admin: 'Amministratore', vet: 'Veterinario', secretary: 'Segreteria' };
+  VR.KIND = { ambulatorio: 'Ambulatorio', clinica: 'Clinica', studio_associato: 'Studio associato', ospedale: 'Ospedale veterinario', domicilio: 'Veterinario a domicilio', altro: 'Struttura veterinaria' };
 
   VR.SPECIES = ['Cane', 'Gatto', 'Coniglio', 'Furetto', 'Roditore', 'Uccello', 'Rettile', 'Cavallo', 'Altro'];
   VR.SEX = { M: 'Maschio', F: 'Femmina', U: 'Non noto' };
@@ -23,15 +24,16 @@
     const profile = await VR.loadProfile(session.user.id);
     if (!profile.is_staff) { VR.go('benvenuto.html'); throw new Error('redirect'); }
 
-    const { data: rows, error } = await VR.sb
-      .from('clinic_members')
-      .select('role, clinic_id, clinics(name, affiliation_code, status, suspended_reason, terms_accepted_at)')
-      .eq('user_id', session.user.id)
-      .eq('status', 'active');
+    // patch 26: codice ST-, titolare, tipo e modello di fatturazione (con ripiego se non ancora installata)
+    const base = 'name, affiliation_code, status, suspended_reason, terms_accepted_at';
+    const q = (cols) => VR.sb.from('clinic_members').select(`role, clinic_id, ${cols.includes('bills_own') ? 'bills_own, ' : ''}clinics(${cols.replace('bills_own, ', '')})`)
+      .eq('user_id', session.user.id).eq('status', 'active');
+    let { data: rows, error } = await q('bills_own, ' + base + ', code, kind, billing_mode, code_owner_id');
+    if (error && /column|does not exist|schema cache/i.test(error.message || '')) ({ data: rows, error } = await q(base));
     if (error) throw error;
     if (!rows || rows.length === 0) {
-      if (/\/clinica\/(index\.html)?$/.test(location.pathname)) throw new Error('noclinic');
-      VR.go('clinica/'); throw new Error('redirect');
+      // nessuna struttura (o richiesta di adesione in attesa): si sceglie dove lavorare
+      VR.go('benvenuto.html?strutture=1'); throw new Error('redirect');
     }
 
     const saved = localStorage.getItem(VR.CLINIC_KEY);
@@ -47,12 +49,15 @@
     localStorage.setItem(VR.CLINIC_KEY, m.clinic_id);
     await VR.requireTerms({ profile, clinicId: m.clinic_id, clinicTerms: m.clinics?.terms_accepted_at, isAdmin: m.role === 'admin' });
     VR.checkPlatformAdmin();
-    if (VR.shellSetClinic) VR.shellSetClinic({ clinic: m.clinics || {}, role: m.role });
+    const isOwner = !!m.clinics?.code_owner_id && m.clinics.code_owner_id === session.user.id;
+    if (VR.shellSetClinic) VR.shellSetClinic({ clinic: m.clinics || {}, role: isOwner ? 'owner' : m.role });
 
     VR.ctx = {
       session, profile, memberships: rows,
       clinicId: m.clinic_id, role: m.role, clinic: m.clinics || {},
-      isVet: m.role === 'admin' || m.role === 'vet'
+      isVet: m.role === 'admin' || m.role === 'vet',
+      isOwner, billsOwn: !!m.bills_own,
+      billingMode: m.clinics?.billing_mode || 'struttura'
     };
     return VR.ctx;
   };

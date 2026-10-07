@@ -12,14 +12,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-02h">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07a">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02h"></script>
-  <script src="../js/app.js?v=2026-10-02h"></script>
-  <script src="../js/i18n.js?v=2026-10-02h"></script>
-  <script src="../js/layout.js?v=2026-10-02h"></script>
-  <script src="../js/clinica.js?v=2026-10-02h"></script>
-  <script src="../js/fatture.js?v=2026-10-02h"></script>
+  <script src="../js/config.js?v=2026-10-07a"></script>
+  <script src="../js/app.js?v=2026-10-07a"></script>
+  <script src="../js/i18n.js?v=2026-10-07a"></script>
+  <script src="../js/layout.js?v=2026-10-07a"></script>
+  <script src="../js/clinica.js?v=2026-10-07a"></script>
+  <script src="../js/fatture.js?v=2026-10-07a"></script>
 </head>
 <body data-shell="clinic" data-nav="cassa">
   <main class="wrap">
@@ -29,10 +29,17 @@
     <div id="msg" hidden></div>
 
     <div id="page" hidden>
+      <section class="panel">
+        <h2>Chi emette le fatture</h2>
+        <div id="modeBox" style="margin-bottom:12px"></div>
+        <div id="issuers" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+        <div class="actions-bar" style="margin-top:12px" id="addBar"></div>
+      </section>
+
       <form id="form" novalidate>
         <section class="panel">
-          <h2>Chi emette le fatture</h2>
-          <p class="muted" style="margin-top:0;font-size:14px">Il medico veterinario titolare della partita IVA, oppure la società. Il codice fiscale deve essere quello con cui si accede al Sistema Tessera Sanitaria.</p>
+          <h2 id="formTitle">Dati fiscali</h2>
+          <p class="muted" style="margin-top:0;font-size:14px" id="formHint"></p>
           <div class="grid">
             <div class="s12"><label for="name">Intestazione</label><input type="text" id="name" name="name" placeholder="Es. Dott.ssa Federica Vigiani – Medico veterinario"></div>
             <div class="s4"><label for="piva">Partita IVA</label><input type="text" id="piva" name="piva" inputmode="numeric" maxlength="11"><span id="pivaHint"></span></div>
@@ -60,6 +67,8 @@
             <div class="s4"><label for="enpav_rate">Contributo integrativo ENPAV</label><input type="number" id="enpav_rate" name="enpav_rate" min="0" max="10" step="0.01"></div>
             <div class="s4" style="padding-top:28px"><label class="check"><input type="checkbox" id="enpav_on" name="enpav_on"> Applica il contributo</label></div>
             <div class="s12"><label class="check"><input type="checkbox" id="bollo_auto" name="bollo_auto"> Aggiungi da solo il bollo da 2 € quando la parte senza IVA supera 77,47 €</label></div>
+            <div class="s12"><label class="check"><input type="checkbox" id="ts_enabled" name="ts_enabled"> Invia le fatture al Sistema Tessera Sanitaria</label>
+              <p class="hint-small" style="margin:.3rem 0 0 28px">Lascialo acceso per il veterinario che fattura a nome proprio, e per le società il cui legale rappresentante è un veterinario (invia lui, con le sue credenziali). <b>Spegnilo</b> per le società con legale rappresentante non veterinario: non possono registrarsi al Sistema TS.</p></div>
             <div class="s4"><label for="series">Sezionale (facoltativo)</label><input type="text" id="series" name="series" maxlength="4" placeholder="Es. A" style="text-transform:uppercase"></div>
             <div class="s12"><label for="footer">Nota fissa in fondo alle fatture (facoltativa)</label><textarea id="footer" name="footer" rows="2"></textarea></div>
           </div>
@@ -67,6 +76,7 @@
         </section>
         <div id="formMsg" hidden></div>
         <div class="actions-bar" style="margin-bottom:18px" id="saveBar"><button class="btn btn-primary" type="submit" id="save">Salva dati fiscali</button></div>
+        <div id="roNote"></div>
       </form>
 
       <section class="panel" id="numerazione">
@@ -102,19 +112,83 @@
       if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
       return;
     }
-    const admin = ctx.role === 'admin', canList = ctx.isVet;
-    let prof;
-    try { prof = await I.loadProfile(ctx.clinicId); }
-    catch (e) { VR.hide(loading); VR.say(msg, /billing_profiles/.test(e.message || '') ? 'La cassa non è ancora attiva: va eseguita la patch 21 sul database.' : VR.errorText(e), 'error'); return; }
+    const admin = ctx.role === 'admin', canList = ctx.isVet, me = ctx.session.user.id;
+    let profiles = [], team = [];
+    try { [profiles, team] = await Promise.all([I.loadProfiles(ctx.clinicId), I.loadTeam(ctx.clinicId)]); }
+    catch (e) { VR.hide(loading); VR.say(msg, /billing_profiles|owner_user_id/.test(e.message || '') ? 'Questa pagina richiede le patch 21 e 25 sul database.' : VR.errorText(e), 'error'); return; }
+    const nameOf = (uid) => team.find((t) => t.user_id === uid)?.name || 'Collega';
+    // modello di fatturazione deciso dall'amministratore (patch 26)
+    let bctx = null;
+    { const { data, error } = await VR.sb.rpc('billing_context', { p_clinic: ctx.clinicId }); if (!error) bctx = data; }
+    const mode = bctx?.mode || null;
+    const canOwn = (uid) => !bctx || !!bctx.members.find((m) => m.user_id === uid)?.can_bill_own;
+    const MODES = {
+      struttura: ['Fattura la struttura', 'Tutti, collaboratori compresi, fatturano con i dati della struttura (titolare, studio o società).'],
+      individuale: ['Ognuno a nome proprio', 'Ogni veterinario fattura ai suoi clienti con la sua partita IVA, il suo regime e la sua numerazione.'],
+      misto: ['Misto', 'Di serie fattura la struttura; i veterinari che abiliti tu (qui o nella pagina Team) fatturano a nome proprio.']
+    };
+    if (mode) {
+      VR.$('#modeBox').innerHTML = admin
+        ? `<p style="margin:0 0 6px;font-size:14px"><b>Come si fattura in questa struttura</b> (lo decide l'amministratore)</p>
+           <div class="seg" role="group" id="modeSeg">${Object.entries(MODES).map(([k, [l]]) => `<button type="button" data-m="${k}" aria-pressed="${mode === k}">${l}</button>`).join('')}</div>
+           <p class="hint-small" style="margin:.5rem 0 0">${MODES[mode][1]}${mode === 'misto' ? ' <a href="team.html">Abilita i veterinari nel Team</a>.' : ''}</p>`
+        : `<p style="margin:0;font-size:14px"><b>${MODES[mode][0]}.</b> ${MODES[mode][1]} ${canOwn(me) ? 'Tu sei abilitato a fatturare a nome tuo.' : 'Il modello lo decide l\'amministratore.'}</p>`;
+      VR.$('#modeSeg')?.addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === mode) return;
+        if (b.dataset.m === 'struttura' && profiles.some((p) => p.owner_user_id) && !confirm('Con "Fattura la struttura" i veterinari non potranno più fatturare a nome proprio (le fatture già emesse restano). Continuare?')) return;
+        const { error } = await VR.sb.rpc('clinic_billing_set', { p_clinic: ctx.clinicId, p_mode: b.dataset.m });
+        if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+        location.reload();
+      });
+    }
 
-    // ---------- Dati fiscali ----------
+    // quale intestatario si sta guardando: ?p=<id> | ?p=clinica | ?p=mio | ?p=u:<id utente>
+    const q = new URLSearchParams(location.search).get('p');
+    const mine = profiles.find((p) => p.owner_user_id === me);
+    const clinicP = profiles.find((p) => !p.owner_user_id);
+    let target;
+    if (q && profiles.some((p) => p.id === q)) { const p = profiles.find((x) => x.id === q); target = { owner: p.owner_user_id || null, p }; }
+    else if (q === 'mio') target = { owner: me, p: mine || null };
+    else if (q && q.startsWith('u:')) { const uid = q.slice(2); target = { owner: uid, p: profiles.find((p) => p.owner_user_id === uid) || null }; }
+    else if (q === 'clinica' || admin || !mine) target = { owner: null, p: clinicP || null };
+    else target = { owner: me, p: mine };
+    const canEdit = target.owner ? ((target.owner === me || admin) && canOwn(target.owner)) : admin;
+
+    // ---------- Elenco intestatari ----------
+    const card = (p, label, href, active) => `<a href="${href}" style="text-decoration:none;color:inherit;flex:1 1 280px;max-width:420px">
+      <div style="height:100%;border:2px solid ${active ? 'var(--teal)' : 'var(--line)'};border-radius:14px;padding:12px 14px;background:${active ? 'var(--teal-soft)' : '#fff'}">
+        <strong>${esc(label)}</strong><br>
+        <span class="muted" style="font-size:13px">${p ? esc(p.name || 'Senza intestazione') + (p.piva ? ' · P. IVA ' + esc(p.piva) : '') : 'Non ancora compilati'}</span><br>
+        ${p ? `<span class="pill ${I.profileReady(p) ? 'pill-ok' : 'pill-wait'}">${I.profileReady(p) ? 'Completi' : 'Da completare'}</span>
+          <span class="pill">${p.regime === 'forfettario' ? 'Forfettario' : 'Ordinario'}</span>
+          <span class="pill ${p.ts_enabled ? '' : 'pill-wait'}">${p.ts_enabled ? 'Invia al Sistema TS' : 'Sistema TS spento'}</span>` : '<span class="pill pill-wait">Da compilare</span>'}
+      </div></a>`;
+    VR.$('#issuers').innerHTML = card(clinicP, 'Dati della struttura', '?p=clinica', !target.owner)
+      + profiles.filter((p) => p.owner_user_id).map((p) => card(p, nameOf(p.owner_user_id) + (p.owner_user_id === me ? ' (tu)' : '') + ' · a nome proprio' + (canOwn(p.owner_user_id) ? '' : ' · non abilitato'), '?p=' + p.id, target.owner === p.owner_user_id)).join('')
+      + (target.owner && !target.p ? card(null, nameOf(target.owner) + (target.owner === me ? ' (tu)' : '') + ' · a nome proprio', '#', true) : '');
+    const bar = [];
+    if (ctx.isVet && !mine && !(target.owner === me) && canOwn(me)) bar.push('<a class="btn btn-ghost btn-small" href="?p=mio">+ Aggiungi i miei dati: fatturo a nome mio</a>');
+    if (admin && mode !== 'struttura') {
+      const free = team.filter((t) => t.status === 'active' && (t.role === 'vet' || t.role === 'admin') && t.user_id !== me && canOwn(t.user_id) && !profiles.some((p) => p.owner_user_id === t.user_id));
+      if (free.length) bar.push(`<select id="addColl" style="max-width:280px"><option value="">+ Aggiungi i dati di un collega…</option>${free.map((t) => `<option value="${t.user_id}">${esc(t.name)}</option>`).join('')}</select>`);
+    }
+    VR.$('#addBar').innerHTML = bar.join('');
+    VR.$('#addColl')?.addEventListener('change', (e) => { if (e.target.value) location.href = '?p=u:' + e.target.value; });
+
+    // ---------- Modulo ----------
     const form = VR.$('#form');
-    let p = prof;
+    VR.$('#formTitle').textContent = target.owner ? `Dati fiscali di ${nameOf(target.owner)}${target.owner === me ? ' (tu)' : ''}` : 'Dati fiscali della struttura';
+    VR.$('#formHint').textContent = target.owner
+      ? 'Il veterinario fattura a nome proprio: le sue fatture hanno questi dati, il suo regime e una numerazione tutta sua. Il codice fiscale deve essere quello con cui accede al Sistema TS.'
+      : 'Il titolare della partita IVA della clinica: il medico veterinario titolare, lo studio o la società. Per una società indica ragione sociale, partita IVA e codice fiscale della società.';
+    let p = target.p;
     if (!p) {
-      // prima volta: si parte dai dati già inseriti per i referti
-      const { data: c } = await VR.sb.from('clinics').select('header_name, header_piva, header_albo, header_phone, header_email, header_address').eq('id', ctx.clinicId).maybeSingle();
-      p = { name: c?.header_name, piva: (c?.header_piva || '').replace(/\D/g, '').slice(-11) || null, albo: c?.header_albo, phone: c?.header_phone, email: c?.header_email,
-            address: c?.header_address, regime: 'ordinario', enpav_on: true, enpav_rate: 2, vat_default: 22, bollo_auto: true, series: '' };
+      if (!target.owner) {
+        // prima volta: si parte dai dati già inseriti per i referti
+        const { data: c } = await VR.sb.from('clinics').select('header_name, header_piva, header_albo, header_phone, header_email, header_address').eq('id', ctx.clinicId).maybeSingle();
+        p = { name: c?.header_name, piva: (c?.header_piva || '').replace(/\D/g, '').slice(-11) || null, albo: c?.header_albo, phone: c?.header_phone, email: c?.header_email, address: c?.header_address };
+      } else p = { name: nameOf(target.owner) };
+      p = { regime: 'ordinario', enpav_on: true, enpav_rate: 2, vat_default: 22, bollo_auto: true, series: '', ts_enabled: true, ...p };
     }
     for (const el of form.elements) {
       if (!el.name) continue;
@@ -131,10 +205,10 @@
       hint(VR.$('#cf'), VR.$('#cfHint'), I.cfValid(cf) || I.pivaValid(cf), '✓ Valido', 'Controlla: il codice fiscale non torna');
     };
     VR.$('#piva').addEventListener('input', checks); VR.$('#cf').addEventListener('input', checks); checks();
-    if (!admin) {
+    if (!canEdit) {
       [...form.elements].forEach((el) => { el.disabled = true; });
       VR.hide(VR.$('#saveBar'));
-      form.insertAdjacentHTML('afterbegin', '<div class="notice notice-info">Solo l\'amministratore della clinica può cambiare questi dati.</div>');
+      VR.$('#roNote').innerHTML = `<div class="notice notice-info" style="margin-bottom:18px">${target.owner && !canOwn(target.owner) ? 'In questa struttura non è abilitato a fatturare a nome proprio: lo decide l\'amministratore.' : target.owner ? 'Questi dati li può cambiare solo il diretto interessato o l\'amministratore.' : 'I dati della struttura li può cambiare solo l\'amministratore.'}</div>`;
     }
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -149,28 +223,31 @@
       const miss = [['name', 'intestazione'], ['piva', 'partita IVA'], ['cf', 'codice fiscale'], ['address', 'indirizzo'], ['city', 'città']].filter(([k]) => !v[k]).map(([, l]) => l);
       if (miss.length) { VR.say(fm, 'Mancano: ' + miss.join(', ') + '.', 'error'); return; }
       if (!I.pivaValid(v.piva)) { VR.say(fm, 'La partita IVA non è valida: controlla le cifre.', 'error'); return; }
+      if (target.p && target.p.ts_enabled && !v.ts_enabled && !confirm('Spegnendo l\'invio al Sistema TS, le fatture di questo intestatario ancora da inviare non verranno più inviate. Confermi?')) return;
       const b = VR.$('#save'); b.disabled = true;
-      const { data, error } = await VR.sb.rpc('billing_profile_save', { p_clinic: ctx.clinicId, p: v });
+      const { data, error } = await VR.sb.rpc('billing_profile_save2', { p_clinic: ctx.clinicId, p_owner: target.owner, p: v });
       b.disabled = false;
       if (error) { VR.say(fm, VR.errorText(error), 'error'); return; }
-      prof = data;
-      VR.say(fm, 'Dati salvati. Ora puoi emettere fatture dalla Cassa.', 'ok');
+      if (!target.p) { location.replace('?p=' + data.id + '#numerazione'); return; }
+      target.p = data;
+      VR.say(fm, 'Dati salvati.', 'ok');
       loadNum();
     });
 
-    // ---------- Numerazione ----------
+    // ---------- Numerazione (per intestatario) ----------
     const loadNum = async () => {
-      const { data, error } = await VR.sb.rpc('billing_counter_status', { p_clinic: ctx.clinicId });
+      if (!target.p) { VR.$('#numInfo').textContent = 'Salva prima i dati fiscali: poi qui trovi la numerazione di questo intestatario.'; VR.$('#numEdit').hidden = true; return; }
+      const { data, error } = await VR.sb.rpc('billing_counter_status2', { p_profile: target.p.id });
       if (error) { VR.$('#numInfo').textContent = VR.errorText(error); return; }
-      VR.$('#numInfo').innerHTML = `La prossima fattura sarà la <b>n. ${esc(data.series || '')}${data.next_number}/${data.year}</b>.` +
-        (data.last_date ? ` L'ultima registrata è del ${I.date(data.last_date)}.` : '') + ' La numerazione riparte da 1 ogni anno.';
-      VR.$('#numEdit').hidden = !(admin && data.editable);
+      VR.$('#numInfo').innerHTML = `La prossima fattura di <b>${esc(target.p.name || '')}</b> sarà la <b>n. ${esc(data.series || '')}${data.next_number}/${data.year}</b>.` +
+        (data.last_date ? ` L'ultima registrata è del ${I.date(data.last_date)}.` : '') + ' La numerazione riparte da 1 ogni anno ed è separata per ogni intestatario.';
+      VR.$('#numEdit').hidden = !data.editable;
       VR.$('#lastNum').value = data.last_number || '';
       VR.$('#lastDate').value = data.last_date || '';
     };
     VR.$('#saveNum').addEventListener('click', async () => {
       const n = Number(VR.$('#lastNum').value || 0);
-      const { error } = await VR.sb.rpc('billing_counter_set', { p_clinic: ctx.clinicId, p_last: n, p_last_date: VR.$('#lastDate').value || null });
+      const { error } = await VR.sb.rpc('billing_counter_set2', { p_profile: target.p.id, p_last: n, p_last_date: VR.$('#lastDate').value || null });
       if (error) { VR.say(VR.$('#numMsg'), VR.errorText(error), 'error'); return; }
       VR.say(VR.$('#numMsg'), 'Fatto: Vetroom proseguirà da qui.', 'ok');
       loadNum();

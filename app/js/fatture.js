@@ -97,10 +97,25 @@
     };
   };
 
-  I.loadProfile = async (clinicId) => {
-    const { data, error } = await VR.sb.from('billing_profiles').select('*').eq('clinic_id', clinicId).maybeSingle();
+  // Intestatari: i dati della clinica (owner_user_id vuoto) e quelli personali dei veterinari
+  I.loadProfiles = async (clinicId) => {
+    const { data, error } = await VR.sb.from('billing_profiles').select('*').eq('clinic_id', clinicId);
     if (error) throw error;
-    return data;
+    return (data || []).sort((a, b) => (a.owner_user_id ? 1 : 0) - (b.owner_user_id ? 1 : 0) || String(a.name || '').localeCompare(String(b.name || ''), 'it'));
+  };
+  I.loadProfile = async (clinicId) => (await I.loadProfiles(clinicId)).find((p) => !p.owner_user_id) || null;
+  // Chi fattura di serie: i miei dati personali se completi, altrimenti quelli della clinica
+  I.defaultProfile = (profiles, userId) => profiles.find((p) => p.owner_user_id === userId && I.profileReady(p))
+    || profiles.find((p) => !p.owner_user_id && I.profileReady(p)) || profiles.find((p) => I.profileReady(p)) || null;
+  I.profileLabel = (p) => p ? `${p.name || 'Senza nome'} · ${p.owner_user_id ? 'a nome proprio' : 'dati della clinica'}${p.regime === 'forfettario' ? ' · forfettario' : ''}` : '';
+  // Team della clinica con i nomi (per "Eseguita da" e per i compensi)
+  I.loadTeam = async (clinicId) => {
+    const { data: rows } = await VR.sb.from('clinic_members').select('user_id, role, status').eq('clinic_id', clinicId);
+    const ids = (rows || []).map((r) => r.user_id);
+    const { data: profs } = ids.length ? await VR.sb.from('profiles').select('id, full_name, first_name, last_name, email').in('id', ids) : { data: [] };
+    const by = Object.fromEntries((profs || []).map((p) => [p.id, p]));
+    return (rows || []).map((r) => ({ ...r, name: by[r.user_id]?.full_name || [by[r.user_id]?.first_name, by[r.user_id]?.last_name].filter(Boolean).join(' ') || by[r.user_id]?.email || 'Collega' }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'it'));
   };
   I.profileReady = (p) => !!(p && p.name && p.piva && p.cf && p.address && p.city);
 
@@ -147,11 +162,12 @@
 
   // Chiede le credenziali (mai salvate da Vetroom) e invia a gruppi finché c'è qualcosa da inviare.
   // onProgress(testo) mostra l'avanzamento; ritorna il riepilogo.
-  I.sendToTs = async ({ clinicId, defaultCf = '', only = null, onProgress = () => {} }) => {
+  I.sendToTs = async ({ clinicId, profileId = null, issuerName = '', defaultCf = '', only = null, onProgress = () => {} }) => {
     const d = document.createElement('dialog');
     d.className = 'dlg';
     d.innerHTML = `<form autocomplete="on" novalidate>
       <h2 style="margin-top:0">Accesso al Sistema TS</h2>
+      ${issuerName ? `<p style="margin:-4px 0 8px"><b>Fatture di: ${VR.esc(issuerName)}</b></p>` : ''}
       <p style="margin-top:0;font-size:14px" class="muted">Le credenziali che usi su sistemats.it. Vetroom le usa solo per questo invio e <b>non le salva</b>: se vuoi, le ricorda il tuo browser.</p>
       <div class="grid">
         <div class="s12"><label for="tsU">Codice fiscale (nome utente)</label><input id="tsU" type="text" name="username" autocomplete="username" maxlength="16" style="text-transform:uppercase" value="${VR.esc(defaultCf)}"></div>
@@ -179,7 +195,7 @@
         const tot = { sent: 0, accepted: 0, warnings: 0, rejected: 0, results: [], stop: null };
         try {
           for (let round = 0; round < 40; round++) {
-            const { data, error } = await VR.sb.functions.invoke('vetroom-ts', { body: { action: 'send', clinic_id: clinicId, cred, only, limit: 20 } });
+            const { data, error } = await VR.sb.functions.invoke('vetroom-ts', { body: { action: 'send', clinic_id: clinicId, profile_id: profileId, cred, only, limit: 20 } });
             if (error) { tot.error = await I.fnError(error); break; }
             tot.sent += data.sent || 0; tot.accepted += data.accepted || 0; tot.warnings += data.warnings || 0; tot.rejected += data.rejected || 0;
             tot.results.push(...(data.results || []));

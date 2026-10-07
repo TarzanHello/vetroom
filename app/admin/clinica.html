@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Scheda clinica · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-02h">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-07a">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02h"></script>
-  <script src="../js/app.js?v=2026-10-02h"></script>
-  <script src="plancia.js?v=2026-10-02h"></script>
+  <script src="../js/config.js?v=2026-10-07a"></script>
+  <script src="../js/app.js?v=2026-10-07a"></script>
+  <script src="plancia.js?v=2026-10-07a"></script>
 </head>
 <body class="pl" data-station="cliniche">
 <main>
@@ -82,7 +82,8 @@
     $('#av').textContent = PL.initials(c.name);
     $('#nm').textContent = c.name || 'Clinica';
     const suspended = c.status === 'suspended';
-    $('#pills').innerHTML = [PL.chip(code),
+    $('#pills').innerHTML = [c.code ? `<span class="chip mono" title="Codice della struttura">${esc(c.code)}</span>` : '', PL.chip(code),
+      c.kind ? `<span class="pill">${esc({ ambulatorio: 'Ambulatorio', clinica: 'Clinica', studio_associato: 'Studio associato', ospedale: 'Ospedale', domicilio: 'A domicilio', altro: 'Altro' }[c.kind] || c.kind)}</span>` : '',
       trash ? '<span class="pill bad">Nel cestino</span>' : suspended ? '<span class="pill bad">Sospesa</span>' : '<span class="pill ok">Operativa</span>',
       Number(num.clients) === 0 ? '<span class="pill">Vuota</span>' : Number(num.visits) === 0 ? '<span class="pill info">Avviata</span>' : Number(num.clients_app) ? '<span class="pill vio">Stanza digitale</span>' : '<span class="pill ok">Attiva</span>'].join(' ');
     const owner = members.find((m) => m.is_code_owner) || members.find((m) => m.role === 'admin');

@@ -12,13 +12,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-02h">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07a">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02h"></script>
-  <script src="../js/app.js?v=2026-10-02h"></script>
-  <script src="../js/i18n.js?v=2026-10-02h"></script>
-  <script src="../js/layout.js?v=2026-10-02h"></script>
-  <script src="../js/clinica.js?v=2026-10-02h"></script>
+  <script src="../js/config.js?v=2026-10-07a"></script>
+  <script src="../js/app.js?v=2026-10-07a"></script>
+  <script src="../js/i18n.js?v=2026-10-07a"></script>
+  <script src="../js/layout.js?v=2026-10-07a"></script>
+  <script src="../js/clinica.js?v=2026-10-07a"></script>
 </head>
 <body data-shell="clinic" data-nav="team">
 
@@ -34,8 +34,21 @@
     <p class="loader" id="loading">Caricamento…</p>
     <div id="msg" hidden></div>
 
+    <div id="transferBanner"></div>
+    <section class="panel" id="codePanel" hidden>
+      <h2>Codice della struttura</h2>
+      <div class="code-box"><span class="code" id="stCode"></span>
+        <button class="btn btn-ghost btn-small" type="button" id="copyCode">Copia</button>
+        <a class="btn btn-ghost btn-small" id="waCode" target="_blank" rel="noopener" href="#">Invia su WhatsApp</a></div>
+      <p class="hint-small" style="margin:.6rem 0 0">Un collega che vuole unirsi entra in Vetroom, sceglie <b>Sono un veterinario → Mi unisco a una struttura</b> (oppure <b>Lavoro in una struttura</b>) e scrive questo codice. La richiesta arriva qui e la approvi tu. Il codice non cambia mai, nemmeno se cambia il titolare.</p>
+    </section>
+    <section class="panel" id="joinPanel" hidden>
+      <h2>Richieste di adesione</h2>
+      <div id="joins"></div>
+    </section>
     <section class="panel" id="membersPanel" hidden>
-      <h2>Persone della clinica</h2>
+      <h2>Persone della struttura</h2>
+      <p class="hint-small" id="billHint" hidden style="margin-top:-4px"></p>
       <div id="members"></div>
     </section>
 
@@ -44,11 +57,16 @@
       <div id="invites"></div>
     </section>
 
+    <section class="panel" id="ownerPanel" hidden>
+      <h2>Titolarità</h2>
+      <div id="ownerBody"></div>
+    </section>
     <section class="panel" id="rolesInfo" hidden>
       <h2>Cosa può fare ogni ruolo</h2>
       <ul class="roles-list">
-        <li><strong>Amministratore</strong> — tutto, compresi team, impostazioni, intestazione dei referti.</li>
-        <li><strong>Veterinario</strong> — clienti, pazienti, agenda, visite, referti e moduli.</li>
+        <li><strong>Titolare</strong> — uno solo: tutto quello che fa l'amministratore, più cedere la struttura a un collega e chiuderla. Non può essere rimosso né declassato finché non cede la titolarità.</li>
+        <li><strong>Amministratore</strong> — tutto, compresi team, impostazioni, intestazione dei referti e come si fattura.</li>
+        <li><strong>Veterinario</strong> — clienti, pazienti, agenda, visite, referti, moduli e fatture. Fattura con i dati della struttura, oppure a nome proprio se l'amministratore lo abilita.</li>
         <li><strong>Segreteria</strong> — proprietari, animali, agenda e documenti generali. Non vede visite e referti.</li>
       </ul>
     </section>
@@ -90,8 +108,109 @@
       if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
       return;
     }
+    const copy = async (text, btn) => {
+      try { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = 'Copiato!'; setTimeout(() => btn.textContent = t, 1500); }
+      catch { prompt('Copia questo link:', text); }
+    };
     const me = ctx.session.user.id;
     const isAdmin = ctx.role === 'admin';
+    const ownerId = ctx.clinic.code_owner_id || null;
+    const mixed = ctx.billingMode === 'misto';
+    const hasP26 = 'code' in ctx.clinic;
+    let members = [];
+    if (mixed) { VR.$('#billHint').textContent = 'In questa struttura alcuni veterinari fatturano a nome proprio: spunta chi è abilitato. Il modello si cambia in Cassa → Impostazioni.'; VR.show(VR.$('#billHint')); }
+
+    // ---------- Codice della struttura ----------
+    if (hasP26 && ctx.clinic.code && isAdmin) {
+      VR.$('#stCode').textContent = ctx.clinic.code;
+      const text = `Ciao! Per unirti a ${ctx.clinic.name || 'la nostra struttura'} su Vetroom: entra su ${new URL('/app/', location.href).href}, scegli "Sono un veterinario" (oppure "Lavoro in una struttura") e scrivi il codice ${ctx.clinic.code}.`;
+      VR.$('#waCode').href = 'https://wa.me/?text=' + encodeURIComponent(text);
+      VR.$('#copyCode').addEventListener('click', (e) => copy(ctx.clinic.code, e.currentTarget));
+      VR.show(VR.$('#codePanel'));
+    }
+
+    // ---------- Richieste di adesione ----------
+    const loadJoins = async () => {
+      if (!isAdmin || !hasP26) return;
+      const { data, error } = await VR.sb.rpc('clinic_join_requests_list', { p_clinic: ctx.clinicId });
+      if (error) return;
+      VR.$('#joins').innerHTML = (data || []).map((r) => `
+        <div class="member" data-req="${r.id}">
+          <span class="avatar" aria-hidden="true">${VR.esc(VR.initials(r.name || r.email || '?'))}</span>
+          <div class="member-main"><strong>${VR.esc(r.name || '')}</strong>
+            <span>${VR.esc(r.email || '')} · chiede di entrare come ${r.role === 'vet' ? '<b>veterinario</b>' : '<b>personale</b>'}${r.albo_provincia || r.albo_numero ? ` · Ordine ${VR.esc(r.albo_provincia || '')} n. ${VR.esc(r.albo_numero || '—')}${r.albo_verified ? ' ✓' : ' (non verificato)'}` : ''}</span>
+            ${r.message ? `<span style="display:block;margin-top:4px">“${VR.esc(r.message)}”</span>` : ''}</div>
+          <div class="member-ctl">
+            <select data-jrole aria-label="Ruolo"><option value="vet" ${r.role === 'vet' ? 'selected' : ''}>Veterinario</option><option value="secretary" ${r.role !== 'vet' ? 'selected' : ''}>Segreteria</option><option value="admin">Amministratore</option></select>
+            ${mixed ? `<label class="check" style="font-size:13px" data-jbillwrap ${r.role === 'vet' ? '' : 'hidden'}><input type="checkbox" data-jbill> Fattura a nome proprio</label>` : ''}
+            <button class="btn btn-primary btn-small" type="button" data-jok>Approva</button>
+            <button class="btn btn-ghost btn-small" type="button" data-jno>Rifiuta</button>
+          </div></div>`).join('');
+      VR.$('#joinPanel').hidden = !(data || []).length;
+    };
+    VR.$('#joins').addEventListener('change', (e) => {
+      const sel = e.target.closest('[data-jrole]'); if (!sel) return;
+      const w = sel.closest('[data-req]').querySelector('[data-jbillwrap]');
+      if (w) { w.hidden = sel.value === 'secretary'; if (w.hidden) w.querySelector('input').checked = false; }
+    });
+    VR.$('#joins').addEventListener('click', async (e) => {
+      const row = e.target.closest('[data-req]'); if (!row) return;
+      const ok = e.target.closest('[data-jok]'), no = e.target.closest('[data-jno]'); if (!ok && !no) return;
+      if (no && !confirm('Rifiutare la richiesta?')) return;
+      const { data, error } = await VR.sb.rpc('clinic_join_decide', { p_id: row.dataset.req, p_approve: !!ok,
+        p_role: row.querySelector('[data-jrole]').value, p_bills_own: !!row.querySelector('[data-jbill]')?.checked });
+      VR.say(msg, error ? VR.errorText(error) : data, error ? 'error' : 'ok');
+      loadJoins(); loadMembers();
+    });
+
+    // ---------- Titolarità ----------
+    let transfers = [];
+    const loadTransfers = async () => {
+      if (!hasP26) return;
+      const { data } = await VR.sb.rpc('clinic_transfer_pending');
+      transfers = (data || []).filter((t) => t.clinic_id === ctx.clinicId);
+      const forMe = transfers.find((t) => t.to_me);
+      VR.$('#transferBanner').innerHTML = forMe ? `<div class="notice notice-info" style="margin-bottom:14px">
+        <b>${VR.esc(forMe.from_name || 'Il titolare')}</b> ti propone di diventare <b>titolare</b> di ${VR.esc(forMe.clinic_name)}.
+        Il codice ${VR.esc(forMe.clinic_code)} resta lo stesso; diventerai tu a decidere su team, impostazioni e fatturazione.
+        <div class="actions-bar" style="margin-top:10px"><button class="btn btn-primary btn-small" type="button" data-tr="${forMe.id}" data-acc="1">Accetto</button><button class="btn btn-ghost btn-small" type="button" data-tr="${forMe.id}" data-acc="0">Rifiuto</button></div></div>` : '';
+      drawOwner();
+    };
+    function drawOwner() {
+      if (!hasP26 || !ownerId) return;
+      const ownerName = members.find((m) => m.id === ownerId)?.name || '—';
+      const mine = transfers.find((t) => !t.to_me);
+      if (ownerId !== me) {
+        VR.$('#ownerBody').innerHTML = `<p style="margin:0">Il titolare è <b>${VR.esc(ownerName)}</b>.</p>`;
+      } else if (mine) {
+        VR.$('#ownerBody').innerHTML = `<p style="margin:0">Hai proposto a <b>${VR.esc(mine.to_name || '')}</b> di diventare titolare: aspetta che accetti.</p>
+          <div class="actions-bar" style="margin-top:10px"><button class="btn btn-ghost btn-small" type="button" data-tr="${mine.id}" data-acc="0">Annulla la proposta</button></div>`;
+      } else {
+        const vets = members.filter((m) => m.vet);
+        VR.$('#ownerBody').innerHTML = `<p style="margin:0 0 10px">Sei tu il titolare. Se cedi lo studio o cambi ruolo, puoi passare la titolarità a un veterinario del team: <b>il codice ${VR.esc(ctx.clinic.code || '')} non cambia</b>, pazienti, clienti e storico restano, e tu rimani amministratore (poi puoi anche uscire).</p>
+          ${vets.length ? `<div class="actions-bar"><select id="trTo" style="max-width:280px">${vets.map((v) => `<option value="${v.id}">${VR.esc(v.name)}</option>`).join('')}</select>
+          <button class="btn btn-ghost btn-small" type="button" id="trGo">Cedi la titolarità</button></div>
+          <p class="hint-small" style="margin:.6rem 0 0">Se il nuovo titolare fattura con una partita IVA diversa, in Cassa → Impostazioni aggiungete i suoi dati come nuovo intestatario: le fatture già emesse restano intatte.</p>`
+          : '<p class="hint-small" style="margin:0">Per cedere la titolarità serve almeno un altro veterinario attivo nel team.</p>'}`;
+        VR.$('#trGo')?.addEventListener('click', async () => {
+          const to = VR.$('#trTo'); const name = to.options[to.selectedIndex].text;
+          if (!confirm(`Proporre a ${name} di diventare titolare? La cessione avviene solo quando accetta.`)) return;
+          const { data, error } = await VR.sb.rpc('clinic_transfer_offer', { p_clinic: ctx.clinicId, p_to: to.value });
+          VR.say(msg, error ? VR.errorText(error) : data, error ? 'error' : 'ok');
+          loadTransfers();
+        });
+      }
+      VR.show(VR.$('#ownerPanel'));
+    }
+    document.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-tr]'); if (!b) return;
+      const acc = b.dataset.acc === '1';
+      if (acc && !confirm('Diventare titolare della struttura?')) return;
+      const { data, error } = await VR.sb.rpc('clinic_transfer_respond', { p_id: b.dataset.tr, p_accept: acc });
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      if (acc) { alert(data); location.reload(); return; }
+      VR.say(msg, data, 'ok'); loadTransfers();
+    });
     const clinicName = ctx.clinic.name || 'la clinica';
     VR.$('#sub').textContent = clinicName;
     if (isAdmin) VR.show(VR.$('#invite'));
@@ -102,24 +221,35 @@
 
     // ---------- Membri ----------
     const loadMembers = async () => {
-      const { data: rows, error } = await VR.sb.from('clinic_members')
-        .select('user_id, role, status, created_at').eq('clinic_id', ctx.clinicId).order('created_at');
+      let { data: rows, error } = await VR.sb.from('clinic_members')
+        .select('user_id, role, status, created_at, bills_own').eq('clinic_id', ctx.clinicId).order('created_at');
+      if (error && /bills_own/.test(error.message || '')) ({ data: rows, error } = await VR.sb.from('clinic_members')
+        .select('user_id, role, status, created_at').eq('clinic_id', ctx.clinicId).order('created_at'));
       if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
       const ids = rows.map((r) => r.user_id);
       const { data: profs } = await VR.sb.from('profiles').select('id, full_name, first_name, last_name, email').in('id', ids);
       const P = Object.fromEntries((profs || []).map((p) => [p.id, p]));
+      members = [];
       VR.$('#members').innerHTML = rows.map((r) => {
         const p = P[r.user_id] || {};
         const name = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.full_name || p.email || 'Utente';
         const self = r.user_id === me;
-        const controls = isAdmin ? `
+        const isOwnerRow = r.user_id === ownerId;
+        const vetRow = r.role === 'admin' || r.role === 'vet';
+        const billCtl = mixed && vetRow ? (isAdmin
+          ? `<label class="check" style="font-size:13px"><input type="checkbox" data-bill="${r.user_id}" ${r.bills_own ? 'checked' : ''}> Fattura a nome proprio</label>`
+          : (r.bills_own ? '<span class="pill">Fattura a nome proprio</span>' : '')) : '';
+        if (isOwnerRow) members.push({ id: r.user_id, name });
+        else if (vetRow && r.status === 'active') members.push({ id: r.user_id, name, vet: true });
+        const controls = isOwnerRow ? `<div class="member-ctl">${billCtl}<span class="pill pill-ok">Titolare</span></div>` : isAdmin ? `
           <div class="member-ctl">
             <select data-role="${r.user_id}" aria-label="Ruolo di ${VR.esc(name)}">
               ${Object.entries(VR.ROLE).map(([k, l]) => `<option value="${k}" ${k === r.role ? 'selected' : ''}>${l}</option>`).join('')}
             </select>
             ${self ? '' : `<button type="button" class="btn btn-ghost btn-small" data-status="${r.user_id}" data-to="${r.status === 'active' ? 'suspended' : 'active'}">${r.status === 'active' ? 'Sospendi' : 'Riattiva'}</button>
             <button type="button" class="btn btn-danger btn-small" data-remove="${r.user_id}" data-name="${VR.esc(name)}">Rimuovi</button>`}
-          </div>` : `<span class="pill">${VR.ROLE[r.role] || r.role}</span>`;
+            ${billCtl}
+          </div>` : `<div class="member-ctl">${billCtl}<span class="pill">${VR.ROLE[r.role] || r.role}</span></div>`;
         return `
           <div class="member ${r.status !== 'active' ? 'is-suspended' : ''}">
             <span class="avatar" aria-hidden="true">${VR.esc(VR.initials(name))}</span>
@@ -131,6 +261,7 @@
           </div>`;
       }).join('');
       VR.show(VR.$('#membersPanel'));
+      drawOwner();
     };
 
     // ---------- Inviti ----------
@@ -159,16 +290,20 @@
       VR.show(VR.$('#invitesPanel'));
     };
 
-    await Promise.all([loadMembers(), loadInvites()]);
+    await Promise.all([loadMembers(), loadInvites(), loadJoins()]);
+    await loadTransfers();
     VR.hide(loading);
 
-    const copy = async (text, btn) => {
-      try { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = 'Copiato!'; setTimeout(() => btn.textContent = t, 1500); }
-      catch { prompt('Copia questo link:', text); }
-    };
 
     // Azioni sui membri
     VR.$('#members').addEventListener('change', async (ev) => {
+      const bc = ev.target.closest('[data-bill]');
+      if (bc) {
+        const { data, error } = await VR.sb.rpc('clinic_member_billing', { p_clinic: ctx.clinicId, p_user: bc.dataset.bill, p_bills_own: bc.checked });
+        VR.say(msg, error ? VR.errorText(error) : data, error ? 'error' : 'ok');
+        if (error) bc.checked = !bc.checked;
+        return;
+      }
       const s = ev.target.closest('[data-role]'); if (!s) return;
       VR.hide(msg);
       const { error } = await VR.sb.from('clinic_members').update({ role: s.value })
@@ -187,7 +322,7 @@
         loadMembers();
       }
       if (rm) {
-        if (!confirm(`Rimuovere ${rm.dataset.name} dalla clinica? Non potrà più accedere ai dati della clinica. Le visite che ha scritto restano.`)) return;
+        if (!confirm(`Rimuovere ${rm.dataset.name} dalla struttura? Non potrà più accedere ai dati della clinica. Le visite che ha scritto restano.`)) return;
         const { error } = await VR.sb.from('clinic_members').delete()
           .eq('clinic_id', ctx.clinicId).eq('user_id', rm.dataset.remove);
         if (error) VR.say(msg, VR.errorText(error), 'error');

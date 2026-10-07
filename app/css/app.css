@@ -1091,3 +1091,12 @@ input[type="time"] { font: inherit; padding: .55em .6em; border: 2px solid var(-
 .cash-row-void td:last-child, .cash-row-void td:nth-last-child(2) { text-decoration: none; }
 .pay-split { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); margin: -4px 0 12px; }
 .pay-split b { color: var(--ink); font-weight: 700; }
+.vtable tr.row-sel td { background: var(--teal-soft); }
+/* Benvenuto: tre percorsi e sotto-moduli */
+.paths-3 { grid-template-columns: repeat(3, 1fr); }
+.paths-small .path { padding: 14px; }
+.paths-small .path strong { font-size: 15px; }
+.sub-form { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) { .paths-3 { grid-template-columns: 1fr; } }
+.code-box { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.code-box .code { font-size: 26px; font-weight: 800; letter-spacing: .08em; color: var(--teal); font-variant-numeric: tabular-nums; }

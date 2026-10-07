@@ -421,7 +421,7 @@
     if (n) n.textContent = ctx.clinic?.name || 'La tua clinica';
     const r = document.getElementById('shellRole');
     if (r) r.textContent = VR.ROLE?.[ctx.role] || '';
-    if (ctx.role === 'admin') document.querySelectorAll('[data-admin-only]').forEach((x) => x.removeAttribute('hidden'));
+    if (ctx.role === 'admin' || ctx.role === 'owner') document.querySelectorAll('[data-admin-only]').forEach((x) => x.removeAttribute('hidden'));
   };
 
   // Icona illustrata per i pulsanti d'azione (come nel vecchio Vetroom)

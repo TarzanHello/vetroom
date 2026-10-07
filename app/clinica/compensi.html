@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Compensi per veterinario – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07a">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-07a"></script>
+  <script src="../js/app.js?v=2026-10-07a"></script>
+  <script src="../js/i18n.js?v=2026-10-07a"></script>
+  <script src="../js/layout.js?v=2026-10-07a"></script>
+  <script src="../js/clinica.js?v=2026-10-07a"></script>
+  <script src="../js/fatture.js?v=2026-10-07a"></script>
+</head>
+<body data-shell="clinic" data-nav="cassa">
+  <main class="wrap wrap-wide">
+    <a class="back" href="cassa.html">← Cassa</a>
+    <div class="page-head">
+      <div><h1>Compensi per veterinario</h1><p class="muted" style="margin:0">Visite e fatture attribuite a ogni veterinario nel periodo: la base per calcolare i compensi dei collaboratori.</p></div>
+      <div class="actions-bar"><button class="btn btn-ghost" type="button" id="csv">Esporta</button></div>
+    </div>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <div id="page" hidden>
+      <section class="panel">
+        <div class="actions-bar" style="align-items:flex-end">
+          <div class="seg seg-big" role="group" aria-label="Periodo" id="period"></div>
+          <div id="customWrap" hidden class="actions-bar">
+            <div><label for="dFrom">Dal</label><input type="date" id="dFrom"></div>
+            <div><label for="dTo">Al</label><input type="date" id="dTo"></div>
+          </div>
+          <div style="margin-left:auto"><label for="pct">Percentuale al veterinario (stima)</label><input type="number" id="pct" min="0" max="100" step="0.5" placeholder="es. 40" style="max-width:150px"></div>
+        </div>
+        <p class="hint-small" style="margin:.6rem 0 0" id="periodHint"></p>
+      </section>
+
+      <section class="panel">
+        <div class="table-wrap">
+          <table class="vtable" id="tbl">
+            <thead><tr><th>Veterinario</th><th class="num">Visite</th><th class="num">Fatture</th><th class="num">Imponibile</th><th class="num">Note di credito</th><th class="num">Imponibile netto</th><th class="num" id="thPct">Compenso stimato</th><th></th></tr></thead>
+            <tbody></tbody><tfoot></tfoot>
+          </table>
+        </div>
+        <p class="hint-small" style="margin:.6rem 0 0">Ogni fattura è attribuita a chi ha <b>eseguito la prestazione</b>: si sceglie in fattura e, di serie, è chi ha fatto la visita. L'<b>imponibile</b> è il totale delle prestazioni e dei farmaci, senza IVA, contributo ENPAV e bollo. Il compenso stimato è solo un aiuto al calcolo: fa fede l'accordo con il collaboratore.</p>
+      </section>
+
+      <section class="panel" id="detail" hidden>
+        <div class="page-head" style="margin-bottom:8px"><h2 style="margin:0" id="dTitle"></h2><button class="btn btn-ghost btn-small" type="button" id="dCsv">Esporta il dettaglio</button></div>
+        <div class="table-wrap"><table class="vtable" id="dTbl"><thead><tr><th>Numero</th><th>Data</th><th>Cliente</th><th>Intestatario</th><th class="num">Imponibile</th><th class="num">Totale</th></tr></thead><tbody></tbody></table></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    const I = VR.inv, esc = VR.esc;
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const admin = ctx.role === 'admin';
+    const today = I.today();
+    const d0 = new Date(today + 'T00:00:00');
+    const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const P = {
+      month: ['Questo mese', () => [iso(new Date(d0.getFullYear(), d0.getMonth(), 1)), today]],
+      last: ['Mese scorso', () => [iso(new Date(d0.getFullYear(), d0.getMonth() - 1, 1)), iso(new Date(d0.getFullYear(), d0.getMonth(), 0))]],
+      year: ['Quest\'anno', () => [iso(new Date(d0.getFullYear(), 0, 1)), today]],
+      custom: ['Scegli le date', () => [VR.$('#dFrom').value || today, VR.$('#dTo').value || today]]
+    };
+    let period = 'month', rows = [], sel = null;
+    const pctKey = 'vetroom_compenso_pct_' + ctx.clinicId;
+    VR.$('#pct').value = localStorage.getItem(pctKey) || '';
+    const pct = () => { const v = Number(String(VR.$('#pct').value).replace(',', '.')); return v > 0 && v <= 100 ? v : null; };
+
+    const range = () => P[period][1]();
+    const draw = () => {
+      VR.$('#period').innerHTML = Object.entries(P).map(([k, [l]]) => `<button type="button" data-p="${k}" aria-pressed="${period === k}">${l}</button>`).join('');
+      VR.$('#customWrap').hidden = period !== 'custom';
+      const [from, to] = range();
+      VR.$('#periodHint').textContent = `Periodo: dal ${I.date(from)} al ${I.date(to)}.` + (admin ? '' : ' Vedi solo i tuoi numeri: quelli dei colleghi li vede l\'amministratore.');
+      const p = pct();
+      VR.$('#thPct').hidden = !p;
+      VR.$('#tbl tbody').innerHTML = rows.map((r) => `<tr style="cursor:pointer" data-u="${r.user_id}" ${sel === r.user_id ? 'class="row-sel"' : ''}>
+          <td><strong>${esc(r.name)}</strong><br><span class="muted" style="font-size:12px">${r.role === 'admin' ? 'Amministratore' : 'Veterinario'}</span></td>
+          <td class="num">${r.visits}<br><span class="muted" style="font-size:12px">${r.visits_final} referti</span></td>
+          <td class="num">${r.invoices}</td>
+          <td class="num">${I.money(r.taxable)}</td>
+          <td class="num">${Number(r.credits) ? '−' + I.money(r.credits) : '—'}</td>
+          <td class="num"><strong>${I.money(r.net_taxable)}</strong></td>
+          ${p ? `<td class="num"><strong>${I.money(Math.round(Number(r.net_taxable) * p) / 100)}</strong></td>` : '<td hidden></td>'}
+          <td class="row-actions"><button class="btn btn-ghost btn-small" type="button" data-d="${r.user_id}">Dettaglio</button></td></tr>`).join('')
+        || '<tr><td colspan="8" class="muted">Nessun veterinario nel periodo.</td></tr>';
+      const sum = (k) => rows.reduce((s, r) => s + Number(r[k] || 0), 0);
+      VR.$('#tbl tfoot').innerHTML = admin && rows.length > 1 ? `<tr><td><strong>Totale</strong></td><td class="num">${sum('visits')}</td><td class="num">${sum('invoices')}</td><td class="num">${I.money(sum('taxable'))}</td><td class="num">${sum('credits') ? '−' + I.money(sum('credits')) : '—'}</td><td class="num"><strong>${I.money(sum('net_taxable'))}</strong></td>${p ? `<td class="num">${I.money(Math.round(sum('net_taxable') * p) / 100)}</td>` : '<td hidden></td>'}<td></td></tr>` : '';
+    };
+    const load = async () => {
+      const [from, to] = range();
+      const { data, error } = await VR.sb.rpc('compensi_report', { p_clinic: ctx.clinicId, p_from: from, p_to: to });
+      if (error) { VR.say(msg, /compensi_report/.test(error.message || '') ? 'Questa pagina richiede la patch 25 sul database.' : VR.errorText(error), 'error'); rows = []; }
+      else { VR.hide(msg); rows = data || []; }
+      draw();
+      if (sel) showDetail(sel);
+    };
+    let detailRows = [];
+    const showDetail = async (uid) => {
+      sel = uid; draw();
+      const r = rows.find((x) => x.user_id === uid); if (!r) { VR.hide(VR.$('#detail')); return; }
+      const [from, to] = range();
+      const { data } = await VR.sb.from('invoices').select('id, doc_type, doc_number, issued_on, customer, taxable, total, issuer, credited_by')
+        .eq('clinic_id', ctx.clinicId).eq('performed_by', uid).gte('issued_on', from).lte('issued_on', to).order('issued_on').order('number');
+      detailRows = data || [];
+      VR.$('#dTitle').textContent = `${r.name}: ${detailRows.length} ${detailRows.length === 1 ? 'documento' : 'documenti'}`;
+      VR.$('#dTbl tbody').innerHTML = detailRows.map((d) => `<tr><td><a href="fattura.html?id=${d.id}">${d.doc_type === 'NC' ? 'NC ' : ''}${esc(d.doc_number.replace(/^NC/, ''))}</a>${d.credited_by ? ' <span class="pill">stornata</span>' : ''}</td>
+        <td>${I.date(d.issued_on)}</td><td>${esc(d.customer?.name || '')}</td><td>${esc(d.issuer?.name || '')}</td>
+        <td class="num">${d.doc_type === 'NC' ? '−' : ''}${I.money(d.taxable)}</td><td class="num">${d.doc_type === 'NC' ? '−' : ''}${I.money(d.total)}</td></tr>`).join('')
+        || '<tr><td colspan="6" class="muted">Nessuna fattura nel periodo.</td></tr>';
+      VR.show(VR.$('#detail'));
+    };
+    const csv = (name, head, lines) => {
+      const q = (v) => { const s = v == null ? '' : String(v); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(['\ufeff' + [head.join(';'), ...lines.map((l) => l.map(q).join(';'))].join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+      a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    };
+    const n2 = (v) => Number(v || 0).toFixed(2).replace('.', ',');
+    VR.$('#csv').addEventListener('click', () => {
+      const [from, to] = range(), p = pct();
+      csv(`compensi-${from}-${to}.csv`, ['Veterinario', 'Visite', 'Referti definitivi', 'Fatture', 'Imponibile', 'Note di credito', 'Imponibile netto', ...(p ? [`Compenso stimato (${p}%)`] : [])],
+        rows.map((r) => [r.name, r.visits, r.visits_final, r.invoices, n2(r.taxable), n2(r.credits), n2(r.net_taxable), ...(p ? [n2(Math.round(Number(r.net_taxable) * p) / 100)] : [])]));
+    });
+    VR.$('#dCsv').addEventListener('click', () => {
+      const r = rows.find((x) => x.user_id === sel); const [from, to] = range();
+      csv(`compensi-${(r?.name || 'veterinario').replace(/[^A-Za-z0-9]+/g, '-')}-${from}-${to}.csv`, ['Tipo', 'Numero', 'Data', 'Cliente', 'Intestatario', 'Imponibile', 'Totale', 'Stornata'],
+        detailRows.map((d) => [d.doc_type === 'NC' ? 'Nota di credito' : 'Fattura', d.doc_number, I.date(d.issued_on), d.customer?.name, d.issuer?.name, (d.doc_type === 'NC' ? '-' : '') + n2(d.taxable), (d.doc_type === 'NC' ? '-' : '') + n2(d.total), d.credited_by ? 'sì' : '']));
+    });
+    VR.$('#period').addEventListener('click', (e) => { const b = e.target.closest('[data-p]'); if (b) { period = b.dataset.p; if (period === 'custom' && !VR.$('#dFrom').value) { VR.$('#dFrom').value = range()[0]; VR.$('#dTo').value = today; } load(); } });
+    VR.$('#dFrom').addEventListener('change', load); VR.$('#dTo').addEventListener('change', load);
+    VR.$('#pct').addEventListener('input', () => { const p = pct(); if (p) localStorage.setItem(pctKey, String(p)); else localStorage.removeItem(pctKey); draw(); });
+    VR.$('#tbl').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-u]'); if (tr) showDetail(tr.dataset.u); });
+    VR.hide(loading); VR.show(VR.$('#page'));
+    await load();
+    if (!admin && rows.length === 1) showDetail(rows[0].user_id);
+  })();
+  </script>
+</body>
+</html>

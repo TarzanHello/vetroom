@@ -12,12 +12,12 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="css/app.css?v=2026-10-02h">
+  <link rel="stylesheet" href="css/app.css?v=2026-10-07a">
   <script src="vendor/supabase-2.117.2.js"></script>
-  <script src="js/config.js?v=2026-10-02h"></script>
-  <script src="js/app.js?v=2026-10-02h"></script>
-  <script src="js/i18n.js?v=2026-10-02h"></script>
-  <script src="js/layout.js?v=2026-10-02h"></script>
+  <script src="js/config.js?v=2026-10-07a"></script>
+  <script src="js/app.js?v=2026-10-07a"></script>
+  <script src="js/i18n.js?v=2026-10-07a"></script>
+  <script src="js/layout.js?v=2026-10-07a"></script>
 </head>
 <body>
   <header class="welcome-top">
@@ -36,16 +36,27 @@
       <a class="btn btn-primary" href="proprietario/">Vai ai tuoi animali</a>
     </section>
 
+    <!-- Strutture: richieste in attesa (chi è professionista ma non fa ancora parte di una struttura) -->
+    <section id="waiting" hidden>
+      <h1>Le tue strutture</h1>
+      <div id="reqList"></div>
+      <p class="muted" style="margin-top:14px">Nel frattempo puoi creare la tua struttura o chiedere di unirti a un'altra, qui sotto.</p>
+    </section>
+
     <!-- Scelta del percorso -->
     <section id="choice" hidden>
       <h1 id="hello">Benvenuto in Vetroom</h1>
-      <p class="muted">Come userai Vetroom? Potrai sempre aggiungere l'altro ruolo in seguito.</p>
-
-      <div class="paths">
+      <p class="muted">Chi sei? Potrai sempre aggiungere un altro ruolo in seguito: per esempio un veterinario che ha anche un animale.</p>
+      <div class="paths paths-3">
         <button class="path" id="pathVet" type="button" aria-pressed="false">
           <img src="img/icons/add_visit.png" alt="">
-          <strong>Lavoro in una clinica</strong>
-          <span>Veterinario o titolare: crea lo spazio della tua clinica o del tuo studio.</span>
+          <strong>Sono un veterinario</strong>
+          <span>Crea la tua struttura, unisciti a una esistente o lavora a domicilio.</span>
+        </button>
+        <button class="path" id="pathStaff" type="button" aria-pressed="false">
+          <img src="img/icons/team.png" alt="">
+          <strong>Lavoro in una struttura veterinaria</strong>
+          <span>Segreteria, reception, tecnico o assistente: entri nel team della tua struttura.</span>
         </button>
         <button class="path" id="pathOwner" type="button" aria-pressed="false">
           <img src="img/icons/pets.png" alt="">
@@ -54,18 +65,65 @@
         </button>
       </div>
 
-      <form class="path-form" id="formVet" hidden>
-        <h2>Crea la tua clinica</h2>
-        <p class="muted">Se invece un collega ti ha invitato, apri il link dell'invito che hai ricevuto via email.</p>
-        <div class="row">
-          <div>
-            <label for="clinicName">Nome della clinica o dello studio</label>
-            <input type="text" id="clinicName" maxlength="120" required placeholder="Es. Ambulatorio Veterinario San Francesco">
-          </div>
-          <button class="btn btn-primary" type="submit" id="btnClinic">Crea la clinica</button>
+      <!-- Veterinario -->
+      <div class="path-form" id="formVet" hidden>
+        <h2>Dove lavori?</h2>
+        <div class="paths paths-3 paths-small">
+          <button class="path" type="button" data-vet="create" aria-pressed="false"><strong>Creo la mia struttura</strong><span>Ambulatorio, clinica, studio associato o società: ne sarai il titolare.</span></button>
+          <button class="path" type="button" data-vet="join" aria-pressed="false"><strong>Mi unisco a una struttura</strong><span>Con il codice ST- che ti dà il titolare. Lui approva la richiesta.</span></button>
+          <button class="path" type="button" data-vet="home" aria-pressed="false"><strong>Lavoro a domicilio</strong><span>Agenda, visite e fatture a tuo nome, senza uno studio.</span></button>
         </div>
+        <p class="hint-small" style="margin:.6rem 0 0">Lavori in più posti? Scegline uno ora: le altre strutture le aggiungi quando vuoi.</p>
+
+        <form id="fCreate" class="sub-form" hidden novalidate>
+          <div class="grid">
+            <div class="s12"><label for="stName">Nome della struttura</label><input type="text" id="stName" maxlength="120" placeholder="Es. Ambulatorio Veterinario San Francesco"></div>
+            <div class="s6"><label for="stKind">Tipo</label>
+              <select id="stKind"><option value="ambulatorio">Ambulatorio</option><option value="clinica">Clinica veterinaria</option><option value="studio_associato">Studio associato</option><option value="ospedale">Ospedale veterinario</option><option value="altro">Altro</option></select></div>
+            <div class="s6"><label for="stForm">Chi è titolare della partita IVA</label>
+              <select id="stForm"><option value="individuale">Io, con la mia partita IVA</option><option value="associato">Un'associazione tra professionisti</option><option value="societa">Una società (S.r.l., S.t.p.…)</option></select></div>
+          </div>
+        </form>
+
+        <form id="fJoin" class="sub-form" hidden novalidate>
+          <div class="grid">
+            <div class="s6"><label for="jCode">Codice della struttura</label><input type="text" id="jCode" maxlength="9" placeholder="ST-XXXXX" style="text-transform:uppercase;letter-spacing:.08em" autocomplete="off"></div>
+            <div class="s6" id="jFound" style="align-self:end"></div>
+            <div class="s12"><label for="jMsg">Messaggio per il titolare (facoltativo)</label><input type="text" id="jMsg" maxlength="300" placeholder="Es. Sono la dott.ssa Rossi, collaboratrice del martedì"></div>
+          </div>
+          <p class="hint-small" style="margin:.5rem 0 0">Il codice lo trova il titolare in Vetroom, nella pagina <b>Team</b>. Se ti ha mandato un link d'invito, aprilo: entri subito, senza approvazione.</p>
+        </form>
+
+        <form id="fHome" class="sub-form" hidden novalidate>
+          <label for="hName">Nome con cui ti presenti ai clienti</label>
+          <input type="text" id="hName" maxlength="120">
+          <p class="hint-small" style="margin:.5rem 0 0">È il tuo spazio personale: ne sei il titolare, e se un giorno apri uno studio puoi trasformarlo o aggiungerne un altro.</p>
+        </form>
+
+        <div class="sub-form" id="alboBox" hidden>
+          <p style="margin:0 0 6px"><b>Iscrizione all'Ordine</b> <span class="muted">(facoltativa)</span></p>
+          <div class="grid">
+            <div class="s4"><label for="alProv">Provincia</label><input type="text" id="alProv" maxlength="2" placeholder="RM" style="text-transform:uppercase"></div>
+            <div class="s8"><label for="alNum">Numero d'iscrizione</label><input type="text" id="alNum" maxlength="12" inputmode="numeric"></div>
+          </div>
+          <p class="hint-small" style="margin:.4rem 0 0">Servirà più avanti per la ricetta elettronica e per mostrare ai clienti che sei un veterinario iscritto all'Ordine.</p>
+          <div class="actions-bar" style="margin-top:14px"><button class="btn btn-primary" type="button" id="btnVetGo">Continua</button></div>
+        </div>
+      </div>
+
+      <!-- Personale della struttura -->
+      <form class="path-form" id="formStaff" hidden novalidate>
+        <h2>Entra nel team della tua struttura</h2>
+        <div class="grid">
+          <div class="s6"><label for="sCode">Codice della struttura</label><input type="text" id="sCode" maxlength="9" placeholder="ST-XXXXX" style="text-transform:uppercase;letter-spacing:.08em" autocomplete="off"></div>
+          <div class="s6" id="sFound" style="align-self:end"></div>
+          <div class="s12"><label for="sMsg">Messaggio per il titolare (facoltativo)</label><input type="text" id="sMsg" maxlength="300" placeholder="Es. Sono Giulia, la nuova segreteria"></div>
+        </div>
+        <p class="hint-small" style="margin:.5rem 0 0">Chiedi il codice al titolare (lo trova in Vetroom, pagina <b>Team</b>), oppure fatti mandare un link d'invito.</p>
+        <div class="actions-bar" style="margin-top:14px"><button class="btn btn-primary" type="submit" id="btnStaff">Invia la richiesta</button></div>
       </form>
 
+      <!-- Proprietario -->
       <div class="path-form" id="formOwner" hidden>
         <h2>Il tuo spazio da proprietario</h2>
         <p class="muted">Aggiungerai i tuoi animali nella prossima schermata. Se il tuo veterinario usa Vetroom, potrai collegarti con il codice della sua clinica.</p>
@@ -85,6 +143,8 @@
     const uid = session.user.id;
     VR.$('#who').textContent = session.user.email;
 
+    let noStructure = false, profile;
+    const askStructures = new URLSearchParams(location.search).has('strutture');
     try {
       // 1. C'è un invito in sospeso? Lo accettiamo
       const invite = localStorage.getItem(VR.INVITE_KEY);
@@ -122,7 +182,7 @@
       if (claimErr) throw claimErr;
 
       // 3. Dove deve andare questo utente?
-      const profile = await VR.loadProfile(uid);
+      profile = await VR.loadProfile(uid);
       VR.hide(loading);
 
       if (inviteFailed && (profile.is_staff || profile.is_owner)) {
@@ -135,7 +195,12 @@
         return;
       }
       if (profile.is_owner && localStorage.getItem('vetroom_intent') === 'owner') { localStorage.removeItem('vetroom_intent'); VR.go('proprietario/'); return; }
-      if (profile.is_staff) { VR.go('clinica/'); return; }
+      if (profile.is_staff) {
+        const { data: mem } = await VR.sb.from('clinic_members').select('clinic_id').eq('user_id', uid).eq('status', 'active').limit(1);
+        if (mem && mem.length) { VR.go('clinica/'); return; }
+        if (await VR.checkPlatformAdmin()) { VR.go('admin/'); return; }
+        noStructure = true;
+      }
 
       if (claimed > 0) {
         VR.$('#foundText').textContent = claimed === 1
@@ -156,34 +221,126 @@
       }
       const name = VR.firstName(profile, session);
       if (name) VR.$('#hello').textContent = `Benvenuto in Vetroom, ${name}`;
+      if (noStructure || askStructures) {
+        VR.$('#hello').textContent = 'Dove lavori?';
+        VR.hide(VR.$('#pathOwner'));
+        await showRequests();
+      }
       VR.show(VR.$('#choice'));
+      if (noStructure || askStructures) pick(profile.staff_kind === 'staff' ? 'staff' : 'vet');
     } catch (e) {
       VR.hide(loading);
       VR.say(msg, VR.errorText(e), 'error');
       return;
     }
 
-    // Scelta del percorso
-    const pick = (which) => {
-      VR.$('#pathVet').setAttribute('aria-pressed', which === 'vet');
-      VR.$('#pathOwner').setAttribute('aria-pressed', which === 'owner');
-      (which === 'vet' ? VR.show : VR.hide)(VR.$('#formVet'));
-      (which === 'owner' ? VR.show : VR.hide)(VR.$('#formOwner'));
-      if (which === 'vet') VR.$('#clinicName').focus();
-    };
+    // ---------- Richieste di adesione in attesa ----------
+    async function showRequests() {
+      const { data } = await VR.sb.rpc('my_join_requests');
+      const rows = data || [];
+      if (!rows.length) return;
+      const st = { pending: ['In attesa di approvazione', 'pill-wait'], approved: ['Approvata', 'pill-ok'], rejected: ['Non approvata', 'pill-bad'], cancelled: ['Annullata', ''] };
+      VR.$('#reqList').innerHTML = rows.map((r) => `<div class="member">
+          <div class="member-main"><strong>${VR.esc(r.clinic_name)}</strong><span>${VR.esc(r.clinic_code)} · ${r.role === 'vet' ? 'veterinario' : 'personale'} · richiesta del ${new Date(r.created_at).toLocaleDateString('it-IT')}</span></div>
+          <div class="member-ctl"><span class="pill ${st[r.status]?.[1] || ''}">${st[r.status]?.[0] || r.status}</span>
+          ${r.status === 'pending' ? `<button class="btn btn-ghost btn-small" type="button" data-cancel="${r.id}">Annulla</button>` : ''}
+          ${r.status === 'approved' ? '<a class="btn btn-primary btn-small" href="clinica/">Entra</a>' : ''}</div></div>`).join('');
+      VR.show(VR.$('#waiting'));
+    }
+    VR.$('#reqList').addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-cancel]'); if (!b) return;
+      await VR.sb.rpc('clinic_join_cancel', { p_id: b.dataset.cancel });
+      location.reload();
+    });
+
+    // ---------- Scelta del percorso ----------
+    function pick(which) {
+      for (const [k, el] of [['vet', '#pathVet'], ['staff', '#pathStaff'], ['owner', '#pathOwner']]) VR.$(el).setAttribute('aria-pressed', which === k);
+      VR.$('#formVet').hidden = which !== 'vet';
+      VR.$('#formStaff').hidden = which !== 'staff';
+      VR.$('#formOwner').hidden = which !== 'owner';
+      if (which === 'staff') VR.$('#sCode').focus();
+    }
     VR.$('#pathVet').addEventListener('click', () => pick('vet'));
+    VR.$('#pathStaff').addEventListener('click', () => pick('staff'));
     VR.$('#pathOwner').addEventListener('click', () => pick('owner'));
 
-    // Creazione della clinica
-    VR.$('#formVet').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const btn = VR.$('#btnClinic');
-      const name = VR.$('#clinicName').value.trim();
-      if (!name) { VR.say(msg, 'Inserisci il nome della clinica.', 'error'); return; }
-      btn.disabled = true;
-      const { error } = await VR.sb.rpc('create_clinic', { p_name: name });
-      if (error) { VR.say(msg, VR.errorText(error), 'error'); btn.disabled = false; return; }
+    // ---------- Veterinario: crea, unisciti, domicilio ----------
+    let vetMode = null;
+    const fullName = () => [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || profile?.full_name || '';
+    VR.$('#formVet').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-vet]'); if (!b) return;
+      vetMode = b.dataset.vet;
+      document.querySelectorAll('#formVet [data-vet]').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      VR.$('#fCreate').hidden = vetMode !== 'create';
+      VR.$('#fJoin').hidden = vetMode !== 'join';
+      VR.$('#fHome').hidden = vetMode !== 'home';
+      VR.show(VR.$('#alboBox'));
+      VR.$('#btnVetGo').textContent = { create: 'Crea la struttura', join: 'Invia la richiesta', home: 'Crea il mio spazio' }[vetMode];
+      if (vetMode === 'home' && !VR.$('#hName').value) VR.$('#hName').value = (fullName() ? 'Dott. ' + fullName() : 'Veterinario') + ' – Veterinario a domicilio';
+      ({ create: VR.$('#stName'), join: VR.$('#jCode'), home: VR.$('#hName') })[vetMode].focus();
+    });
+    if (profile?.albo_provincia) VR.$('#alProv').value = profile.albo_provincia;
+    if (profile?.albo_numero) VR.$('#alNum').value = profile.albo_numero;
+
+    const KIND = { ambulatorio: 'Ambulatorio', clinica: 'Clinica', studio_associato: 'Studio associato', ospedale: 'Ospedale veterinario', domicilio: 'Veterinario a domicilio', altro: 'Struttura veterinaria' };
+    // anteprima della struttura mentre si scrive il codice
+    const cleanCode = (v) => { const k = v.toUpperCase().replace(/[^A-Z0-9]/g, ''); return k.length === 7 && k.startsWith('ST') ? 'ST-' + k.slice(2) : null; };
+    const lookup = (input, out) => {
+      let t;
+      input.addEventListener('input', () => {
+        clearTimeout(t); out.innerHTML = '';
+        const code = cleanCode(input.value); if (!code) return;
+        if (input.value !== code) input.value = code;
+        t = setTimeout(async () => {
+          const { data, error } = await VR.sb.rpc('clinic_lookup', { p_code: code });
+          out.innerHTML = error ? `<span class="field-bad">${VR.esc(VR.errorText(error))}</span>`
+            : `<span class="field-ok">✓ ${VR.esc(data.name)}</span><br><span class="muted" style="font-size:13px">${VR.esc(KIND[data.kind] || '')}${data.address ? ' · ' + VR.esc(data.address) : ''}${data.member ? ' · ne fai già parte' : ''}</span>`;
+        }, 350);
+      });
+    };
+    lookup(VR.$('#jCode'), VR.$('#jFound'));
+    lookup(VR.$('#sCode'), VR.$('#sFound'));
+
+    const busy = (btn, on, label) => { btn.disabled = on; if (label) btn.textContent = label; };
+    VR.$('#btnVetGo').addEventListener('click', async () => {
+      const btn = VR.$('#btnVetGo'); VR.hide(msg);
+      const prov = VR.$('#alProv').value.trim().toUpperCase(), num = VR.$('#alNum').value.trim();
+      if (prov && !/^[A-Z]{2}$/.test(prov)) { VR.say(msg, 'La provincia è la sigla di due lettere (es. RM).', 'error'); return; }
+      const before = btn.textContent; busy(btn, true, 'Un attimo…');
+      const fail = (e) => { VR.say(msg, VR.errorText(e), 'error'); busy(btn, false, before); };
+      const { error: pe } = await VR.sb.rpc('set_professional', { p_kind: 'vet', p_albo_provincia: prov || null, p_albo_numero: num || null });
+      if (pe && !/set_professional/.test(pe.message || '')) return fail(pe);
+      if (vetMode === 'join') {
+        const code = cleanCode(VR.$('#jCode').value);
+        if (!code) { busy(btn, false, before); VR.say(msg, 'Scrivi il codice della struttura: ha la forma ST-XXXXX.', 'error'); return; }
+        const { data, error } = await VR.sb.rpc('clinic_join_request', { p_code: code, p_role: 'vet', p_message: VR.$('#jMsg').value.trim() || null });
+        if (error) return fail(error);
+        VR.say(msg, data, 'ok'); busy(btn, false, before);
+        await showRequests(); window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      const name = (vetMode === 'create' ? VR.$('#stName') : VR.$('#hName')).value.trim();
+      if (!name) { busy(btn, false, before); VR.say(msg, 'Scrivi il nome.', 'error'); return; }
+      let res = await VR.sb.rpc('create_structure', { p_name: name, p_kind: vetMode === 'home' ? 'domicilio' : VR.$('#stKind').value, p_legal_form: vetMode === 'home' ? 'individuale' : VR.$('#stForm').value });
+      if (res.error && /create_structure/.test(res.error.message || '')) res = await VR.sb.rpc('create_clinic', { p_name: name });   // patch 26 non ancora installata
+      if (res.error) return fail(res.error);
+      if (res.data) localStorage.setItem(VR.CLINIC_KEY, res.data);
       VR.go('clinica/');
+    });
+
+    // ---------- Personale della struttura ----------
+    VR.$('#formStaff').addEventListener('submit', async (ev) => {
+      ev.preventDefault(); VR.hide(msg);
+      const code = cleanCode(VR.$('#sCode').value);
+      if (!code) { VR.say(msg, 'Scrivi il codice della struttura: ha la forma ST-XXXXX.', 'error'); return; }
+      const btn = VR.$('#btnStaff'); busy(btn, true);
+      const { error: pe } = await VR.sb.rpc('set_professional', { p_kind: 'staff' });
+      const { data, error } = await VR.sb.rpc('clinic_join_request', { p_code: code, p_role: 'secretary', p_message: VR.$('#sMsg').value.trim() || null });
+      busy(btn, false);
+      if (error || pe) { VR.say(msg, VR.errorText(error || pe), 'error'); return; }
+      VR.say(msg, data, 'ok');
+      await showRequests(); window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
     // Percorso proprietario

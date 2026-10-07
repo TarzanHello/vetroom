@@ -12,16 +12,16 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-02h">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07a">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-02h"></script>
-  <script src="../js/app.js?v=2026-10-02h"></script>
-  <script src="../js/i18n.js?v=2026-10-02h"></script>
-  <script src="../js/layout.js?v=2026-10-02h"></script>
-  <script src="../js/clinica.js?v=2026-10-02h"></script>
+  <script src="../js/config.js?v=2026-10-07a"></script>
+  <script src="../js/app.js?v=2026-10-07a"></script>
+  <script src="../js/i18n.js?v=2026-10-07a"></script>
+  <script src="../js/layout.js?v=2026-10-07a"></script>
+  <script src="../js/clinica.js?v=2026-10-07a"></script>
   <script src="../vendor/jspdf-2.5.2.min.js"></script>
-  <script src="../js/pdf.js?v=2026-10-02h"></script>
-  <script src="../js/fatture.js?v=2026-10-02h"></script>
+  <script src="../js/pdf.js?v=2026-10-07a"></script>
+  <script src="../js/fatture.js?v=2026-10-07a"></script>
 </head>
 <body data-shell="clinic" data-nav="cassa">
   <main class="wrap wrap-wide">
@@ -35,6 +35,13 @@
       <div id="dupNote" hidden></div>
       <div class="cash-layout">
         <div>
+          <section class="panel" id="whoPanel" hidden>
+            <div class="grid">
+              <div class="s6" id="issuerWrap"><label for="issuer">Chi fattura</label><select id="issuer"></select></div>
+              <div class="s6" id="perfWrap"><label for="perf">Prestazione eseguita da</label><select id="perf"></select></div>
+            </div>
+            <p class="hint-small" style="margin:.5rem 0 0" id="whoHint"></p>
+          </section>
           <section class="panel">
             <h2>Cliente</h2>
             <div class="grid">
@@ -128,8 +135,16 @@
       if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
       return;
     }
-    let prof;
-    try { prof = await I.loadProfile(ctx.clinicId); } catch (e) {
+    let prof, profiles = [];
+    try {
+      profiles = await I.loadProfiles(ctx.clinicId);
+      // patch 26: i dati personali valgono solo per chi è abilitato a fatturare a nome proprio
+      const { data: bctx, error: be } = await VR.sb.rpc('billing_context', { p_clinic: ctx.clinicId });
+      if (!be && bctx) profiles = profiles.filter((p) => !p.owner_user_id || bctx.members.some((m) => m.user_id === p.owner_user_id && m.can_bill_own));
+      // i dati personali di un collega li usano solo lui, l'amministratore e la segreteria
+      profiles = profiles.filter((p) => !p.owner_user_id || p.owner_user_id === ctx.session.user.id || ctx.role === 'admin' || ctx.role === 'secretary');
+      prof = I.defaultProfile(profiles, ctx.session.user.id);
+    } catch (e) {
       VR.hide(loading);
       VR.say(msg, /billing_profiles/.test(e.message || '') ? 'La cassa non è ancora attiva: va eseguita la patch 21 sul database.' : VR.errorText(e), 'error');
       return;
@@ -198,7 +213,7 @@
         VR.$('#tsHint').insertAdjacentHTML('afterend', `<div class="actions-bar" style="margin-top:10px"><button class="btn btn-ghost btn-small" type="button" id="tsOne">${inv.ts_status === 'rejected' ? 'Riprova l\'invio' : 'Invia adesso'}</button></div>`);
         VR.$('#tsOne').addEventListener('click', async () => {
           if (inv.ts_status === 'rejected') { const { error: e } = await VR.sb.rpc('ts_requeue', { p_id: inv.id }); if (e) { VR.say(msg, VR.errorText(e), 'error'); return; } }
-          const out = await I.sendToTs({ clinicId: ctx.clinicId, defaultCf: iss.cf || '', only: inv.id });
+          const out = await I.sendToTs({ clinicId: ctx.clinicId, profileId: inv.billing_profile_id || null, issuerName: iss.name || '', defaultCf: iss.cf && iss.cf.length === 16 ? iss.cf : '', only: inv.id });
           if (!out) { if (inv.ts_status === 'rejected') location.reload(); return; }
           if (out.error) { VR.say(msg, out.error, 'error'); return; }
           location.reload();
@@ -268,15 +283,16 @@
     // ===================================================================
     //  NUOVA FATTURA
     // ===================================================================
-    if (!I.profileReady(prof)) {
+    if (!prof) {
       VR.hide(loading);
       msg.className = 'notice notice-info'; VR.show(msg);
-      msg.innerHTML = ctx.role === 'admin'
-        ? 'Prima di emettere la prima fattura servono i dati fiscali della clinica (partita IVA, codice fiscale, indirizzo). <a class="btn btn-primary btn-small" href="fatturazione.html" style="margin-left:6px">Inseriscili ora</a>'
-        : 'Per emettere fatture servono i dati fiscali della clinica: chiedi all\'amministratore di inserirli in Cassa → Impostazioni.';
+      msg.innerHTML = 'Prima di emettere la prima fattura servono i dati fiscali di chi fattura: quelli della clinica, oppure i tuoi se fatturi a nome tuo. <a class="btn btn-primary btn-small" href="fatturazione.html" style="margin-left:6px">Vai alle impostazioni</a>';
       return;
     }
-    const forf = prof.regime === 'forfettario';
+    let forf = prof.regime === 'forfettario';
+    const ready = profiles.filter((p) => I.profileReady(p));
+    const team = await I.loadTeam(ctx.clinicId).catch(() => []);
+    const vets = team.filter((t) => t.status === 'active' && (t.role === 'vet' || t.role === 'admin'));
 
     const [{ data: list }, clientsAll] = await Promise.all([
       VR.sb.from('price_list').select('*').eq('clinic_id', ctx.clinicId).eq('active', true).order('sort').order('name'),
@@ -422,7 +438,7 @@
     // ---------- Precompilazione da visita, animale, appuntamento o cliente ----------
     let visit = null, petId = VR.param('animale'), clientId = VR.param('cliente');
     if (state.visit_id) {
-      const { data } = await VR.sb.from('visits').select('id, pet_id, client_id, title, visit_kind, visit_date').eq('id', state.visit_id).maybeSingle();
+      const { data } = await VR.sb.from('visits').select('id, pet_id, client_id, title, visit_kind, visit_date, created_by').eq('id', state.visit_id).maybeSingle();
       visit = data;
       if (visit) { petId = petId || visit.pet_id; clientId = clientId || visit.client_id; }
       const { data: prev } = await VR.sb.from('invoices').select('id, doc_number').eq('visit_id', state.visit_id).eq('doc_type', 'FT').is('credited_by', null).limit(1);
@@ -446,12 +462,31 @@
     if (!state.lines.length) state.lines.push(newLine());
     if (visit) VR.$('#newSub').textContent = `Incasso della visita del ${I.date(visit.visit_date)}. Controlla le righe ed emetti.`;
     VR.$('#cPet').addEventListener('input', () => { state.pet_id = null; });
+    // ---------- Chi fattura e chi ha eseguito la prestazione ----------
+    const issuerSel = VR.$('#issuer'), perfSel = VR.$('#perf');
+    issuerSel.innerHTML = ready.map((p) => `<option value="${p.id}" ${p.id === prof.id ? 'selected' : ''}>${esc(I.profileLabel(p))}</option>`).join('');
+    const defPerf = (visit && visit.created_by) || (ctx.isVet ? ctx.session.user.id : (vets[0]?.user_id || ctx.session.user.id));
+    perfSel.innerHTML = vets.map((t) => `<option value="${t.user_id}" ${t.user_id === defPerf ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+    VR.$('#issuerWrap').hidden = ready.length < 2;
+    VR.$('#perfWrap').hidden = vets.length < 2;
+    VR.$('#whoPanel').hidden = ready.length < 2 && vets.length < 2;
+    const whoHint = () => { VR.$('#whoHint').textContent = prof.owner_user_id ? 'Fattura a nome del veterinario, con la sua numerazione.' : 'Fattura con i dati della clinica.'; };
+    whoHint();
+    issuerSel.addEventListener('change', () => {
+      prof = ready.find((p) => p.id === issuerSel.value) || prof;
+      forf = prof.regime === 'forfettario';
+      // con un regime diverso, le aliquote delle righe ripartono da quelle dell'intestatario
+      state.lines.forEach((l) => { if (forf) { l.vat = null; l.nature = null; } else if (l.vat == null && !l.nature) l.vat = l.kind === 'FV' ? 10 : prof.vat_default; l.enpav = l.kind === 'SV' && prof.enpav_on !== false; });
+      whoHint(); drawLines();
+    });
+
     drawLines(); cfCheck();
     VR.hide(loading); VR.show(VR.$('#newPage'));
     if (!clientId) VR.$('#cSearch').focus();
 
     // ---------- Emissione ----------
     const payload = () => ({
+      billing_profile_id: prof.id, performed_by: perfSel.value || null,
       client_id: state.client_id, pet_id: state.pet_id, visit_id: visit ? visit.id : null, appointment_id: state.appointment_id,
       pet_name: VR.$('#cPet').value.trim() || null,
       customer: { name: VR.$('#cName').value.trim(), cf: VR.$('#cCf').value.trim().toUpperCase(), address: VR.$('#cAddr').value.trim(),
@@ -476,7 +511,7 @@
       b.disabled = false;
       if (error) { VR.say(im, VR.errorText(error), 'error'); return; }
       const ok = await I.ask({ title: `Emettere la fattura n. ${pv.doc_number}?`, ok: 'Emetti',
-        html: `<p style="margin-top:0">A <b>${esc(p.customer.name)}</b>${p.customer.cf ? ' (' + esc(p.customer.cf) + ')' : ''}, data ${I.date(pv.issued_on)}.</p>
+        html: `<p style="margin-top:0">Intestata a <b>${esc(prof.name)}</b>, per <b>${esc(p.customer.name)}</b>${p.customer.cf ? ' (' + esc(p.customer.cf) + ')' : ''}, data ${I.date(pv.issued_on)}.</p>
                <p style="font-size:22px;font-weight:800;margin:6px 0">${I.money(pv.total)}</p>
                <p class="muted" style="font-size:14px">${p.payment_method ? 'Pagata con ' + esc(I.PAY[p.payment_method]).toLowerCase() : 'Da incassare'}. Dopo l'emissione non si può modificare.</p>` });
       if (!ok) return;
