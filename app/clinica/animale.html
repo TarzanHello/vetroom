@@ -12,15 +12,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-07d">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07h">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07d"></script>
-  <script src="../js/app.js?v=2026-10-07d"></script>
-  <script src="../js/i18n.js?v=2026-10-07d"></script>
-  <script src="../js/layout.js?v=2026-10-07d"></script>
-  <script src="../js/clinica.js?v=2026-10-07d"></script>
-  <script src="../js/documenti.js?v=2026-10-07d"></script>
-  <script src="../js/promemoria.js?v=2026-10-07d"></script>
+  <script src="../js/config.js?v=2026-10-07h"></script>
+  <script src="../js/app.js?v=2026-10-07h"></script>
+  <script src="../js/i18n.js?v=2026-10-07h"></script>
+  <script src="../js/layout.js?v=2026-10-07h"></script>
+  <script src="../js/clinica.js?v=2026-10-07h"></script>
+  <script src="../js/documenti.js?v=2026-10-07h"></script>
+  <script src="../js/promemoria.js?v=2026-10-07h"></script>
 </head>
 <body data-shell="clinic" data-nav="animali">
 
@@ -196,7 +196,7 @@
         .eq('pet_id', id).eq('clinic_id', ctx.clinicId).maybeSingle();
       clientId = acc?.client_id || null;
       if (acc?.clients) VR.$('#ownerLine').textContent = 'Proprietario: ' + VR.clientName(acc.clients);
-      if (pet.owner_user_id) VR.$('#ownerLine').textContent += ' · iscritto a Vetroom';
+      if (pet.owner_user_id) { const ol = VR.$('#ownerLine'); ol.textContent = ol.textContent ? ol.textContent + ' · usa FurrFinder' : 'Il proprietario usa FurrFinder'; }
 
       // Se la select non ha la specie salvata (es. dati importati), aggiungila
       if (pet.species && !VR.SPECIES.includes(pet.species)) {

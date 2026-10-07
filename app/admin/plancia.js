@@ -240,7 +240,7 @@
   };
 
   // ---------- Diario: frasi leggibili ----------
-  const ST = { confirmed: 'ha confermato', cancelled: 'ha annullato', done: 'ha segnato come svolto', no_show: 'ha segnato come assente', requested: 'ha richiesto' };
+  const ST = { scaduta: 'ha chiuso per mancata risposta della clinica', confirmed: 'ha confermato', cancelled: 'ha annullato', done: 'ha segnato come svolto', no_show: 'ha segnato come assente', requested: 'ha richiesto' };
   PL.logLine = (a) => {
     const m = a.meta || {};
     const T = a.target_name ? esc(a.target_name) : 'un account';
@@ -292,6 +292,7 @@
       'admin.nuovo_amministratore': `ha nominato amministratore ${T}`,
       'admin.tolto_amministratore': `ha tolto ${T} dagli amministratori`,
       'admin.annuncio': `ha pubblicato l'annuncio “${esc(a.label || '')}”`,
+      'admin.messaggio_gruppo': `ha scritto a un gruppo scelto (${Number(m.destinatari || 0)} destinatari)`,
       'admin.broadcast': `ha scritto a tutti ${a.label === '/all_vet' ? 'i veterinari' : 'i proprietari'} (${Number(m.destinatari || 0)} destinatari)`,
       'admin.impostazione': a.label === 'maintenance' ? (m.on ? 'ha ATTIVATO la modalità manutenzione' : 'ha disattivato la modalità manutenzione') : `ha cambiato l'impostazione ${esc(a.label || '')}`
     };

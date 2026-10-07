@@ -12,18 +12,18 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-07d">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07h">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07d"></script>
-  <script src="../js/app.js?v=2026-10-07d"></script>
-  <script src="../js/i18n.js?v=2026-10-07d"></script>
-  <script src="../js/layout.js?v=2026-10-07d"></script>
-  <script src="../js/clinica.js?v=2026-10-07d"></script>
-  <script src="../js/documenti.js?v=2026-10-07d"></script>
-  <script src="../js/moduli.js?v=2026-10-07d"></script>
-  <script src="../js/promemoria.js?v=2026-10-07d"></script>
+  <script src="../js/config.js?v=2026-10-07h"></script>
+  <script src="../js/app.js?v=2026-10-07h"></script>
+  <script src="../js/i18n.js?v=2026-10-07h"></script>
+  <script src="../js/layout.js?v=2026-10-07h"></script>
+  <script src="../js/clinica.js?v=2026-10-07h"></script>
+  <script src="../js/documenti.js?v=2026-10-07h"></script>
+  <script src="../js/moduli.js?v=2026-10-07h"></script>
+  <script src="../js/promemoria.js?v=2026-10-07h"></script>
   <script src="../vendor/jspdf-2.5.2.min.js"></script>
-  <script src="../js/pdf.js?v=2026-10-07d"></script>
+  <script src="../js/pdf.js?v=2026-10-07h"></script>
 </head>
 <body data-shell="clinic" data-nav="animali">
 
@@ -69,7 +69,7 @@
               <p class="hint-small" id="recallHint" style="margin:4px 0 0">Lo ritrovi tra i richiami in scadenza, con il messaggio WhatsApp per il proprietario già pronto.</p>
             </div>
           </div>
-          <p style="margin:1.25rem 0 0"><label class="check"><input type="checkbox" name="visible_to_owner" id="visible_to_owner" checked> Visibile al proprietario, se è iscritto a Vetroom</label></p>
+          <p style="margin:1.25rem 0 0"><label class="check"><input type="checkbox" name="visible_to_owner" id="visible_to_owner" checked> Visibile al proprietario, se usa FurrFinder</label></p>
         </section>
 
         <section class="panel" id="modPanel">
@@ -145,7 +145,7 @@
       const from = !!v.ref_from_appointment;
       return (report ? (from ? 'RVP-' : 'RV-') : (from ? 'VP-' : 'V-')) + v.ref_code;
     };
-    const { data: pet } = await VR.sb.from('pets').select('id, name, species, breed, birth_date, weight_kg, notes').eq('id', petId).maybeSingle();
+    const { data: pet } = await VR.sb.from('pets').select('id, name, species, breed, birth_date, sex, weight_kg, notes').eq('id', petId).maybeSingle();
     const { data: acc } = await VR.sb.from('pet_access').select('client_id').eq('pet_id', petId).eq('clinic_id', ctx.clinicId).maybeSingle();
 
     if (pet) {
