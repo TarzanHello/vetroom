@@ -669,7 +669,8 @@ input[type="time"] { font: inherit; padding: .55em .6em; border: 2px solid var(-
 @media (prefers-reduced-motion: reduce) { .dictate-btn.on { animation: none; } }
 @media (max-width: 720px) {
   .sticky-actions { position: sticky; bottom: 0; z-index: 5; background: rgba(243,244,246,.96); padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px)); margin: 0 -2px; border-top: 1px solid var(--line); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-  .sticky-actions .btn-primary { flex: 1 1 auto; }
+  .sticky-actions .btn-primary, .sticky-actions .btn-ghost { flex: 1 1 auto; }
+  .sticky-actions .spacer { display: none; }
 }
 .vr-search-btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 700; color: #ecfeff; background: rgba(255,255,255,.12); border: 1px solid rgba(236,254,255,.35); border-radius: 12px; min-height: 36px; padding: 6px 12px; cursor: pointer; }
 .vr-search-btn:hover { background: rgba(255,255,255,.2); }
@@ -1216,14 +1217,35 @@ input[type="time"] { font: inherit; padding: .55em .6em; border: 2px solid var(-
 .home-tax b { display: block; font-size: 1.35rem; color: var(--ink); }
 .home-tax span { font-size: 13px; color: var(--muted); }
 
-/* ---------- Referto con l'AI (patch 33) ---------- */
+/* ---------- Telefono: ritocchi di fruibilità (07g) ---------- */
+@media (max-width: 820px) {
+  /* conversazione aperta: tutto lo schermo alla chat, il campo di testo sempre in vista */
+  body.msg-open .msg-wrap .page-head { display: none; }
+  body.msg-open .msg-pane { height: calc(100dvh - 160px - env(safe-area-inset-bottom, 0px)); min-height: 340px; }
+  body[data-shell="owner"].msg-open .msg-pane { height: calc(100dvh - 176px - env(safe-area-inset-bottom, 0px)); }
+  .msg-filters button { min-height: 34px; padding: 6px 12px; font-size: 13.5px; }
+  .msg-tools input[type="search"] { font-size: 16px; }
+}
+@media (max-width: 640px) {
+  /* Cassa: ogni fattura diventa una scheda leggibile, senza scorrere di lato */
+  .cash-tbl thead { display: none; }
+  .cash-tbl, .cash-tbl tbody { display: block; }
+  .cash-tbl tr { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; padding: 11px 12px; border-bottom: 1px solid var(--line); }
+  .cash-tbl td { display: block; padding: 0; border: 0; min-width: 0 !important; }
+  .cash-tbl td:nth-child(1) { order: 1; }
+  .cash-tbl td:nth-child(4) { order: 2; font-size: 15px; font-weight: 700; }
+  .cash-tbl td:nth-child(3) { order: 3; }
+  .cash-tbl td:nth-child(2) { order: 4; text-align: right; color: var(--muted); }
+  .cash-tbl td:nth-child(5) { order: 5; color: var(--muted); }
+  .cash-tbl td:nth-child(6) { order: 6; text-align: right; }
+  .cash-tbl td:nth-child(7) { display: none; }
+  .cash-tbl td[colspan] { grid-column: 1 / -1; }
+  .cash-tbl tr.cash-row-unpaid { box-shadow: inset 3px 0 var(--amber); }
+  .cash-tbl tr.cash-row-unpaid td:first-child { box-shadow: none; }
+  /* i campi di testo a 16px: il telefono non ingrandisce la pagina quando li tocchi */
+  input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="number"], input[type="date"], input[type="time"], input:not([type]), select, textarea { font-size: 16px; }
+}
+
+/* ---------- Utilità ---------- */
 .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .notice-warn { background: #fef3c7; color: #92400e; }
-.ai-box { border: 1px solid #ddd6fe; background: linear-gradient(180deg, #faf5ff, #fff); border-radius: 12px; padding: 12px 14px; }
-.ai-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; padding-right: 48px; }
-.ai-head strong { color: #5b21b6; }
-.ai-box textarea { width: 100%; }
-.ai-out { margin-top: 10px; border-top: 1px dashed #ddd6fe; padding-top: 10px; }
-.ai-sec { margin-bottom: 8px; }
-.ai-sec b { display: block; font-size: 13px; color: #5b21b6; }
-.ai-sec p { margin: 2px 0 0; white-space: pre-wrap; }

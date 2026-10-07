@@ -630,7 +630,7 @@
 "Via / Piazza": "Street",
 "Via / Piazza (fatturazione)": "Street (billing)",
 "Via, civico, CAP, città (provincia)": "Street, number, postcode, city (province)",
-"Visibile al proprietario, se è iscritto a Vetroom": "Visible to the owner, if registered on Vetroom",
+"Visibile al proprietario, se usa FurrFinder": "Visible to the owner, if they use FurrFinder",
 "Visibile solo agli amministratori della piattaforma.": "Visible only to platform administrators.",
 "Visibili solo alla clinica": "Visible only to the clinic",
 "Visita": "Visit",
@@ -993,7 +993,7 @@
 
   // Parti di frase (prefissi e suffissi) riconoscibili anche dentro testi più lunghi
   const FRAGMENTS = [
-    ['Proprietario: ', 'Owner: '], [' · iscritto a Vetroom', ' · registered on Vetroom'], ['Diagnosi: ', 'Diagnosis: '],
+    ['Proprietario: ', 'Owner: '], [' · usa FurrFinder', ' · uses FurrFinder'], ['Il proprietario usa FurrFinder', 'The owner uses FurrFinder'], ['Diagnosi: ', 'Diagnosis: '],
     [' · condivisione revocata', ' · sharing revoked'], ['Ultimo backup da questo dispositivo: ', 'Last backup from this device: '],
     ['Foto non caricata: ', 'Photo not uploaded: '], ['Immagine non caricata: ', 'Image not uploaded: '], ['PDF non generato: ', 'PDF not generated: '],
     ['Referto non creato: ', 'Report not created: '], ['Condivisione non riuscita: ', 'Sharing failed: '], ['Anteprima non riuscita: ', 'Preview failed: '],

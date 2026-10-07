@@ -26,6 +26,15 @@
     if (d.toDateString() === y.toDateString()) return 'Ieri';
     return d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
   };
+  // Nome di chi scrive: se il database manda solo il ruolo, mostra un nome leggibile
+  const ROLE_NAME = { owner: 'Cliente', clinic: 'Clinica', admin: 'Vetroom' };
+  const who = (m, c) => {
+    const n = (m.sender_name || '').trim();
+    if (n && !ROLE_NAME[n]) return n;
+    const r = m.sender_role || n;
+    if (r !== 'admin' && c && c.title) return c.title;
+    return ROLE_NAME[r] || n;
+  };
   // Il testo resta testo: niente HTML. Gli indirizzi web diventano link sicuri.
   const linkify = (t) => VR.esc(t).replace(/(https?:\/\/[^\s<]+)/g, (u) => `<a href="${u}" target="_blank" rel="noopener nofollow">${u}</a>`);
   const bytes = (b) => { b = Number(b || 0); return b < 1024 * 1024 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1048576).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' MB'; };
@@ -459,7 +468,7 @@
         const auto = att.length && m.body === '📎 ' + att.map((a) => a.name.slice(0, 60)).join(', ');
         return sep + `
           <div class="bubble ${m.mine ? 'mine' : 'theirs'} role-${m.sender_role} ${hitIds.has(Number(m.id)) ? 'hit' : ''}" data-mid="${m.id}">
-            ${!m.mine ? `<span class="bubble-who" translate="no">${VR.esc(m.sender_name || '')}</span>` : ''}
+            ${!m.mine ? `<span class="bubble-who" translate="no">${VR.esc(who(m, c))}</span>` : ''}
             ${auto ? '' : `<p translate="no">${linkify(m.body)}</p>`}
             ${M.attachmentsHtml(att, urls)}
             <span class="bubble-when">${when(m.created_at)}${m.mine && adv ? ' <span class="tick">✓</span>' : ''}</span>

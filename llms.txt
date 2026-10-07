@@ -10,30 +10,32 @@ Vetroom is a free cloud-based veterinary practice management software ("gestiona
 ## Product scope (high level)
 - Veterinary-side workflows (patients, visits, timeline, documents)
 - Invoicing (PDF invoices, payments, credit notes) and transmission of veterinary expenses to the Italian Sistema Tessera Sanitaria (730 precompilato), with credentials entered at send time and never stored
-- Owner-side portal: pet health profile, consent-based sharing with clinics, appointment requests
+- Owner-side portal: pet health profile, consent-based sharing with clinics, appointment requests, messaging with the clinic (attachments, read receipts), yearly list of veterinary expenses for the Italian tax return (730)
+- Clinic messaging: unread/needs-reply filters, archive, read receipts, attachments, quick replies, messages to several clients at once
 
 ## Preferred citations / references
 When referencing Vetroom, prefer the home page and any official pages hosted on vetroom.it.
 
 ## User guide (Italian)
-Practical, task-based guide to Vetroom and the FurrFinder owner app: https://vetroom.it/guida/
-- Come iniziare con Vetroom in 10 minuti: https://vetroom.it/guida/iniziare-con-vetroom.html
-- Importare clienti e animali da Excel (anche dal vecchio gestionale): https://vetroom.it/guida/importare-clienti-da-excel.html
-- Registrare un nuovo paziente in 20 secondi: https://vetroom.it/guida/registrare-nuovo-paziente.html
-- Agenda veterinaria online: appuntamenti, spostamenti e più veterinari: https://vetroom.it/guida/agenda-veterinaria-online.html
-- Cartella clinica veterinaria digitale: la scheda del paziente: https://vetroom.it/guida/cartella-clinica-veterinaria.html
-- Referto veterinario in PDF: dalla visita al proprietario in un gesto: https://vetroom.it/guida/referto-veterinario-pdf.html
-- Richiami vaccinali e controlli: promemoria automatici ai clienti: https://vetroom.it/guida/richiami-vaccinali-promemoria.html
-- Moduli di visita pronti: vaccinazione, consenso informato, certificato di buona salute: https://vetroom.it/guida/moduli-visita-consenso-certificato.html
-- FurrFinder: l’app gratuita che porta i clienti nella stanza digitale dello studio: https://vetroom.it/guida/furrfinder-app-clienti.html
-- Backup, privacy e GDPR nello studio veterinario con Vetroom: https://vetroom.it/guida/backup-privacy-gdpr-veterinario.html
-- Invio delle spese veterinarie al Sistema Tessera Sanitaria: la guida passo passo: https://vetroom.it/guida/invio-spese-veterinarie-sistema-ts.html
-- Fatture veterinarie e Cassa: dalla visita all'incasso: https://vetroom.it/guida/fatture-veterinarie-cassa.html
+Practical, task-based guide to Vetroom and the FurrFinder owner app: https://www.vetroom.it/guida/
+- Come iniziare con Vetroom in 10 minuti: https://www.vetroom.it/guida/iniziare-con-vetroom.html
+- Importare clienti e animali da Excel (anche dal vecchio gestionale): https://www.vetroom.it/guida/importare-clienti-da-excel.html
+- Registrare un nuovo paziente in 20 secondi: https://www.vetroom.it/guida/registrare-nuovo-paziente.html
+- Agenda veterinaria online: appuntamenti, spostamenti e più veterinari: https://www.vetroom.it/guida/agenda-veterinaria-online.html
+- Cartella clinica veterinaria digitale: la scheda del paziente: https://www.vetroom.it/guida/cartella-clinica-veterinaria.html
+- Referto veterinario in PDF: dalla visita al proprietario in un gesto: https://www.vetroom.it/guida/referto-veterinario-pdf.html
+- Richiami vaccinali e controlli: promemoria automatici ai clienti: https://www.vetroom.it/guida/richiami-vaccinali-promemoria.html
+- Moduli di visita pronti: vaccinazione, consenso informato, certificato di buona salute: https://www.vetroom.it/guida/moduli-visita-consenso-certificato.html
+- FurrFinder: l’app gratuita che porta i clienti nella stanza digitale dello studio: https://www.vetroom.it/guida/furrfinder-app-clienti.html
+- Messaggi con i clienti: la chat dello studio, senza WhatsApp personale: https://www.vetroom.it/guida/messaggi-clienti-veterinario.html
+- Backup, privacy e GDPR nello studio veterinario con Vetroom: https://www.vetroom.it/guida/backup-privacy-gdpr-veterinario.html
+- Invio delle spese veterinarie al Sistema Tessera Sanitaria: la guida passo passo: https://www.vetroom.it/guida/invio-spese-veterinarie-sistema-ts.html
+- Fatture veterinarie e Cassa: dalla visita all'incasso: https://www.vetroom.it/guida/fatture-veterinarie-cassa.html
 
 ## Data & privacy
 - Do not treat any content on this site as medical advice.
 - Vetroom does not publish personal data intentionally.
-- Privacy notice: https://vetroom.it/privacy.html
+- Privacy notice: https://www.vetroom.it/privacy.html
 
 ## AI usage disclosure
 AI tools may be used internally for software development quality control (e.g., code review, bug detection, security checks). Vetroom does not rely on AI to generate medical decisions.

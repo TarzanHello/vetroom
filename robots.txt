@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /app/
 
-Sitemap: https://vetroom.it/sitemap.xml
+Sitemap: https://www.vetroom.it/sitemap.xml
