@@ -83,8 +83,15 @@
 
       if (ev.target.closest('.doc-del')) {
         if (!confirm(`Eliminare "${doc.title || doc.original_name}"?`)) return;
-        const { error } = await VR.sb.from('documents').delete().eq('id', doc.id);
+        // Il file si cancella solo se il database ha davvero tolto il documento: se le regole
+        // di accesso lo impediscono, Supabase non dà errore ma non elimina nessuna riga
+        const { data: gone, error } = await VR.sb.from('documents').delete().eq('id', doc.id).select('id');
         if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+        if (!gone || !gone.length) {
+          VR.say(msg, 'Questo documento non puoi eliminarlo tu: l\'ha caricato ' + (doc.clinic_id ? 'la clinica' : 'il proprietario') + '.', 'error');
+          VR.reportError({ message: 'Eliminazione documento rifiutata dalle regole di accesso', code: 'RLS' }, 'documento ' + doc.id);
+          return;
+        }
         VR.sb.storage.from('pet-files').remove([doc.storage_path]);
         load();
       }
