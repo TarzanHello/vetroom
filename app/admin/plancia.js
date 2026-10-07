@@ -240,7 +240,7 @@
   };
 
   // ---------- Diario: frasi leggibili ----------
-  const ST = { confirmed: 'ha confermato', cancelled: 'ha annullato', done: 'ha segnato come svolto', no_show: 'ha segnato come assente', requested: 'ha richiesto' };
+  const ST = { scaduta: 'ha chiuso per mancata risposta della clinica', confirmed: 'ha confermato', cancelled: 'ha annullato', done: 'ha segnato come svolto', no_show: 'ha segnato come assente', requested: 'ha richiesto' };
   PL.logLine = (a) => {
     const m = a.meta || {};
     const T = a.target_name ? esc(a.target_name) : 'un account';

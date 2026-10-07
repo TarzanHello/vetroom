@@ -12,18 +12,18 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-07e">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07f">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07e"></script>
-  <script src="../js/app.js?v=2026-10-07e"></script>
-  <script src="../js/i18n.js?v=2026-10-07e"></script>
-  <script src="../js/layout.js?v=2026-10-07e"></script>
-  <script src="../js/clinica.js?v=2026-10-07e"></script>
-  <script src="../js/documenti.js?v=2026-10-07e"></script>
-  <script src="../js/moduli.js?v=2026-10-07e"></script>
-  <script src="../js/promemoria.js?v=2026-10-07e"></script>
+  <script src="../js/config.js?v=2026-10-07f"></script>
+  <script src="../js/app.js?v=2026-10-07f"></script>
+  <script src="../js/i18n.js?v=2026-10-07f"></script>
+  <script src="../js/layout.js?v=2026-10-07f"></script>
+  <script src="../js/clinica.js?v=2026-10-07f"></script>
+  <script src="../js/documenti.js?v=2026-10-07f"></script>
+  <script src="../js/moduli.js?v=2026-10-07f"></script>
+  <script src="../js/promemoria.js?v=2026-10-07f"></script>
   <script src="../vendor/jspdf-2.5.2.min.js"></script>
-  <script src="../js/pdf.js?v=2026-10-07e"></script>
+  <script src="../js/pdf.js?v=2026-10-07f"></script>
 </head>
 <body data-shell="clinic" data-nav="animali">
 
@@ -57,6 +57,14 @@
             <div class="s4"><label for="weight">Peso rilevato (kg)</label><input type="number" id="weight" step="0.01" min="0" inputmode="decimal">
               <p class="hint-small">Aggiorna anche il peso nella scheda dell'animale.</p></div>
             <div class="s12"><label for="vtitle">Motivo della visita</label><input type="text" id="vtitle" name="title" placeholder="Es. zoppia arto posteriore sinistro"></div>
+            <div class="s12 ai-box" id="aiBox" hidden>
+              <div class="ai-head"><strong>✨ Referto con l'AI</strong><span class="hint-small" id="aiQuota"></span></div>
+              <label for="aiNotes" class="visually-hidden">Appunti per l'AI</label>
+              <textarea data-dictate id="aiNotes" rows="4" placeholder="Scrivi o detta gli appunti come vengono: cosa racconta il proprietario, cosa trovi alla visita, cosa fai e cosa prescrivi…"></textarea>
+              <div class="actions-bar" style="margin-top:8px"><button type="button" class="btn btn-primary btn-small" id="aiGo">Ordina in referto</button>
+                <span class="hint-small" style="margin:0">Rileggi sempre prima di salvare. All'AI arrivano solo gli appunti e specie, razza, età e peso: mai i dati del proprietario.</span></div>
+              <div id="aiOut" hidden></div>
+            </div>
             <div class="s12"><label for="notes">Anamnesi ed esame clinico</label><textarea data-dictate id="notes" name="notes" rows="5"></textarea></div>
             <div class="s12"><label for="diagnosis">Diagnosi</label><textarea data-dictate id="diagnosis" name="diagnosis" rows="3"></textarea></div>
             <div class="s12"><label for="therapy">Terapia e indicazioni</label><textarea data-dictate id="therapy" name="therapy" rows="4"></textarea></div>
@@ -145,7 +153,7 @@
       const from = !!v.ref_from_appointment;
       return (report ? (from ? 'RVP-' : 'RV-') : (from ? 'VP-' : 'V-')) + v.ref_code;
     };
-    const { data: pet } = await VR.sb.from('pets').select('id, name, species, breed, birth_date, weight_kg, notes').eq('id', petId).maybeSingle();
+    const { data: pet } = await VR.sb.from('pets').select('id, name, species, breed, birth_date, sex, weight_kg, notes').eq('id', petId).maybeSingle();
     const { data: acc } = await VR.sb.from('pet_access').select('client_id').eq('pet_id', petId).eq('clinic_id', ctx.clinicId).maybeSingle();
 
     if (pet) {
@@ -288,6 +296,58 @@
     }
 
     if (ctx.isVet && !visit?.finalized_at) VR.enableDictation(form);
+
+    // ---------- Referto con l'AI (patch 33 + funzione vetroom-ai) ----------
+    if (ctx.isVet && !visit?.finalized_at) {
+      VR.sb.rpc('ai_quota', { p_clinic: ctx.clinicId }).then(({ data: q }) => {
+        if (!q || !q.on) return;
+        VR.show(VR.$('#aiBox'));
+        VR.$('#aiQuota').textContent = q.remaining > 0 ? `${q.remaining} su ${q.limit} questo mese` : 'Esauriti per questo mese';
+        VR.$('#aiGo').disabled = q.remaining <= 0;
+      }, () => {});
+      let aiRes = null;
+      const aiOut = VR.$('#aiOut');
+      const fieldsNow = () => ({ motivo: VR.$('#vtitle').value, anamnesi_esame: VR.$('#notes').value, diagnosi: VR.$('#diagnosis').value, terapia: VR.$('#therapy').value });
+      VR.$('#aiGo').addEventListener('click', async () => {
+        const notes = VR.$('#aiNotes').value.trim();
+        if (notes.length < 15) { VR.say(aiOut, 'Scrivi o detta qualche appunto in più: almeno una frase.', 'error'); return; }
+        const b = VR.$('#aiGo'); b.disabled = true; b.textContent = 'Sto scrivendo il referto…';
+        VR.hide(aiOut);
+        try {
+          const sexL = { M: 'maschio', F: 'femmina' };
+          const { data, error } = await VR.sb.functions.invoke('vetroom-ai', { body: {
+            clinic: ctx.clinicId, appunti: notes, tipo: VR.$('#visit_kind').value,
+            animale: { specie: pet?.species || '', razza: pet?.breed || '', eta: pet?.birth_date && VR.age ? VR.age(pet.birth_date) : '', sesso: sexL[pet?.sex] || '',
+                       peso: VR.$('#weight').value ? VR.$('#weight').value + ' kg' : '' },
+            campi: fieldsNow() } });
+          if (error) {
+            let m = error.message; try { const j = await error.context.json(); m = j.error || m; } catch { /* testo */ }
+            if (/Failed to send|fetch|not found|404/i.test(m)) m = 'Il referto con l\'AI non è ancora attivo su questa installazione.';
+            throw new Error(m);
+          }
+          aiRes = data;
+          const sec = (t, v) => v ? `<div class="ai-sec"><b>${t}</b><p translate="no">${VR.esc(v)}</p></div>` : '';
+          aiOut.className = 'ai-out';
+          aiOut.innerHTML = `${data.attenzione ? `<div class="notice notice-warn" style="margin:0 0 8px">⚠️ Da verificare: ${VR.esc(data.attenzione)}</div>` : ''}
+            ${sec('Motivo della visita', data.motivo)}${sec('Anamnesi ed esame clinico', data.anamnesi_esame)}${sec('Diagnosi', data.diagnosi)}${sec('Terapia e indicazioni', data.terapia)}
+            <div class="actions-bar" style="margin-top:8px"><button type="button" class="btn btn-primary btn-small" id="aiUse">Inserisci nel referto</button><button type="button" class="btn btn-ghost btn-small" id="aiNo">Scarta</button></div>`;
+          VR.show(aiOut);
+          if (typeof data.rimasti === 'number') VR.$('#aiQuota').textContent = `${data.rimasti} rimasti questo mese`;
+        } catch (e) {
+          VR.say(aiOut, VR.errorText(e), 'error');
+        } finally { b.disabled = false; b.textContent = 'Ordina in referto'; }
+      });
+      aiOut.addEventListener('click', (e) => {
+        if (e.target.closest('#aiNo')) { aiRes = null; VR.hide(aiOut); return; }
+        if (!e.target.closest('#aiUse') || !aiRes) return;
+        const set = (id, v) => { if (!v) return; const el = VR.$(id); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+        if (!VR.$('#vtitle').value.trim()) set('#vtitle', aiRes.motivo);
+        set('#notes', aiRes.anamnesi_esame); set('#diagnosis', aiRes.diagnosi); set('#therapy', aiRes.terapia);
+        aiRes = null; VR.hide(aiOut);
+        VR.$('#notes').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        VR.say(msg2, 'Referto inserito: rileggilo, correggi se serve e salva.', 'ok');
+      });
+    }
     let docs = null;
     if (visit && pet) {
       VR.show(VR.$('#docsPanel'));

@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Sala macchine · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-07e">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-07f">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07e"></script>
-  <script src="../js/app.js?v=2026-10-07e"></script>
-  <script src="plancia.js?v=2026-10-07e"></script>
+  <script src="../js/config.js?v=2026-10-07f"></script>
+  <script src="../js/app.js?v=2026-10-07f"></script>
+  <script src="plancia.js?v=2026-10-07f"></script>
 </head>
 <body class="pl" data-station="sala">
 <main>
@@ -35,6 +35,11 @@
       <div class="pn-h"><h2>Collegamento al Sistema Tessera Sanitaria</h2><div class="tools"><button class="btn sm" id="tsTest">Prova nell'ambiente di test</button></div></div>
       <p class="dim" style="margin-top:-6px">Invia due documenti di prova all'ambiente di test del Sistema TS con l'utenza pubblicata nel kit ufficiale (veterinario di prova). Non tocca dati veri e non usa le credenziali di nessuno. Se entrambi risultano <b>accolti</b>, la funzione <span class="mono">vetroom-ts</span> è installata bene e la cifratura è corretta.</p>
       <div id="tsOut"></div>
+    </section>
+
+    <section class="pn c12" id="ai">
+      <div class="pn-h"><h2>Referto con l'intelligenza artificiale</h2><div class="tools"><button class="btn sm" id="aiCheck">Controlla la funzione</button></div></div>
+      <div id="aiBody"><p class="loader">Lettura</p></div>
     </section>
 
     <section class="pn c12" id="sistema">
@@ -227,7 +232,38 @@
     b.disabled = false; b.textContent = 'Prova nell\'ambiente di test';
   });
 
-  loadMaint(); loadAdmins(); loadSys(); loadErr(); loadMine();
+  // ---------- Referto con l'AI ----------
+  const loadAi = async () => {
+    let st;
+    try { st = await PL.rpc('platform_ai_stats'); }
+    catch (e) { $('#aiBody').innerHTML = `<p class="note warn">${esc(e.missing ? 'Per il referto con l\'AI va eseguita la patch 33 su Supabase.' : e.message)}</p>`; return; }
+    $('#aiBody').innerHTML = `<div class="cols">
+      <div class="c5">
+        <label class="check" style="gap:14px"><input type="checkbox" class="switch" id="aiOn" ${st.on ? 'checked' : ''}> <span>${st.on ? 'Acceso: i veterinari vedono "Referto con l\'AI" nella visita' : 'Spento: nessuno lo vede'}</span></label>
+        <label class="f" for="aiLim">Referti al mese per ogni struttura</label>
+        <div style="display:flex;gap:8px"><input id="aiLim" type="number" min="0" max="10000" value="${n(st.monthly_limit).replace(/\./g, '')}" style="max-width:140px"><button class="btn" id="aiSave">Salva</button></div>
+        <p class="small dim" style="margin:10px 0 0">Ogni referto è una chiamata a Claude (Anthropic), pagata con la chiave che hai messo nella funzione <span class="mono">vetroom-ai</span>. Il limite tiene sotto controllo la spesa; il conteggio riparte il primo del mese.</p>
+      </div>
+      <div class="c7"><div class="nums" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+          <div><b>${n(st.month_ok)}</b><span>referti questo mese</span></div><div><b>${n(st.month_err)}</b><span>non riusciti</span></div>
+          <div><b>${n(Math.round((Number(st.month_tokens_in) + Number(st.month_tokens_out)) / 1000))}k</b><span>token usati</span></div></div>
+        ${st.clinics.length ? `<ul class="list" style="margin-top:12px">${st.clinics.map((c) => `<li><a class="grow" href="${PL.clinicHref(c.id)}">${esc(c.name)}</a><span class="mono">${n(c.n)}</span></li>`).join('')}</ul>` : '<p class="dim small" style="margin-top:12px">Nessun referto con l\'AI questo mese.</p>'}
+        ${st.last_error ? `<p class="note warn small" style="margin-top:12px">Ultimo errore: ${esc(st.last_error)}</p>` : ''}</div></div>`;
+    const save = async (on) => { const r = await PL.run($('#aiSave'), () => PL.rpc('platform_ai_set', { p_on: on, p_limit: Number($('#aiLim').value || 0) }), 'Impostazione salvata.'); if (r !== undefined) loadAi(); };
+    $('#aiOn').addEventListener('change', (e) => save(e.target.checked));
+    $('#aiSave').addEventListener('click', () => save($('#aiOn').checked));
+  };
+  $('#aiCheck').addEventListener('click', async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try {
+      const { data, error } = await VR.sb.functions.invoke('vetroom-ai', { body: { action: 'version' } });
+      if (error) throw new Error(/Failed to send|fetch|not found|404/i.test(error.message) ? 'La funzione "vetroom-ai" non risponde: va installata su Supabase (Edge Functions).' : error.message);
+      PL.toast(data.chiave ? `Funzione vetroom-ai ${data.versione} pronta (modello ${data.modello}).` : 'La funzione risponde, ma manca la chiave ANTHROPIC_API_KEY nei Secrets.', data.chiave ? 'ok' : 'bad');
+    } catch (err) { PL.toast(err.message, 'bad'); }
+    b.disabled = false;
+  });
+
+  loadMaint(); loadAdmins(); loadSys(); loadErr(); loadMine(); loadAi();
 })();
 </script>
 </body>

@@ -1188,3 +1188,42 @@ input[type="time"] { font: inherit; padding: .55em .6em; border: 2px solid var(-
   .msg-head-act { width: 100%; justify-content: flex-end; }
   .att-img { width: 110px; height: 110px; }
 }
+
+/* ---------- FurrFinder: spese per il 730 (patch 33) ---------- */
+.year-chips { justify-content: flex-start; margin: 4px 0 12px; }
+.year-chips .chip { cursor: pointer; font-size: 14px; padding: 5px 14px; background: var(--white); border-color: var(--line); color: var(--muted); }
+.year-chips .chip.is-on { background: var(--teal); border-color: var(--teal); color: #fff; }
+.tax-head { display: flex; flex-direction: column; gap: 2px; }
+.tax-big { font-size: 2rem; line-height: 1.1; color: var(--ink); }
+.tax-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-top: 12px; }
+.tax-grid > div { background: #f8fafc; border-radius: 10px; padding: 10px 12px; }
+.tax-grid span { display: block; font-size: 12.5px; color: var(--muted); }
+.tax-grid b { font-size: 1.15rem; color: var(--ink); }
+.tax-green { color: #15803d !important; }
+.exp-list { list-style: none; margin: 0; padding: 0; }
+.exp-list li { display: flex; gap: 10px; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.exp-list li:first-child { border-top: 0; }
+.exp-main { min-width: 0; display: grid; gap: 1px; }
+.exp-main strong { color: var(--ink); }
+.exp-main span { font-size: 13px; color: var(--muted); }
+.exp-ts { color: #15803d; font-weight: 600; }
+.exp-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.exp-side b { font-size: 1.05rem; color: var(--ink); }
+.exp-neg { color: #b91c1c !important; }
+.tax-help summary { cursor: pointer; }
+.tax-help p { margin: 10px 0 0; }
+.home-tax { display: flex; gap: 12px; align-items: center; justify-content: space-between; text-decoration: none; color: inherit; }
+.home-tax b { display: block; font-size: 1.35rem; color: var(--ink); }
+.home-tax span { font-size: 13px; color: var(--muted); }
+
+/* ---------- Referto con l'AI (patch 33) ---------- */
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.notice-warn { background: #fef3c7; color: #92400e; }
+.ai-box { border: 1px solid #ddd6fe; background: linear-gradient(180deg, #faf5ff, #fff); border-radius: 12px; padding: 12px 14px; }
+.ai-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; padding-right: 48px; }
+.ai-head strong { color: #5b21b6; }
+.ai-box textarea { width: 100%; }
+.ai-out { margin-top: 10px; border-top: 1px dashed #ddd6fe; padding-top: 10px; }
+.ai-sec { margin-bottom: 8px; }
+.ai-sec b { display: block; font-size: 13px; color: #5b21b6; }
+.ai-sec p { margin: 2px 0 0; white-space: pre-wrap; }
