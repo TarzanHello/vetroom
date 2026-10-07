@@ -7,30 +7,37 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Messaggi · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-07d">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-07e">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07d"></script>
-  <script src="../js/app.js?v=2026-10-07d"></script>
-  <script src="plancia.js?v=2026-10-07d"></script>
+  <script src="../js/config.js?v=2026-10-07e"></script>
+  <script src="../js/app.js?v=2026-10-07e"></script>
+  <script src="../js/messaggi.js?v=2026-10-07e"></script>
+  <script src="plancia.js?v=2026-10-07e"></script>
 </head>
 <body class="pl" data-station="messaggi">
 <main>
-  <div class="pl-head"><div class="grow"><h1>Messaggi</h1><p>Tutte le conversazioni della piattaforma. Nell'assistenza puoi rispondere; quelle fra clinica e proprietario le puoi leggere ma non scriverci, e ogni lettura resta registrata.</p></div>
-    <div class="actions"><button class="btn" id="allVet" title="/all_vet">A tutti i veterinari</button><button class="btn" id="allUser" title="/all_user">A tutti i proprietari</button><button class="btn prim" id="new">Nuovo messaggio</button></div></div>
+  <div class="pl-head"><div class="grow"><h1>Messaggi</h1><p>Tutte le conversazioni della piattaforma. Nell'assistenza puoi rispondere, anche con foto e PDF; quelle fra clinica e proprietario le puoi leggere ma non scriverci, e ogni lettura resta registrata.</p></div>
+    <div class="actions"><button class="btn" id="allVet" title="/all_vet">A tutti i veterinari</button><button class="btn" id="allUser" title="/all_user">A tutti i proprietari</button><button class="btn" id="group">Scrivi a un gruppo</button><button class="btn prim" id="new">Nuovo messaggio</button></div></div>
   <section class="pn">
     <div class="pn-h" style="margin-bottom:12px">
       <div class="seg" role="group" aria-label="Filtro" id="filt"></div>
-      <div class="tools"><input type="search" class="search" id="q" placeholder="Clinica, nome o email"></div>
+      <div class="tools"><input type="search" class="search" id="q" placeholder="Nome, email o testo dei messaggi"></div>
     </div>
+    <div class="bulk" id="bulk"></div>
     <div class="inbox" id="inbox">
       <div class="convs" id="list"><p class="loader">Caricamento</p></div>
       <div class="thread" id="thread">
-        <div class="thread-h"><button class="btn sm ghost only-m" id="back" style="margin-bottom:8px" hidden>Torna all'elenco</button><h2 id="tTitle">Scegli una conversazione</h2><p class="small dim" id="tNote" style="margin:4px 0 0"></p></div>
+        <div class="thread-h"><button class="btn sm ghost only-m" id="back" style="margin-bottom:8px" hidden>Torna all'elenco</button>
+          <div class="thread-ht"><div class="grow"><h2 id="tTitle">Scegli una conversazione</h2><p class="small dim" id="tNote" style="margin:4px 0 0"></p></div>
+            <div class="actions" id="tAct" hidden><button class="btn sm ghost" id="tUnread" title="Torna nell'elenco come da leggere">Non letta</button><button class="btn sm ghost" id="tArch">Archivia</button></div></div></div>
         <div class="thread-b" id="tBody"></div>
         <div class="thread-f" id="tFoot" hidden>
           <label class="f" for="reply" style="margin-top:0">Rispondi come Assistenza Vetroom</label>
+          <div class="att-strip" id="strip" hidden></div>
           <textarea id="reply" rows="3"></textarea>
-          <div class="actions" style="margin-top:8px"><button class="btn prim" id="send">Invia</button><span class="small faint">Ctrl+Invio per inviare</span></div>
+          <input type="file" id="file" multiple accept="image/*,application/pdf" hidden>
+          <div class="actions" style="margin-top:8px"><button class="btn prim" id="send">Invia</button><button class="btn ghost" id="attach" title="Allega foto o PDF (max 10 MB)">Allega</button>
+            <span class="tpl-anchor"><button class="btn ghost" id="tpl">Risposte pronte</button></span><span class="small faint">Ctrl+Invio per inviare</span></div>
         </div>
       </div>
     </div>
@@ -44,62 +51,268 @@
 (async () => {
   await PL.boot();
   const { $, esc, n } = PL;
+  const M = VR.msg;
   const qs = new URLSearchParams(location.search);
-  let filt = qs.get('f') || 'all', convs = [], cur = null;
+  let filt = qs.get('f') || 'all', convs = [], cur = null, adv = true, selecting = false, receipt = 0, pending = [], shownSig = '';
+  const sel = new Set();
   const isAdm = (c) => c && String(c.kind).startsWith('admin');
   const waiting = (c) => isAdm(c) && c.last_message_at && c.last_sender_role !== 'admin';
   const title = (c) => c.kind === 'admin_user' ? 'Assistenza · ' + (c.owner_name || c.owner_email || 'utente')
     : c.kind === 'admin_clinic' ? 'Assistenza · ' + (c.clinic_name || 'clinica')
     : (c.clinic_name || 'Clinica') + ' ⇄ ' + (c.owner_name || 'proprietario');
-  const F = [['all', 'Tutte'], ['attesa', 'Da rispondere'], ['assist', 'Assistenza'], ['co', 'Clinica ⇄ proprietario']];
-  const pass = (c) => filt === 'all' || (filt === 'attesa' ? waiting(c) : filt === 'assist' ? isAdm(c) : c.kind === 'clinic_owner');
+  const F = [['all', 'Tutte'], ['unread', 'Non lette'], ['attesa', 'Da rispondere'], ['assist', 'Assistenza'], ['co', 'Clinica ⇄ proprietario'], ['arch', 'Archiviate']];
+  const match = (c, k) => k === 'arch' ? c.archived : !c.archived && (k === 'all' || (k === 'unread' ? c.unread > 0 : k === 'attesa' ? waiting(c) : k === 'assist' ? isAdm(c) : c.kind === 'clinic_owner'));
+
+  // ---------- Elenco ----------
+  const drawBulk = () => {
+    if (!adv) { $('#bulk').innerHTML = ''; return; }
+    const rows = convs.filter((c) => match(c, filt)), all = rows.length && rows.every((c) => sel.has(c.id));
+    $('#bulk').innerHTML = selecting
+      ? `<label class="check"><input type="checkbox" id="selAll" ${all ? 'checked' : ''}> ${sel.size ? n(sel.size) + ' selezionate' : 'Seleziona tutte quelle mostrate'}</label>
+         <span class="grow"></span>
+         <button class="btn sm" data-act="read" ${sel.size ? '' : 'disabled'}>Segna come lette</button>
+         <button class="btn sm" data-act="unread" ${sel.size ? '' : 'disabled'}>Segna come non lette</button>
+         <button class="btn sm" data-act="${filt === 'arch' ? 'unarchive' : 'archive'}" ${sel.size ? '' : 'disabled'}>${filt === 'arch' ? 'Ripristina' : 'Archivia'}</button>
+         <button class="btn sm ghost" id="selEnd">Fine</button>`
+      : `<button class="btn sm ghost" id="selStart" ${convs.length ? '' : 'disabled'}>Seleziona più conversazioni</button>`;
+  };
   const drawList = () => {
-    $('#filt').innerHTML = F.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${filt === k}">${l}<span class="n">${convs.filter((c) => k === 'all' || (k === 'attesa' ? waiting(c) : k === 'assist' ? isAdm(c) : c.kind === 'clinic_owner')).length}</span></button>`).join('');
-    const rows = convs.filter(pass);
-    $('#list').innerHTML = rows.map((c) => `<button type="button" class="conv ${cur && cur.id === c.id ? 'on' : ''} ${waiting(c) ? 'wait' : ''}" data-c="${c.id}">
-      <span class="top"><strong>${esc(title(c))}</strong><time>${c.last_message_at ? PL.ago(c.last_message_at) : ''}</time></span>
+    $('#filt').innerHTML = F.filter(([k]) => adv || !['unread', 'arch'].includes(k)).map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${filt === k}">${l}<span class="n">${convs.filter((c) => match(c, k)).length}</span></button>`).join('');
+    const rows = convs.filter((c) => match(c, filt));
+    $('#list').innerHTML = rows.map((c) => `<button type="button" class="conv ${cur && cur.id === c.id ? 'on' : ''} ${waiting(c) ? 'wait' : ''} ${c.unread ? 'unread' : ''} ${sel.has(c.id) ? 'sel' : ''}" data-c="${c.id}">
+      ${selecting ? `<input type="checkbox" class="cchk" tabindex="-1" ${sel.has(c.id) ? 'checked' : ''} aria-hidden="true">` : ''}
+      <span class="top"><strong translate="no">${esc(title(c))}</strong>${c.unread ? `<span class="ubadge">${n(c.unread)}</span>` : ''}<time>${c.last_message_at ? PL.ago(c.last_message_at) : ''}</time></span>
       <span class="pv">${c.last_sender_role ? esc({ owner: 'Proprietario', clinic: 'Clinica', admin: 'Tu' }[c.last_sender_role] || '') + ': ' : ''}${esc(c.last_preview || '—')}</span></button>`).join('')
-      || '<p class="empty">Nessuna conversazione.</p>';
+      || `<p class="empty">${filt === 'unread' ? 'Nessun messaggio da leggere. 👍' : filt === 'attesa' ? 'Hai risposto a tutti. 👍' : 'Nessuna conversazione.'}</p>`;
+    drawBulk();
   };
   const loadList = async () => {
-    try { convs = await PL.rpc('platform_conversations', { p_limit: 300, p_q: $('#q').value.trim() || null }) || []; }
-    catch (e) { $('#list').innerHTML = `<p class="note warn" style="margin:12px">${esc(e.message)}</p>`; return; }
+    const q = $('#q').value.trim() || null;
+    try {
+      if (adv) {
+        try { convs = await PL.rpc('platform_inbox', { p_q: q, p_limit: 500 }) || []; }
+        catch (e) { if (!e.missing) throw e; adv = false; }
+      }
+      if (!adv) convs = (await PL.rpc('platform_conversations', { p_limit: 300, p_q: q }) || []).map((c) => ({ ...c, unread: 0, archived: false, files: 0 }));
+    } catch (e) { $('#list').innerHTML = `<p class="note warn" style="margin:12px">${esc(e.message)}</p>`; return; }
+    [...sel].forEach((id) => { if (!convs.some((c) => c.id === id)) sel.delete(id); });
     drawList();
   };
+
+  // ---------- Conversazione ----------
+  const drawTicks = () => $$('#tBody .bub.me[data-mid]').forEach((b) => {
+    const seen = Number(b.dataset.mid) <= receipt, t = b.querySelector('.tick');
+    if (t) { t.textContent = seen ? '✓✓ letto' : '✓ inviato'; t.classList.toggle('seen', seen); }
+  });
+  const $$ = PL.$$;
   const open = async (c, quiet) => {
     cur = c; drawList();
     $('#inbox').classList.add('reading'); $('#back').hidden = false;
     $('#tTitle').textContent = title(c);
-    $('#tNote').innerHTML = isAdm(c) ? (c.owner_email ? `<a href="mailto:${esc(c.owner_email)}">${esc(c.owner_email)}</a>` : 'Conversazione di assistenza')
+    $('#tNote').innerHTML = isAdm(c) ? (c.owner_email ? `<a href="mailto:${esc(c.owner_email)}">${esc(c.owner_email)}</a>` : c.clinic_id ? `<a href="${PL.clinicHref(c.clinic_id)}">Scheda della struttura</a>` : 'Conversazione di assistenza')
       : 'Puoi leggerla, non scriverci. Questa apertura resta nel registro delle letture.';
     $('#tFoot').hidden = !isAdm(c);
-    if (!quiet) $('#tBody').innerHTML = '<p class="loader">Caricamento</p>';
+    $('#tAct').hidden = !adv;
+    $('#tUnread').hidden = !isAdm(c);
+    $('#tArch').textContent = c.archived ? 'Ripristina' : 'Archivia';
+    $('#attach').hidden = $('#tpl').parentElement.hidden = !adv;
+    if (!quiet) { $('#tBody').innerHTML = '<p class="loader">Caricamento</p>'; shownSig = ''; pending = []; drawStrip(); }
     try {
-      const msgs = (await PL.rpc('msg_thread', { p_conv: c.id, p_limit: 300 }) || []).slice().reverse();
-      $('#tBody').innerHTML = msgs.map((m) => `<div class="bub r-${m.sender_role} ${m.sender_role === 'admin' ? 'me' : ''}"><small>${esc(m.sender_name || '')}</small>${esc(m.body)}<time>${PL.dt(m.created_at)}</time></div>`).join('') || '<p class="dim">Nessun messaggio.</p>';
+      const [msgsR, files, rc] = await Promise.all([
+        PL.rpc('msg_thread', { p_conv: c.id, p_limit: 300 }),
+        adv ? PL.try('msg_files', { p_conv: c.id }, []) : [],
+        adv && isAdm(c) ? PL.try('msg_receipt', { p_conv: c.id }, null) : null]);
+      if (cur !== c) return;
+      receipt = Number(rc?.seen_id || 0);
+      const msgs = (msgsR || []).slice().reverse();
+      const sig = c.id + ':' + msgs.length + ':' + (msgs.length ? msgs[msgs.length - 1].id : 0) + ':' + (files || []).length;
+      if (quiet && sig === shownSig) { drawTicks(); return; }
+      shownSig = sig;
+      const byMsg = {}; (files || []).forEach((a) => { (byMsg[a.message_id] ||= []).push(a); });
+      const urls = (files || []).length ? await M.signed(files.map((a) => a.storage_path)) : {};
+      $('#tBody').innerHTML = msgs.map((m) => {
+        const att = byMsg[m.id] || [];
+        const auto = att.length && m.body === '📎 ' + att.map((a) => a.name.slice(0, 60)).join(', ');
+        return `<div class="bub r-${m.sender_role} ${m.sender_role === 'admin' ? 'me' : ''}" data-mid="${m.id}"><small>${esc(m.sender_name || '')}</small><span translate="no">${auto ? '' : esc(m.body)}</span>${M.attachmentsHtml(att, urls)}<time>${PL.dt(m.created_at)}${m.sender_role === 'admin' && isAdm(c) && adv ? ' · <span class="tick">✓ inviato</span>' : ''}</time></div>`;
+      }).join('') || '<p class="dim">Nessun messaggio.</p>';
+      drawTicks();
       $('#tBody').scrollTop = $('#tBody').scrollHeight;
+      if (c.unread) { c.unread = 0; drawList(); PL.refreshSignals(); }
     } catch (e) { $('#tBody').innerHTML = `<p class="note bad">${esc(e.message)}</p>`; }
     if (!quiet) loadAcc();
   };
+
+  // allegati in uscita
+  const drawStrip = () => {
+    $('#strip').hidden = !pending.length;
+    $('#strip').innerHTML = pending.map((p, i) => `<span class="att-chip">${/^image\//.test(p.file.type) ? '🖼' : '📄'} ${esc(p.file.name)}${p.up ? ' · invio…' : ` <button type="button" data-rm="${i}" aria-label="Togli">×</button>`}</span>`).join('');
+  };
+  const addFiles = async (files) => {
+    for (const f of files) {
+      if (pending.length >= 5) { PL.toast('Al massimo 5 allegati per messaggio.', 'bad'); break; }
+      try { pending.push({ file: await M.prepareFile(f) }); } catch (e) { PL.toast(e.message, 'bad'); }
+    }
+    drawStrip();
+  };
+  $('#attach').addEventListener('click', () => $('#file').click());
+  $('#file').addEventListener('change', () => { addFiles([...$('#file').files]); $('#file').value = ''; });
+  $('#strip').addEventListener('click', (e) => { const r = e.target.closest('[data-rm]'); if (r) { pending.splice(Number(r.dataset.rm), 1); drawStrip(); } });
+  $('#reply').addEventListener('paste', (e) => { const f = [...(e.clipboardData?.files || [])]; if (f.length && adv) { e.preventDefault(); addFiles(f); } });
+
   const send = async () => {
-    const t = $('#reply').value.trim(); if (!t || !cur) return;
-    const r = await PL.run($('#send'), () => PL.rpc('msg_send', { p_conv: cur.id, p_body: t }), 'Risposta inviata.');
-    if (r !== undefined) { $('#reply').value = ''; await loadList(); open(convs.find((x) => x.id === cur.id) || cur, true); PL.refreshSignals(); }
+    const t = $('#reply').value.trim(); if ((!t && !pending.length) || !cur) return;
+    const c = cur;
+    const r = await PL.run($('#send'), async () => {
+      if (!pending.length) return PL.rpc('msg_send', { p_conv: c.id, p_body: t });
+      const up = [];
+      for (const p of pending) { p.up = true; drawStrip(); up.push(await M.upload(c.id, p.file)); }
+      return PL.rpc('msg_send_files', { p_conv: c.id, p_body: t, p_files: up });
+    }, 'Risposta inviata.');
+    if (r !== undefined) { $('#reply').value = ''; pending = []; drawStrip(); await loadList(); open(convs.find((x) => x.id === c.id) || c, true); PL.refreshSignals(); }
+    else { pending.forEach((p) => { p.up = false; }); drawStrip(); }
   };
   const loadAcc = async () => {
     const rows = await PL.try('platform_access_log', { p_limit: 100 }, []);
     $('#acc').innerHTML = (rows || []).length ? `<div class="tw"><table class="t"><thead><tr><th>Quando</th><th>Chi</th><th>Conversazione</th></tr></thead><tbody>${rows.map((a) => `<tr><td class="nowrap">${PL.dt(a.at)}</td><td>${esc(a.admin_email || '')}</td><td>${esc([a.clinic_name, a.owner_email].filter(Boolean).join(' ⇄ ') || 'Assistenza')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="dim">Nessuna lettura registrata.</p>';
   };
 
-  $('#list').addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) { const c = convs.find((x) => x.id === b.dataset.c); if (c) { open(c); history.replaceState(null, '', '?conv=' + c.id); } } });
-  $('#filt').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filt = b.dataset.f; drawList(); } });
+  // ---------- Risposte pronte della Plancia ----------
+  const tplManage = async () => {
+    for (;;) {
+      let rows;
+      try { rows = await M.templates.list(null); } catch (e) { PL.toast(e.message || VR.errorText(e), 'bad'); return; }
+      const v = await PL.ask({ title: 'Risposte pronte della Plancia', wide: true, ok: 'Salva nuova',
+        html: (rows.length ? `<ul class="list" style="margin-bottom:6px">${rows.map((t) => `<li><div class="grow"><strong>${esc(t.title)}</strong><span class="small dim" style="display:block;white-space:pre-wrap">${esc(t.body)}</span></div><button type="button" class="btn sm danger" data-tdel="${t.id}">Elimina</button></li>`).join('')}</ul>` : '<p class="dim">Ancora nessuna risposta pronta: scrivi qui sotto la prima.</p>'),
+        fields: [{ name: 'title', label: 'Titolo', required: true }, { name: 'body', label: 'Testo', type: 'textarea', rows: 5, required: true }] });
+      if (!v) return;
+      if (v.__del) continue;
+      try { await PL.rpc('msg_template_save', { p_id: null, p_clinic: null, p_title: v.title, p_body: v.body }); PL.toast('Risposta pronta salvata.'); }
+      catch (e) { PL.toast(e.message, 'bad'); }
+    }
+  };
+  // pulsante "Elimina" dentro la finestra delle risposte pronte
+  document.addEventListener('click', async (e) => {
+    const d = e.target.closest('[data-tdel]'); if (!d) return;
+    try { await PL.rpc('msg_template_delete', { p_id: d.dataset.tdel, p_clinic: null }); d.closest('li').remove(); PL.toast('Eliminata.'); } catch (err) { PL.toast(err.message, 'bad'); }
+  });
+  $('#tpl').addEventListener('click', () => M.templates.pick($('#tpl').parentElement, null, (t) => M.insertAtCursor($('#reply'), t)));
+  // nel menu a comparsa, "Gestisci" apre la finestra della Plancia invece di quella delle cliniche
+  M.templates.manage = () => tplManage();
+
+  // ---------- Scrivi a un gruppo scelto ----------
+  const groupDialog = async () => {
+    const [clinics, users, codes, app, structs] = await Promise.all([PL.try('platform_clinics', {}, []), PL.try('platform_users', { p_limit: 5000 }, []), PL.codes(), PL.try('platform_clinic_app_stats', {}, []), PL.try('platform_structures', {}, [])]);
+    const appBy = Object.fromEntries((app || []).map((r) => [r.clinic_id, r]));
+    const stBy = Object.fromEntries((structs || []).map((r) => [r.id, r]));
+    const C = (clinics || []).map((c) => ({ id: c.id, kind: 'clinic', name: c.name, sub: [stBy[c.id]?.code || codes.clinics?.[c.id], PL.KIND[stBy[c.id]?.kind] || '', c.admin_email].filter(Boolean).join(' · '),
+      status: c.status, stage: Number(c.clients) === 0 ? 'empty' : Number(c.visits) === 0 ? 'started' : !(appBy[c.id]?.app_owners) ? 'active' : 'room', type: stBy[c.id]?.kind || '', last: c.last_activity }));
+    const U = (users || []).map((u) => ({ id: u.id, kind: 'user', name: u.full_name || u.email || 'Utente', sub: [codes.users?.[u.id], u.email].filter(Boolean).join(' · '),
+      type: u.is_staff ? 'pro' : u.is_owner ? 'owner' : 'half', push: !!u.push_devices, created: u.created_at, last: u.last_sign_in_at }));
+    const sel = new Map();
+    let tab = 'clinic', f = 'all';
+    const FC = [['all', 'Tutte'], ['empty', 'Vuote'], ['started', 'Avviate'], ['active', 'Attive'], ['room', 'Stanza digitale'], ['inactive30', 'Ferme da 30 giorni']];
+    const FU = [['all', 'Tutti'], ['pro', 'Professionisti'], ['owner', 'Proprietari'], ['half', 'A metà'], ['push', 'Con notifiche'], ['new30', 'Iscritti negli ultimi 30 giorni'], ['away30', 'Assenti da 30 giorni']];
+    const ago30 = Date.now() - 30 * 864e5;
+    const pass = (r) => {
+      const t = d.querySelector('#gq').value.trim().toLowerCase();
+      if (t && ![r.name, r.sub].join(' ').toLowerCase().includes(t)) return false;
+      if (f === 'all') return r.kind === 'user' || r.status === 'active';
+      if (r.kind === 'clinic') return r.status === 'active' && (f === 'inactive30' ? !(r.last && new Date(r.last) > ago30) : r.stage === f);
+      if (f === 'push') return r.push;
+      if (f === 'new30') return r.created && new Date(r.created) > ago30;
+      if (f === 'away30') return !(r.last && new Date(r.last) > ago30);
+      return r.type === f;
+    };
+    const d = document.createElement('dialog');
+    d.className = 'dl wide grp';
+    d.innerHTML = `<form method="dialog" novalidate><h2>Scrivi a un gruppo</h2>
+      <p class="dim small" style="margin-top:-4px">Scegli strutture e persone, anche mescolate. Ognuno riceve il messaggio nella sua conversazione con l'Assistenza e risponde in privato; le risposte le ritrovi qui e in “A tutti, annunci, email”.</p>
+      <div class="seg" role="group" id="gtab"><button type="button" data-tab="clinic">Strutture</button><button type="button" data-tab="user">Utenti</button></div>
+      <div class="gtools"><div class="seg" role="group" id="gf"></div><input type="search" class="search" id="gq" placeholder="Cerca per nome, codice o email"></div>
+      <label class="check" style="margin:8px 0"><input type="checkbox" id="gall"> <span id="galltxt"></span></label>
+      <div class="glist" id="glist"></div>
+      <label class="f" for="gtext">Messaggio</label>
+      <textarea id="gtext" rows="6" maxlength="4000"></textarea>
+      <div class="note bad" hidden data-err style="margin-top:12px"></div>
+      <div class="foot"><span class="dim small grow" id="gcount"></span><button class="btn ghost" type="button" data-x>Annulla</button><button class="btn prim" type="button" id="gsend" disabled>Invia</button></div></form>`;
+    document.body.appendChild(d);
+    const draw = () => {
+      $$('#gtab button', d).forEach((b) => b.setAttribute('aria-pressed', b.dataset.tab === tab));
+      const src = tab === 'clinic' ? C : U, FF = tab === 'clinic' ? FC : FU;
+      $('#gf', d).innerHTML = FF.map(([k, l]) => `<button type="button" data-gf="${k}" aria-pressed="${f === k}">${l}<span class="n">${src.filter((r) => { const o = f; f = k; const ok = pass(r); f = o; return ok; }).length}</span></button>`).join('');
+      const vis = src.filter(pass);
+      $('#glist', d).innerHTML = vis.slice(0, 600).map((r) => `<label class="grow-row"><input type="checkbox" data-gid="${r.kind}:${r.id}" ${sel.has(r.kind + ':' + r.id) ? 'checked' : ''}><span><strong>${esc(r.name)}</strong><span class="small dim">${esc(r.sub)}</span></span></label>`).join('')
+        + (vis.length > 600 ? `<p class="dim small">…e altri ${n(vis.length - 600)}: usa la ricerca o i filtri.</p>` : '') || '<p class="dim">Nessuno con questi criteri.</p>';
+      $('#gall', d).checked = vis.length && vis.every((r) => sel.has(r.kind + ':' + r.id));
+      $('#galltxt', d).textContent = `Seleziona tutti quelli mostrati (${n(vis.length)})`;
+      const nc = [...sel.keys()].filter((k) => k.startsWith('clinic:')).length, nu = sel.size - nc;
+      $('#gcount', d).textContent = sel.size ? `Selezionati: ${[nc ? n(nc) + (nc === 1 ? ' struttura' : ' strutture') : '', nu ? n(nu) + (nu === 1 ? ' utente' : ' utenti') : ''].filter(Boolean).join(' e ')}` : 'Nessun destinatario scelto';
+      $('#gsend', d).textContent = sel.size ? `Invia a ${n(sel.size)}` : 'Invia';
+      $('#gsend', d).disabled = !sel.size || !$('#gtext', d).value.trim();
+    };
+    d.addEventListener('click', async (e) => {
+      const t = e.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; f = 'all'; draw(); return; }
+      const g = e.target.closest('[data-gf]'); if (g) { f = g.dataset.gf; draw(); return; }
+      if (e.target.closest('[data-x]')) { d.close(); return; }
+      if (e.target.closest('#gsend')) {
+        const targets = [...sel.keys()].map((k) => { const [kind, id] = k.split(':'); return { kind, id }; });
+        const ok = await PL.ask({ title: `Inviare a ${n(targets.length)} destinatari?`, ok: 'Invia', html: `<div class="note" style="white-space:pre-wrap;margin:0">${esc($('#gtext', d).value.trim())}</div>` });
+        if (!ok) return;
+        const r = await PL.run($('#gsend', d), () => PL.rpc('platform_message_many', { p_targets: targets, p_body: $('#gtext', d).value }),
+          (x) => `Inviato a ${n(x.sent)}${x.failed ? `, ${n(x.failed)} non riusciti` : ''}. Le risposte arriveranno qui.`);
+        if (r !== undefined) { d.close(); loadList(); }
+      }
+    });
+    d.addEventListener('change', (e) => {
+      const c = e.target.closest('[data-gid]');
+      if (c) { if (c.checked) sel.set(c.dataset.gid, 1); else sel.delete(c.dataset.gid); draw(); }
+      if (e.target.id === 'gall') { (tab === 'clinic' ? C : U).filter(pass).forEach((r) => (e.target.checked ? sel.set(r.kind + ':' + r.id, 1) : sel.delete(r.kind + ':' + r.id))); draw(); }
+    });
+    d.addEventListener('input', (e) => { if (e.target.id === 'gq' || e.target.id === 'gtext') draw(); });
+    d.addEventListener('cancel', (e) => { e.preventDefault(); d.close(); });
+    d.addEventListener('close', () => d.remove());
+    d.showModal(); draw();
+  };
+
+  // ---------- Eventi ----------
+  $('#list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-c]'); if (!b) return;
+    if (selecting) { const id = b.dataset.c; if (sel.has(id)) sel.delete(id); else sel.add(id); drawList(); return; }
+    const c = convs.find((x) => x.id === b.dataset.c); if (c) { open(c); history.replaceState(null, '', '?conv=' + c.id); }
+  });
+  $('#bulk').addEventListener('click', async (e) => {
+    if (e.target.closest('#selStart')) { selecting = true; drawList(); return; }
+    if (e.target.closest('#selEnd')) { selecting = false; sel.clear(); drawList(); return; }
+    const a = e.target.closest('[data-act]'); if (!a) return;
+    const ids = [...sel];
+    const r = await PL.run(a, () => PL.rpc('msg_mark', { p_convs: ids, p_action: a.dataset.act }), (k) => `${n(k)} ${k === 1 ? 'conversazione aggiornata' : 'conversazioni aggiornate'}.`);
+    if (r !== undefined) { sel.clear(); selecting = false; await loadList(); PL.refreshSignals(); }
+  });
+  $('#bulk').addEventListener('change', (e) => {
+    if (e.target.id !== 'selAll') return;
+    convs.filter((c) => match(c, filt)).forEach((c) => (e.target.checked ? sel.add(c.id) : sel.delete(c.id))); drawList();
+  });
+  const closeThread = () => { cur = null; $('#inbox').classList.remove('reading'); $('#back').hidden = true; $('#tTitle').textContent = 'Scegli una conversazione'; $('#tNote').textContent = ''; $('#tBody').innerHTML = ''; $('#tFoot').hidden = true; $('#tAct').hidden = true; history.replaceState(null, '', location.pathname); };
+  $('#tUnread').addEventListener('click', async (e) => {
+    if (!cur) return;
+    const r = await PL.run(e.currentTarget, () => PL.rpc('msg_mark', { p_convs: [cur.id], p_action: 'unread' }), 'Segnata come non letta.');
+    if (r !== undefined) { closeThread(); await loadList(); PL.refreshSignals(); }
+  });
+  $('#tArch').addEventListener('click', async (e) => {
+    if (!cur) return;
+    const act = cur.archived ? 'unarchive' : 'archive';
+    const r = await PL.run(e.currentTarget, () => PL.rpc('msg_mark', { p_convs: [cur.id], p_action: act }), act === 'archive' ? 'Archiviata: torna da sola se arriva un messaggio nuovo.' : 'Ripristinata.');
+    if (r !== undefined) { closeThread(); await loadList(); }
+  });
+  $('#filt').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filt = b.dataset.f; sel.clear(); drawList(); } });
   let t; $('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadList, 300); });
   $('#send').addEventListener('click', send);
   $('#reply').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
   $('#back').addEventListener('click', () => { $('#inbox').classList.remove('reading'); $('#back').hidden = true; });
+  $('#group').addEventListener('click', groupDialog);
   $('#new').addEventListener('click', async () => {
     const v = await PL.ask({ title: 'A chi vuoi scrivere?', ok: 'Continua',
-      html: 'Scrivi un codice, un\'email o un nome. Per scrivere a tutti: <span class="mono">/all_vet</span> (tutte le cliniche) oppure <span class="mono">/all_user</span> (tutti i proprietari).',
+      html: 'Scrivi un codice, un\'email o un nome. Per scrivere a tutti: <span class="mono">/all_vet</span> (tutte le cliniche) oppure <span class="mono">/all_user</span> (tutti i proprietari). Per scegliere più destinatari usa <b>Scrivi a un gruppo</b>.',
       fields: [{ name: 'q', label: 'Destinatario', required: true }] });
     if (!v) return;
     const cmd = v.q.trim().toLowerCase();
@@ -118,13 +331,14 @@
   $('#allVet').addEventListener('click', async () => { if (await PL.broadcast('vet')) loadList(); });
   $('#allUser').addEventListener('click', async () => { if (await PL.broadcast('user')) loadList(); });
   await loadList();
+  if (!adv) $('#group').title = 'Disponibile dopo la patch 32 su Supabase';
   const want = qs.get('conv');
   if (want) { const c = convs.find((x) => x.id === want); if (c) open(c); }
   setInterval(async () => {
     if (document.visibilityState !== 'visible') return;
     await loadList();
     // si ricarica da sola solo l'assistenza: rileggere le altre lascerebbe una riga nel registro ogni volta
-    if (cur && isAdm(cur) && !$('#reply').value) open(convs.find((x) => x.id === cur.id) || cur, true);
+    if (cur && isAdm(cur) && !$('#reply').value && !pending.length) open(convs.find((x) => x.id === cur.id) || cur, true);
   }, 20000);
 })();
 </script>

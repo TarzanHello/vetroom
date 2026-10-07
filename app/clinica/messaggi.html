@@ -12,14 +12,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-07d">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-07e">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-07d"></script>
-  <script src="../js/app.js?v=2026-10-07d"></script>
-  <script src="../js/i18n.js?v=2026-10-07d"></script>
-  <script src="../js/layout.js?v=2026-10-07d"></script>
-  <script src="../js/clinica.js?v=2026-10-07d"></script>
-  <script src="../js/messaggi.js?v=2026-10-07d"></script>
+  <script src="../js/config.js?v=2026-10-07e"></script>
+  <script src="../js/app.js?v=2026-10-07e"></script>
+  <script src="../js/i18n.js?v=2026-10-07e"></script>
+  <script src="../js/layout.js?v=2026-10-07e"></script>
+  <script src="../js/clinica.js?v=2026-10-07e"></script>
+  <script src="../js/messaggi.js?v=2026-10-07e"></script>
 </head>
 <body data-shell="clinic" data-nav="messaggi">
 
@@ -27,7 +27,7 @@
     <div class="page-head">
       <div>
         <h1>Messaggi</h1>
-        <p class="muted" style="margin:0">Le conversazioni con i proprietari che usano FurrFinder. Le vede tutto il team della clinica.</p>
+        <p class="muted" style="margin:0">Le conversazioni con i proprietari che usano FurrFinder. Le vede tutto il team della clinica; lette e archiviate valgono solo per te.</p>
       </div>
     </div>
     <p class="loader" id="loading">Caricamento…</p>
@@ -47,7 +47,7 @@
     }
     VR.hide(loading); VR.show(VR.$('#page'));
     await VR.msg.mount({
-      listEl: '#list', threadEl: '#thread', side: 'clinic',
+      listEl: '#list', threadEl: '#thread', side: 'clinic', clinicId: ctx.clinicId, groupBtn: true,
       emptyHtml: '<div class="msg-empty"><p><strong>Nessun messaggio.</strong></p><p class="muted">Puoi scrivere a un proprietario dalla sua scheda, se usa FurrFinder. <a href="furrfinder.html">Come invitare i clienti</a></p></div>',
       noteHtml: 'I messaggi non sostituiscono la visita. Ricorda al proprietario di telefonare in caso di urgenza.'
     });
