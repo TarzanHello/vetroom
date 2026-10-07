@@ -334,15 +334,15 @@
     // ---------- Dati di esempio ----------
     if ((demoRes.count || 0) > 0) VR.show(VR.$('#demoNotice'));
     VR.$('#mkDemo').addEventListener('click', async (ev) => {
-      ev.currentTarget.disabled = true;
+      const btn = ev.currentTarget; btn.disabled = true;
       try { await VR.createDemoData(ctx); location.reload(); }
-      catch (e) { VR.say(msg, VR.errorText(e), 'error'); ev.currentTarget.disabled = false; }
+      catch (e) { VR.say(msg, VR.errorText(e), 'error'); btn.disabled = false; }
     });
     VR.$('#rmDemo').addEventListener('click', async (ev) => {
       if (!confirm('Rimuovere tutti i dati di esempio? I tuoi dati veri non vengono toccati.')) return;
-      ev.currentTarget.disabled = true;
+      const btn = ev.currentTarget; btn.disabled = true;
       try { await VR.removeDemoData(ctx); location.reload(); }
-      catch (e) { VR.say(msg, VR.errorText(e), 'error'); ev.currentTarget.disabled = false; }
+      catch (e) { VR.say(msg, VR.errorText(e), 'error'); btn.disabled = false; }
     });
 
     // ---------- Per iniziare ----------
