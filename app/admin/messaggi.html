@@ -7,17 +7,17 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Messaggi · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-08a">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-08b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-08a"></script>
-  <script src="../js/app.js?v=2026-10-08a"></script>
-  <script src="../js/messaggi.js?v=2026-10-08a"></script>
-  <script src="plancia.js?v=2026-10-08a"></script>
+  <script src="../js/config.js?v=2026-10-08b"></script>
+  <script src="../js/app.js?v=2026-10-08b"></script>
+  <script src="../js/messaggi.js?v=2026-10-08b"></script>
+  <script src="plancia.js?v=2026-10-08b"></script>
 </head>
 <body class="pl" data-station="messaggi">
 <main>
   <div class="pl-head"><div class="grow"><h1>Messaggi</h1><p>Tutte le conversazioni della piattaforma. Nell'assistenza puoi rispondere, anche con foto e PDF; quelle fra clinica e proprietario le puoi leggere ma non scriverci, e ogni lettura resta registrata.</p></div>
-    <div class="actions"><button class="btn" id="allVet" title="/all_vet">A tutti i veterinari</button><button class="btn" id="allUser" title="/all_user">A tutti i proprietari</button><button class="btn" id="group">Scrivi a un gruppo</button><button class="btn prim" id="new">Nuovo messaggio</button></div></div>
+    <div class="actions"><button class="btn" id="allVet" title="/all_vet">A tutti i veterinari</button><button class="btn" id="allUser" title="/all_user">A tutti i proprietari</button><button class="btn" id="group">Scrivi a un gruppo</button><button class="btn" id="welcome" title="Il messaggio che ricevono le nuove strutture">Benvenuto</button><button class="btn prim" id="new">Nuovo messaggio</button></div></div>
   <section class="pn">
     <div class="pn-h" style="margin-bottom:12px">
       <div class="seg" role="group" aria-label="Filtro" id="filt"></div>
@@ -302,7 +302,8 @@
     if (!cur) return;
     const act = cur.archived ? 'unarchive' : 'archive';
     const r = await PL.run(e.currentTarget, () => PL.rpc('msg_mark', { p_convs: [cur.id], p_action: act }), act === 'archive' ? 'Archiviata: torna da sola se arriva un messaggio nuovo.' : 'Ripristinata.');
-    if (r !== undefined) { closeThread(); await loadList(); }
+    // il numero giallo sul menu segue subito l'archiviazione
+    if (r !== undefined) { closeThread(); await loadList(); PL.refreshSignals(); }
   });
   $('#filt').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filt = b.dataset.f; sel.clear(); drawList(); } });
   let t; $('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadList, 300); });
@@ -326,6 +327,19 @@
       if (!w) return; pick = res[Number(w.i)];
     }
     if (await PL.messageTo(pick.kind, pick.id, pick.name)) loadList();
+  });
+
+  // ---------- Benvenuto ai nuovi veterinari ----------
+  $('#welcome').addEventListener('click', async () => {
+    let w;
+    try { w = await PL.rpc('platform_welcome_get'); }
+    catch (e) { PL.toast(e.missing ? 'Per il benvenuto va eseguita la patch 34 su Supabase.' : e.message, 'bad'); return; }
+    const v = await PL.ask({ title: 'Benvenuto ai nuovi veterinari', wide: true, ok: 'Salva',
+      html: `Quando un veterinario crea la sua struttura (clinica, ambulatorio, a domicilio…) riceve questo messaggio nella casella Messaggi di Vetroom, come conversazione con l'Assistenza. Se risponde, la risposta arriva qui in “Da rispondere”.<br><span class="small">Inviati finora: <b>${n(w.sent || 0)}</b>${w.signer ? ` · parte dall'account di ${esc(w.signer)}` : ''}</span>`,
+      fields: [{ name: 'on', label: 'Invia il benvenuto alle nuove strutture', type: 'checkbox', value: !!w.enabled },
+               { name: 'body', label: 'Testo del messaggio', type: 'textarea', rows: 12, value: w.body || '', required: true }] });
+    if (!v) return;
+    await PL.run(null, () => PL.rpc('platform_welcome_save', { p_enabled: !!v.on, p_body: v.body }), v.on ? 'Benvenuto salvato: lo riceveranno le prossime strutture.' : 'Benvenuto spento.');
   });
 
   $('#allVet').addEventListener('click', async () => { if (await PL.broadcast('vet')) loadList(); });

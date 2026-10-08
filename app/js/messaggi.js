@@ -510,9 +510,15 @@
       try { convs = await load(); } catch (e) { convBox.innerHTML = `<div class="notice notice-error">${VR.esc(VR.errorText(e))}</div>`; return; }
       [...sel].forEach((id) => { if (!convs.some((c) => c.id === id)) sel.delete(id); });
       if (current && !convs.some((c) => c.id === current)) closeConv();
+      // La conversazione aperta si rilegge PRIMA di contare: aprendola, i messaggi
+      // nuovi risultano letti, quindi né l'elenco né il menu devono mostrarli da leggere
+      if (current) {
+        await loadThread(current, keepOpen);
+        const c = convs.find((x) => x.id === current);
+        if (c) c.unread = 0;
+      }
       renderList();
       M.unreadBadge();
-      if (current) await loadThread(current, keepOpen);
     };
 
     const runSearch = async () => {
