@@ -12,6 +12,7 @@
   <script src="../js/config.js?v=2026-10-10c"></script>
   <script src="../js/app.js?v=2026-10-10c"></script>
   <script src="plancia.js?v=2026-10-10d"></script>
+  <script src="censimento-dati.js?v=2026-10-10e"></script>
   <style>
     .cz-steps { list-style: none; margin: 14px 0 0; padding: 0; }
     .cz-steps li { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(31, 49, 80, .45); align-items: center; color: var(--faint); }
@@ -62,7 +63,8 @@
       <input type="search" class="search" id="q" placeholder="Nome, comune, telefono…">
     </div>
     <div id="tbl"><p class="loader">Caricamento</p></div>
-    <p class="small faint" style="margin:12px 0 0"><b>Contatti cambiati</b>: telefono, email o sito sono stati modificati su OpenStreetMap dopo il primo censimento. Chiunque può modificare OpenStreetMap: per la rivendicazione valgono solo i contatti presenti da prima della richiesta, gli altri vanno controllati a mano.</p>
+    <p class="small faint" style="margin:12px 0 0"><b>Da controllare</b>: strutture che forse non sono veterinarie (farmacie, negozi, canili…) o possibili doppioni (a meno di 40 metri o con lo stesso telefono). Per ognuna scegli <b>Va bene</b> o <b>Escludi</b>: la decisione resta anche dopo i prossimi censimenti.</p>
+    <p class="small faint" style="margin:6px 0 0"><b>Contatti cambiati</b>: telefono, email o sito sono stati modificati su OpenStreetMap dopo il primo censimento. Chiunque può modificare OpenStreetMap: per la rivendicazione valgono solo i contatti presenti da prima della richiesta, gli altri vanno controllati a mano.</p>
     <p class="small faint" style="margin:6px 0 0">Dati © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, licenza ODbL. Molte strutture portano il nome del medico: prima di pubblicarle servono informativa e tasto "Rimuovi la mia scheda".</p>
   </section>
 </main>
@@ -72,55 +74,14 @@
   const { $, esc, n } = PL;
 
   // ================================================================
-  //  Pulizia dei dati di OpenStreetMap
-  // ================================================================
-  const first = (tags, ...keys) => { for (const k of keys) { const v = String(tags[k] || '').trim(); if (v) return v; } return null; };
-  const one = (v) => (v ? String(v).split(';')[0].trim() || null : null);
-  const tel = (v) => {
-    v = one(v); if (!v) return null;
-    v = v.split(/[,/]/)[0];
-    const d = v.replace(/\D/g, '');
-    let num;
-    if (v.trim().startsWith('+')) num = '+' + d;
-    else if (d.startsWith('0039')) num = '+' + d.slice(2);
-    else if (d.startsWith('39') && d.length >= 11) num = '+' + d;
-    else num = '+39' + d;
-    return d.length >= 6 ? num : null;
-  };
-  const mail = (v) => { v = one(v); if (!v) return null; v = v.toLowerCase().replace(/^mailto:/, '').trim(); return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? v : null; };
-  const site = (v) => {
-    v = one(v); if (!v || /\s/.test(v)) return null;
-    if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
-    const m = v.match(/^(https?:\/\/)([^/]+)(.*)$/i);
-    return m ? (m[1].toLowerCase() + m[2].toLowerCase() + m[3]).replace(/\/+$/, '') : null;
-  };
-  const sigla = (v) => { v = String(v || '').trim().toUpperCase(); return /^[A-Z]{2}$/.test(v) ? v : null; };
-  const toRow = (el) => {
-    const t = el.tags || {};
-    const lat = el.type === 'node' ? el.lat : el.center?.lat, lon = el.type === 'node' ? el.lon : el.center?.lon;
-    if (lat == null || lon == null) return null;
-    return {
-      osm_type: el.type, osm_id: el.id,
-      nome: first(t, 'name', 'official_name', 'brand'),
-      via: first(t, 'addr:street', 'addr:place'), civico: first(t, 'addr:housenumber'), cap: first(t, 'addr:postcode'),
-      comune: first(t, 'addr:city'), provincia: sigla(first(t, 'addr:province')), regione: null,
-      telefono: tel(first(t, 'phone', 'contact:phone', 'contact:mobile', 'mobile')),
-      email: mail(first(t, 'email', 'contact:email')),
-      sito: site(first(t, 'website', 'contact:website', 'url')),
-      orari: first(t, 'opening_hours'),
-      lat, lon, tags: t, osm_versione: el.version ?? null, osm_modificato_il: el.timestamp ?? null, localizzata: false
-    };
-  };
-
-  // ================================================================
   //  Dialogo con OpenStreetMap (API Overpass)
   // ================================================================
   const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let stopped = false;
-  const overpass = async (query, label, waitSec = 330) => {
+  const overpass = async (query, label, waitSec = 330, rounds = 4) => {
     let last = '';
-    for (let round = 0; round < 4; round++) {
+    for (let round = 0; round < rounds; round++) {
       for (const url of OVERPASS) {
         if (stopped) throw new Error('Interrotto da te.');
         const host = url.split('/')[2];
@@ -144,6 +105,7 @@
         }
         log(`${label}: ${host} non ha risposto (${last}).`, 'warn');
       }
+      if (round === rounds - 1) break;
       const w = 30 * (round + 1);
       log(`Riprovo fra ${w} secondi…`);
       await sleep(w * 1000);
@@ -174,20 +136,13 @@ foreach->.v(
 );`;
   };
   const leggiLuoghi = (elements) => {
-    const out = new Map();
+    const aree = new Map();
     let cur = null;
     for (const e of elements) {
-      if (e.type !== 'area') { cur = e.type + '/' + e.id; out.set(cur, {}); continue; }
-      if (!cur) continue;
-      const t = e.tags || {}, o = out.get(cur), nome = t['name:it'] || t.name || null;
-      if (t.admin_level === '8' && !o.comune) o.comune = nome;
-      if (t.admin_level === '6' && !o.provincia) {
-        const iso = String(t['ISO3166-2'] || '').match(/^IT-([A-Z]{2})$/);
-        o.provincia = iso ? iso[1] : sigla(t.ref) || sigla(t.short_name);
-      }
-      if (t.admin_level === '4' && !o.regione) o.regione = nome;
+      if (e.type !== 'area') { cur = e.type + '/' + e.id; aree.set(cur, []); continue; }
+      if (cur) aree.get(cur).push(e.tags || {});
     }
-    return out;
+    return new Map([...aree].map(([k, a]) => [k, CZ.luogoDaAree(a)]));
   };
 
   // ================================================================
@@ -242,43 +197,54 @@ foreach->.v(
       const seen = new Set(), rows = [];
       for (const el of els) {
         const k = el.type + '/' + el.id; if (seen.has(k)) continue; seen.add(k);
-        const r = toRow(el); if (r) rows.push(r);
+        const r = CZ.riga(el); if (r) rows.push(r);
       }
       esito.trovate = rows.length;
+      const avvisi = rows.filter((r) => r.avviso).length;
       if (!rows.length) throw new Error('OpenStreetMap ha restituito un elenco vuoto: probabilmente un suo problema momentaneo. Riprova più tardi.');
-      step('scarica', 'ok', n(rows.length) + ' trovate'); log(`Trovate ${n(rows.length)} strutture.`, 'ok'); prog(10);
+      step('scarica', 'ok', n(rows.length) + ' trovate'); log(`Trovate ${n(rows.length)} strutture${avvisi ? `, di cui ${n(avvisi)} da controllare (forse non sono veterinarie)` : ''}.`, 'ok'); prog(10);
 
-      // 2. localizzo le nuove, quelle mai localizzate e quelle spostate
+      // 2. localizzo le nuove, quelle spostate e quelle senza comune, provincia o regione
       fase = 'luoghi';
       const moved = (a, b) => Math.abs(a.lat - b.lat) > 0.002 || Math.abs(a.lon - b.lon) > 0.002;
       const todo = rows.filter((r) => { const k = note.get(r.osm_type + '/' + r.osm_id); return !k || !k.loc || moved(r, k); });
       esito.da_localizzare = todo.length;
-      if (!todo.length) { step('luoghi', 'skip', 'niente da fare'); log('Tutte le strutture hanno già comune e provincia.'); }
+      if (!todo.length) { step('luoghi', 'skip', 'niente da fare'); log('Tutte le strutture hanno già comune, provincia e regione.'); }
       else {
         step('luoghi', 'run', `0 / ${n(todo.length)}`);
         log(`Da localizzare: ${n(todo.length)}. Procedo a gruppi di 80.`);
-        const SIZE = 80, t0 = Date.now(); let done = 0, falliti = 0;
-        for (let i = 0; i < todo.length; i += SIZE) {
-          const part = todo.slice(i, i + SIZE);
+        // coda di gruppi: un gruppo che non riesce viene diviso in due e riprovato una volta
+        const coda = [];
+        for (let i = 0; i < todo.length; i += 80) coda.push({ rows: todo.slice(i, i + 80), retry: false });
+        const t0 = Date.now(); let done = 0, falliti = 0, ferma = false;
+        while (coda.length && !ferma) {
+          const g = coda.shift();
           try {
-            const luoghi = leggiLuoghi(await overpass(Q_LUOGHI(part), 'Localizzazione', 300));
-            for (const r of part) {
+            const luoghi = leggiLuoghi(await overpass(Q_LUOGHI(g.rows), 'Localizzazione', 300, g.retry ? 2 : 1));
+            for (const r of g.rows) {
               const o = luoghi.get(r.osm_type + '/' + r.osm_id);
               if (o && o.comune) {
                 r.comune = o.comune; r.provincia = o.provincia || r.provincia; r.regione = o.regione || null; r.localizzata = true;
                 esito.localizzate++;
               }
             }
+            done += g.rows.length;
           } catch (e) {
             if (stopped) throw e;
             if (e.fatal) { // richiesta non accettata: salto la localizzazione, il resto del censimento prosegue
-              falliti += todo.length - done;
+              falliti += todo.length - done; ferma = true;
               log(`Localizzazione non disponibile (${e.message}). Uso l'indirizzo scritto su OSM e ci riprovo al prossimo censimento.`, 'warn');
               break;
             }
-            falliti += part.length; log(`Gruppo saltato (${e.message}). Ci riprovo al prossimo censimento.`, 'warn');
+            if (!g.retry && g.rows.length > 10) {
+              const h = Math.ceil(g.rows.length / 2);
+              coda.push({ rows: g.rows.slice(0, h), retry: true }, { rows: g.rows.slice(h), retry: true });
+              log(`Gruppo non riuscito: lo divido in due e lo riprovo alla fine.`, 'warn');
+            } else {
+              falliti += g.rows.length; done += g.rows.length;
+              log(`Gruppo di ${g.rows.length} rimandato al prossimo censimento (${e.message}).`, 'warn');
+            }
           }
-          done += part.length;
           step('luoghi', 'run', `${n(done)} / ${n(todo.length)}`);
           prog(10 + 70 * done / todo.length, `Localizzazione: ${n(done)} di ${n(todo.length)}${eta(t0, done, todo.length)}`);
           await sleep(1000); // gentilezza verso il servizio gratuito
@@ -339,33 +305,67 @@ foreach->.v(
   // ================================================================
   //  Archivio: numeri, storico, elenco
   // ================================================================
-  let all = [], filtro = 'attive', regione = '';
+  let all = [], filtro = 'attive', regione = '', dop = new Map();
+  const key = (r) => r.t + '/' + r.i;
+  const valida = (r) => r.attivo && r.revisione !== 'escluso';
+  const daControllare = (r) => valida(r) && r.revisione !== 'ok' && (r.avviso || dop.has(key(r)));
+  const incompleta = (r) => valida(r) && (!r.comune || !r.provincia || !r.regione);
   const FILTRI = [
-    ['attive', 'Attive', (r) => r.attivo],
-    ['telefono', 'Con telefono', (r) => r.attivo && r.telefono],
-    ['senza', 'Senza comune', (r) => r.attivo && !r.comune],
-    ['cambiati', 'Contatti cambiati', (r) => r.attivo && r.cambi > 0],
+    ['attive', 'Attive', valida],
+    ['controllare', 'Da controllare', daControllare],
+    ['telefono', 'Con telefono', (r) => valida(r) && r.telefono],
+    ['incomplete', 'Senza comune o provincia', incompleta],
+    ['cambiati', 'Contatti cambiati', (r) => valida(r) && r.cambi > 0],
+    ['escluse', 'Escluse', (r) => r.revisione === 'escluso'],
     ['sparite', 'Non più su OSM', (r) => !r.attivo]
   ];
+  const MOTIVI = ['Non è una struttura veterinaria', 'Doppione di un\'altra scheda', 'Chiusa o trasferita', 'Il titolare ha chiesto di toglierla', 'Altro'];
+  const nomeDi = (r) => r.nome || 'Struttura senza nome';
+  const decisione = (r) => {
+    if (r.revisione === 'escluso') return `<span class="pill bad" title="${esc(PL.dt(r.revisionato_il))}">esclusa</span>${r.revisione_nota ? `<span class="sub">${esc(r.revisione_nota)}</span>` : ''}<div class="actions" style="margin-top:6px"><button class="btn sm ghost" data-rev="" data-k="${esc(key(r))}">Ripristina</button></div>`;
+    if (r.revisione === 'ok') return `<span class="pill ok" title="${esc(PL.dt(r.revisionato_il))}">verificata</span><div class="actions" style="margin-top:6px"><button class="btn sm ghost" data-rev="" data-k="${esc(key(r))}">Annulla</button></div>`;
+    return `<div class="actions"><button class="btn sm" data-rev="ok" data-k="${esc(key(r))}">Va bene</button><button class="btn sm danger" data-rev="escluso" data-k="${esc(key(r))}">Escludi</button></div>`;
+  };
   const T = PL.table({
     el: $('#tbl'), pageSize: 50, sortKey: 'luogo', sortDir: 1,
-    empty: 'Nessuna struttura. Avvia il censimento qui sopra.',
-    rowClass: (r) => (r.attivo ? '' : 'is-bad'),
+    empty: 'Nessuna struttura con questi criteri.',
+    rowClass: (r) => (valida(r) ? '' : 'is-bad'),
     cols: [
-      { k: 'nome', l: 'Struttura', sort: (r) => (r.nome || '~').toLowerCase(), render: (r) => `<strong>${esc(r.nome || 'Senza nome')}</strong><span class="sub">${esc([[r.via, r.civico].filter(Boolean).join(' '), r.cap].filter(Boolean).join(', ') || 'indirizzo non indicato')}</span>` },
-      { k: 'luogo', l: 'Comune', sort: (r) => [r.regione || '~', r.provincia || '~', r.comune || '~', r.nome || ''].join('|').toLowerCase(), render: (r) => r.comune ? `${esc(r.comune)}${r.provincia ? ` <span class="faint">(${esc(r.provincia)})</span>` : ''}<span class="sub">${esc(r.regione || '')}</span>` : '<span class="faint">—</span>' },
+      { k: 'nome', l: 'Struttura', sort: (r) => (r.nome || '~').toLowerCase(), render: (r) => {
+        const d = valida(r) && r.revisione !== 'ok' ? dop.get(key(r)) : null;
+        const avvisi = [r.avviso && valida(r) && r.revisione !== 'ok' ? `<span class="pill warn">${esc(r.avviso)}</span>` : '',
+          ...(d || []).map((x) => `<span class="pill warn">possibile doppione di «${esc(x.nome || 'senza nome')}» (${esc(x.perche)})</span>`)].filter(Boolean).join(' ');
+        return `<strong${r.nome ? '' : ' class="dim"'}>${esc(nomeDi(r))}</strong><span class="sub">${esc([[r.via, r.civico].filter(Boolean).join(' '), r.cap].filter(Boolean).join(', ') || 'indirizzo non indicato')}</span>${avvisi ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${avvisi}</div>` : ''}`;
+      } },
+      { k: 'luogo', l: 'Comune', sort: (r) => [r.regione || '~', r.provincia || '~', r.comune || '~', r.nome || ''].join('|').toLowerCase(), render: (r) => r.comune ? `${esc(r.comune)}${r.provincia ? ` <span class="faint">(${esc(r.provincia)})</span>` : ''}<span class="sub">${esc(r.regione || 'regione da trovare')}</span>` : '<span class="faint">da trovare</span>' },
       { k: 'contatti', l: 'Contatti', render: (r) => [r.telefono ? `<span class="mono small nowrap">${esc(r.telefono)}</span>` : '', r.email ? `<span class="sub">${esc(r.email)}</span>` : '', r.sito && /^https?:\/\//.test(r.sito) ? `<span class="sub"><a href="${esc(r.sito)}" target="_blank" rel="noopener nofollow">${esc(r.sito.replace(/^https?:\/\/(www\.)?/, ''))}</a></span>` : ''].join('') || '<span class="faint">nessuno</span>' },
-      { k: 'stato', l: 'Stato', hideM: true, sort: (r) => new Date(r.contatti_dal).getTime(), render: (r) => [!r.attivo ? `<span class="pill bad" title="Visto l'ultima volta il ${PL.d(r.visto_il)}">non più su OSM</span>` : '', r.cambi > 0 ? `<span class="pill warn" title="Contatti attuali presenti dal ${PL.dt(r.contatti_dal)}">contatti cambiati il ${PL.d(r.contatti_dal)}</span>` : '', r.attivo && !r.cambi ? `<span class="small dim">dal ${PL.d(r.importato_il)}</span>` : ''].join(' ') },
-      { k: 'osm', l: 'OSM', hideM: true, sort: (r) => (r.osm_modificato_il ? new Date(r.osm_modificato_il).getTime() : 0), render: (r) => `<a class="small nowrap" href="https://www.openstreetmap.org/${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener" title="Ultima modifica su OSM: ${PL.d(r.osm_modificato_il)}">apri ↗</a>` }
+      { k: 'stato', l: 'Su OSM', hideM: true, sort: (r) => new Date(r.contatti_dal).getTime(), render: (r) => [`<a class="small nowrap" href="https://www.openstreetmap.org/${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener" title="Ultima modifica su OSM: ${PL.d(r.osm_modificato_il)}">apri la scheda ↗</a>`,
+        !r.attivo ? `<span class="pill bad" title="Vista l'ultima volta il ${PL.d(r.visto_il)}">non più su OSM</span>` : '',
+        r.cambi > 0 ? `<span class="pill warn" title="Contatti attuali presenti dal ${PL.dt(r.contatti_dal)}">contatti cambiati il ${PL.d(r.contatti_dal)}</span>` : `<span class="sub">dal ${PL.d(r.importato_il)}</span>`].filter(Boolean).join(' ') },
+      { k: 'rev', l: 'Decisione', sort: (r) => (r.revisione || ''), render: decisione }
     ]
   });
+  $('#tbl').innerHTML = '<p class="loader">Caricamento</p>';
   const visibili = () => {
     const f = FILTRI.find((x) => x[0] === filtro)[2];
-    const q = $('#q').value.trim().toLowerCase();
+    const q = CZ.fold($('#q').value);
     return all.filter((r) => f(r) && (!regione || (r.regione || '') === regione)
-      && (!q || [r.nome, r.comune, r.provincia, r.via, r.telefono, r.email, r.sito].some((v) => String(v || '').toLowerCase().includes(q))));
+      && (!q || [r.nome, r.comune, r.provincia, r.via, r.telefono, r.email, r.sito, r.avviso].some((v) => CZ.fold(v).includes(q))));
+  };
+  const numeri = () => {
+    const c = (f) => all.filter(f).length;
+    const g = (val, label, f, tone) => `<a class="gauge" href="#elenco" data-f="${f}"><b${tone && val ? ` style="color:var(--${tone})"` : ''}>${n(val)}</b><span>${label}</span></a>`;
+    $('#gauges').innerHTML = g(c(valida), 'Strutture attive', 'attive')
+      + g(c(daControllare), 'Da controllare', 'controllare', 'amber')
+      + g(c((r) => valida(r) && r.telefono), 'Con telefono', 'telefono')
+      + g(c(incompleta), 'Senza comune o provincia', 'incomplete')
+      + g(c((r) => valida(r) && r.cambi > 0), 'Contatti cambiati', 'cambiati')
+      + g(c((r) => r.revisione === 'escluso'), 'Escluse', 'escluse')
+      + g(c((r) => !r.attivo), 'Non più su OSM', 'sparite');
   };
   const disegna = () => {
+    dop = CZ.doppioni(all.filter(valida));
+    numeri();
     $('#fil').innerHTML = FILTRI.map(([k, l, f]) => `<button type="button" data-f="${k}" aria-pressed="${filtro === k}">${l}<span class="n">${n(all.filter(f).length)}</span></button>`).join('');
     const rows = visibili();
     $('#cnt').textContent = n(rows.length);
@@ -378,18 +378,13 @@ foreach->.v(
     catch (e) {
       $('#tbl').innerHTML = `<p class="note warn">${esc(e.message)}</p>`;
       $('#gauges').innerHTML = ''; $('#go').disabled = !!e.missing;
-      if (e.missing) $('#last').innerHTML = '<span class="note bad" style="display:block">Prima di usare il censimento esegui su Supabase la patch SQL <span class="mono">patch-censimento-osm.sql</span>.</span>';
+      if (e.missing) $('#last').innerHTML = '<span class="note bad" style="display:block">Prima di usare il censimento esegui su Supabase la patch SQL <span class="mono">patch-censimento-osm-v2.sql</span>.</span>';
       return;
     }
     all = elenco || [];
-    const att = all.filter((r) => r.attivo);
-    const g = (val, label, f) => `<a class="gauge" href="#elenco" data-f="${f}"><b>${n(val)}</b><span>${label}</span></a>`;
-    $('#gauges').innerHTML = g(att.length, 'Strutture attive', 'attive')
-      + g(att.filter((r) => r.telefono).length, 'Con telefono', 'telefono')
-      + g(att.filter((r) => r.email || r.sito).length, 'Con email o sito', 'attive')
-      + g(att.filter((r) => !r.comune).length, 'Senza comune', 'senza')
-      + g(att.filter((r) => r.cambi > 0).length, 'Contatti cambiati', 'cambiati')
-      + g(all.length - att.length, 'Non più su OSM', 'sparite');
+    if (all.length && !('revisione' in all[0])) $('#last').insertAdjacentHTML('afterend', '<p class="note bad" id="oldSql">Il database ha ancora la prima versione del censimento: esegui su Supabase la patch SQL <span class="mono">patch-censimento-osm-v2.sql</span>, poi ricarica la pagina.</p>');
+    else $('#oldSql')?.remove();
+    const att = all.filter(valida);
     const regs = [...new Set(att.map((r) => r.regione).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
     $('#reg').innerHTML = '<option value="">Tutte le regioni</option>' + regs.map((x) => `<option value="${esc(x)}" ${x === regione ? 'selected' : ''}>${esc(x)} (${n(att.filter((r) => r.regione === x).length)})</option>`).join('');
     const ult = stato.ultimi || [];
@@ -398,6 +393,28 @@ foreach->.v(
     $('#hist').innerHTML = ult.map((u) => `<li class="small">${riga(u)}</li>`).join('') || '<li class="small dim">Nessuna.</li>';
     disegna();
   };
+
+  // ---------- Decisioni: va bene / escludi / ripristina ----------
+  $('#tbl').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-rev]'); if (!b) return;
+    const r = all.find((x) => key(x) === b.dataset.k); if (!r) return;
+    const scelta = b.dataset.rev || null;
+    let nota = null;
+    if (scelta === 'escluso') {
+      const d = dop.get(key(r));
+      const v = await PL.ask({ title: `Escludere «${nomeDi(r)}»?`, ok: 'Escludi', danger: true,
+        html: 'Resta nell\'archivio ma non diventerà una pagina pubblica. I prossimi censimenti non la rimettono dentro; puoi ripristinarla quando vuoi.',
+        fields: [{ name: 'motivo', label: 'Motivo', type: 'select', value: r.avviso ? MOTIVI[0] : d ? MOTIVI[1] : MOTIVI[0], options: MOTIVI.map((m) => [m, m]) },
+          { name: 'nota', label: 'Nota (facoltativa)', placeholder: d ? 'es. doppione di ' + (d[0].nome || 'altra scheda') : '' }] });
+      if (!v) return;
+      nota = [v.motivo, v.nota.trim()].filter(Boolean).join(' — ');
+    }
+    const ok = await PL.run(b, () => PL.rpc('osm_revisiona', { p_type: r.t, p_id: Number(r.i), p_revisione: scelta, p_nota: nota }),
+      scelta === 'escluso' ? 'Struttura esclusa.' : scelta === 'ok' ? 'Segnata come verificata.' : 'Torna da decidere.');
+    if (ok === undefined) return;
+    Object.assign(r, { revisione: scelta, revisione_nota: nota, revisionato_il: scelta ? new Date().toISOString() : null });
+    disegna();
+  });
 
   $('#fil').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; disegna(); } });
   $('#gauges').addEventListener('click', (e) => { const a = e.target.closest('[data-f]'); if (a) { filtro = a.dataset.f; disegna(); } });
@@ -408,6 +425,8 @@ foreach->.v(
       ['Nome', (r) => r.nome], ['Via', (r) => r.via], ['Civico', (r) => r.civico], ['CAP', (r) => r.cap], ['Comune', (r) => r.comune],
       ['Provincia', (r) => r.provincia], ['Regione', (r) => r.regione], ['Telefono', (r) => r.telefono], ['Email', (r) => r.email], ['Sito', (r) => r.sito],
       ['Orari', (r) => r.orari], ['Su OSM', (r) => (r.attivo ? 'sì' : 'non più')], ['Contatti attuali dal', (r) => PL.d(r.contatti_dal)],
+      ['Da controllare', (r) => [r.avviso, ...(dop.get(key(r)) || []).map((x) => 'possibile doppione di ' + (x.nome || 'senza nome') + ' (' + x.perche + ')')].filter(Boolean).join(' · ')],
+      ['Decisione', (r) => ({ ok: 'verificata', escluso: 'esclusa' }[r.revisione] || '')], ['Nota', (r) => r.revisione_nota],
       ['Latitudine', (r) => r.lat], ['Longitudine', (r) => r.lon], ['Scheda OSM', (r) => `https://www.openstreetmap.org/${r.t}/${r.i}`]
     ]);
   });
