@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Termini di servizio – Vetroom</title>
-  <meta name="description" content="Termini di servizio di Vetroom e FurrFinder e accordo sul trattamento dei dati per le cliniche veterinarie.">
+  <title>Termini di servizio – Vetroom e FurrFinder</title>
+  <meta name="description" content="Termini di servizio di Vetroom (gestionale veterinario) e FurrFinder (libretto digitale per i proprietari di animali), con le condizioni per le cliniche e per i proprietari.">
   <link rel="canonical" href="https://vetroom.it/termini.html">
   <link rel="icon" href="/favicon.ico">
   <style>
@@ -16,13 +16,15 @@
     main { max-width:780px; margin:24px auto; padding:26px 22px 40px; background:#fff; border-radius:16px; box-shadow:0 1px 3px rgba(15,23,42,.08); }
     @media (max-width:820px){ main { margin:0; border-radius:0; } }
     h1 { color:var(--ink); font-size:1.9rem; line-height:1.2; margin:0 0 .3em; }
-    h2 { color:var(--ink); font-size:1.15rem; margin:1.8em 0 .5em; }
+    h2 { color:var(--ink); font-size:1.15rem; margin:1.8em 0 .5em; scroll-margin-top:12px; }
+    h3 { color:var(--ink); font-size:1.02rem; margin:1.4em 0 .4em; scroll-margin-top:12px; }
     p, li { max-width:70ch; }
     .muted { color:var(--muted); }
     .box { border-left:5px solid var(--teal); background:#f0fdfa; padding:12px 16px; border-radius:10px; }
+    .part { margin-top:2.4em; padding-top:1em; border-top:2px solid var(--line); }
+    .toc { background:#f8fafc; border:1px solid var(--line); border-radius:12px; padding:10px 16px; font-size:.95rem; }
+    .toc ul { margin:.3em 0; padding-left:1.1em; }
     a { color:var(--teal); }
-    table { border-collapse:collapse; width:100%; font-size:.95rem; }
-    th, td { text-align:left; border-bottom:1px solid var(--line); padding:8px 6px; vertical-align:top; }
     footer { background:var(--ink); color:#94a3b8; padding:18px 20px; font-size:.9rem; text-align:center; }
     footer a { color:#e5e7eb; }
   </style>
@@ -31,54 +33,134 @@
   <header><a href="/"><img src="/app/img/logo-bianco.png" alt="Vetroom" width="504" height="132"></a></header>
   <main>
     <h1>Termini di servizio</h1>
-    <p class="muted">Versione 2026-09 · in vigore dal 29 settembre 2026 · aggiornata il 30 settembre 2026</p>
+    <p class="muted">Versione 2026-10 · in vigore dal 10 ottobre 2026. Chi era già iscritto li accetta al primo accesso successivo.</p>
 
     <div class="box">
-      <p style="margin:0"><strong>Fornitore del servizio:</strong> AF&amp;B S.r.l.s., Via Mario Ugo Guattari 48, 00173 Roma (RM), P.IVA 13698751008, REA RM-1466364. Contatto: <a href="mailto:info@vetroom.it">info@vetroom.it</a></p>
+      <p style="margin:0"><strong>Fornitore del servizio:</strong> AF&amp;B S.r.l.s., Via Mario Ugo Guattari 48, 00173 Roma (RM), P.IVA 13698751008, REA RM-1466364, capitale sociale € 2.700,00 i.v.<br>
+      Email: <a href="mailto:info@vetroom.it">info@vetroom.it</a> · PEC: <a href="mailto:afebsrls@pec.it">afebsrls@pec.it</a></p>
     </div>
 
-    <h2>1. Il servizio</h2>
-    <p><strong>Vetroom</strong> è un gestionale per cliniche e professionisti veterinari (anagrafiche, agenda, visite, referti, documenti). <strong>FurrFinder</strong> è il libretto sanitario digitale per i proprietari di animali. Sono servizi collegati, gestiti da AF&amp;B S.r.l.s., offerti gratuitamente e accessibili tramite account Google.</p>
+    <nav class="toc" aria-label="Indice">
+      <strong>In breve</strong>
+      <ul>
+        <li><a href="#generale">Condizioni per tutti</a> (articoli 1–13)</li>
+        <li><a href="#cliniche">Parte A – Cliniche e professionisti veterinari</a></li>
+        <li><a href="#proprietari">Parte B – Proprietari di animali (FurrFinder)</a></li>
+        <li><a href="/accordo-trattamento-dati.html">Accordo sul trattamento dei dati per le cliniche (art. 28 GDPR)</a></li>
+        <li><a href="#segnalazioni">Come segnalare un contenuto illecito</a></li>
+      </ul>
+    </nav>
 
-    <h2>2. Account</h2>
-    <p>Per usare il servizio serve un account Google. Sei responsabile delle attività svolte con il tuo account e della riservatezza del tuo accesso. Chi si registra come clinica dichiara di agire in qualità di professionista o per conto della struttura veterinaria indicata.</p>
+    <h2 id="generale">Condizioni per tutti</h2>
 
-    <h2>3. Uso corretto</h2>
+    <h3 id="art1">1. Chi siamo e a chi si applicano</h3>
+    <p>Questi termini regolano l'uso di <strong>Vetroom</strong> (vetroom.it), il gestionale per cliniche e professionisti veterinari, e di <strong>FurrFinder</strong> (furrfinder.com e la sezione proprietari di vetroom.it), il libretto sanitario digitale per i proprietari di animali. Insieme li chiamiamo "il servizio". Li fornisce AF&amp;B S.r.l.s. ("noi").</p>
+    <p>Valgono per tutti gli utenti. La <a href="#cliniche">Parte A</a> si aggiunge per chi usa il servizio per la propria attività professionale; la <a href="#proprietari">Parte B</a> per i proprietari di animali, che di regola sono consumatori.</p>
+
+    <h3 id="art2">2. Il servizio</h3>
+    <p>Vetroom permette di gestire anagrafiche, agenda, visite, referti, moduli, documenti, incassi e fatture, e di trasmettere al Sistema Tessera Sanitaria i dati delle spese veterinarie. FurrFinder permette al proprietario di tenere il libretto dei propri animali, ricevere i documenti dalle cliniche con cui decide di condividerlo, prenotare e scrivere alle cliniche. Il servizio è oggi gratuito (vedi <a href="#art8">art. 8</a>).</p>
+
+    <h3 id="art3">3. Account</h3>
+    <ul>
+      <li>Si accede con un account Google. Devi avere almeno 18 anni.</li>
+      <li>Sei responsabile di quello che viene fatto con il tuo account: tieni al sicuro l'accesso e, se possibile, attiva la verifica in due passaggi su Google. Se sospetti un accesso non autorizzato scrivici subito.</li>
+      <li>I dati che inserisci devono essere veritieri. Chi si registra come veterinario dichiara di essere un medico veterinario abilitato o di agire per conto della struttura indicata.</li>
+    </ul>
+
+    <h3 id="art4">4. Uso corretto</h3>
     <ul>
       <li>Inserisci solo dati che hai il diritto di trattare, per le finalità del servizio.</li>
-      <li>Non usare il servizio per attività illecite, per inviare contenuti offensivi o per tentare di accedere a dati altrui.</li>
-      <li>Possiamo sospendere o chiudere gli account che violano questi termini, avvisandoti quando possibile.</li>
+      <li>Non usare il servizio per attività illecite, per spam o pubblicità non richiesta, per inviare contenuti offensivi, minacciosi o discriminatori, o per spacciarti per qualcun altro.</li>
+      <li>Non tentare di accedere a dati altrui, di aggirare le protezioni o di sovraccaricare il servizio (per esempio con programmi automatici).</li>
     </ul>
 
-    <h2>4. Responsabilità professionale</h2>
-    <p>Vetroom è uno strumento di organizzazione: diagnosi, terapie, prescrizioni e documenti restano sotto la piena responsabilità del medico veterinario che li redige. FurrFinder non sostituisce il parere del veterinario.</p>
+    <h3 id="art5">5. Messaggi e contenuti degli utenti</h3>
+    <p>Messaggi, documenti, foto e testi che inserisci restano tuoi (o della clinica che li registra): a noi serve solo il permesso di conservarli e mostrarli alle persone a cui li destini, per far funzionare il servizio.</p>
+    <p>I messaggi fra proprietario e clinica sono visibili ai partecipanti alla conversazione. Il personale autorizzato di AF&amp;B può leggerli solo per assistenza, sicurezza e contrasto agli abusi, oppure se ce lo chiede un partecipante; ogni accesso viene registrato. Non usiamo programmi automatici per filtrare o valutare i contenuti: interveniamo su segnalazione o quando lo impone la legge.</p>
 
-    <h2>5. Dati e backup</h2>
-    <p>Conserviamo i dati su server nell'Unione Europea e adottiamo misure di sicurezza adeguate, comprese copie di sicurezza giornaliere cifrate. Le cliniche possono scaricare in qualsiasi momento una copia completa dei propri dati (Opzioni → Backup) e sono invitate a farlo regolarmente. Il servizio è fornito gratuitamente e "così com'è": pur impegnandoci per la massima continuità, non garantiamo che sia sempre privo di interruzioni o errori.</p>
-
-    <h2>6. Chiusura dell'account</h2>
-    <p>Puoi eliminare il tuo account in ogni momento dalle impostazioni. Il proprietario elimina i propri dati; le visite e i documenti registrati da una clinica restano nell'archivio della clinica, che ne è titolare. L'amministratore di una clinica può eliminare la clinica e tutti i suoi dati, dopo averne scaricato il backup.</p>
-
-    <h2>7. Modifiche</h2>
-    <p>Possiamo aggiornare questi termini. In caso di modifiche rilevanti te lo chiederemo al primo accesso successivo.</p>
-
-    <h2>8. Legge applicabile</h2>
-    <p>Si applica la legge italiana. Per i consumatori resta competente il foro del luogo di residenza; negli altri casi è competente il foro di Roma.</p>
-
-    <h2 id="dpa">Accordo sul trattamento dei dati per le cliniche (art. 28 GDPR)</h2>
-    <p>Quando una clinica usa Vetroom per gestire i dati dei propri clienti e dei loro animali, la clinica è <strong>titolare del trattamento</strong> e nomina AF&amp;B S.r.l.s. <strong>responsabile del trattamento</strong>. Accettando questi termini, la clinica e AF&amp;B concordano che AF&amp;B:</p>
+    <h3 id="segnalazioni">6. Segnalazioni e punto di contatto</h3>
+    <p>Se trovi nel servizio un contenuto che ritieni illecito, scrivi a <a href="mailto:info@vetroom.it?subject=Segnalazione%20contenuto">info@vetroom.it</a> con oggetto "Segnalazione" indicando:</p>
     <ul>
-      <li>tratta i dati solo per fornire il servizio e secondo le istruzioni della clinica, che coincidono con l'uso delle funzioni di Vetroom;</li>
-      <li>garantisce che le persone autorizzate al trattamento siano vincolate alla riservatezza;</li>
-      <li>adotta misure di sicurezza adeguate (accesso autenticato, regole che separano i dati di ogni clinica, cifratura dei collegamenti, server nell'UE);</li>
-      <li>si avvale dei seguenti sub-responsabili, che la clinica autorizza: Supabase (database e archivio, UE), Google (autenticazione), il fornitore di hosting del sito, GitHub (conservazione di copie di sicurezza cifrate con chiave in possesso esclusivo di AF&amp;B); eventuali nuovi sub-responsabili saranno comunicati in anticipo;</li>
-      <li>assiste la clinica nel rispondere alle richieste degli interessati e nelle notifiche di eventuali violazioni, informandola senza ingiustificato ritardo;</li>
-      <li>al termine del servizio cancella i dati della clinica, che può prima scaricarne copia completa;</li>
-      <li>mette a disposizione le informazioni necessarie a dimostrare il rispetto di questi obblighi.</li>
+      <li>perché ritieni che il contenuto sia illecito;</li>
+      <li>dove si trova (pagina, conversazione, data) in modo che possiamo individuarlo;</li>
+      <li>il tuo nome e la tua email (non servono se segnali materiale pedopornografico);</li>
+      <li>una dichiarazione che ciò che scrivi è, per quanto sai, esatto e completo.</li>
     </ul>
-    <p class="muted" style="margin-top:2.5em"><a href="/privacy.html">Informativa privacy e cookie</a> · <a href="/">Torna al sito</a></p>
+    <p>Ti confermiamo la ricezione, esaminiamo la segnalazione con attenzione e in modo imparziale e ti comunichiamo la decisione. Lo stesso indirizzo è il punto di contatto unico per le autorità e per gli utenti ai sensi degli articoli 11 e 12 del Regolamento (UE) 2022/2065 (Digital Services Act). Lingue: italiano e inglese.</p>
+
+    <h3 id="art7">7. Sospensione e chiusura da parte nostra</h3>
+    <p>Possiamo rimuovere contenuti, limitare funzioni, sospendere o chiudere un account che viola la legge o questi termini, in modo proporzionato alla gravità. Ti diciamo che cosa abbiamo fatto e perché, salvo che la legge lo impedisca. Se non sei d'accordo, puoi chiederci di riesaminare la decisione scrivendo a info@vetroom.it entro 6 mesi; restano salvi i tuoi diritti davanti al giudice. In caso di violazioni gravi o ripetute, o di rischio per la sicurezza di altri utenti, possiamo intervenire subito.</p>
+
+    <h3 id="art8">8. Gratuità e servizi a pagamento</h3>
+    <p>Le funzioni oggi disponibili sono gratuite. In futuro potremo offrire servizi aggiuntivi a pagamento: saranno sempre facoltativi, chiaramente indicati come tali e regolati da condizioni specifiche che accetterai prima dell'acquisto. Non trasformeremo in pagamento una funzione gratuita che già usi senza avvisarti con almeno 60 giorni di anticipo.</p>
+
+    <h3 id="art9">9. Disponibilità, sicurezza e copie dei dati</h3>
+    <p>Conserviamo i dati su server nell'Unione Europea e adottiamo misure di sicurezza adeguate, descritte nell'<a href="/accordo-trattamento-dati.html#misure">accordo sul trattamento dei dati</a>. Ci impegniamo per la massima continuità, ma il servizio può avere interruzioni per manutenzione, guasti o cause che non dipendono da noi. Le cliniche possono scaricare in qualsiasi momento una copia completa dei propri dati (Opzioni → Backup) e i proprietari la copia del proprio libretto (Profilo → I tuoi dati): ti consigliamo di farlo con regolarità.</p>
+
+    <h3 id="art10">10. Marchi e software</h3>
+    <p>I nomi Vetroom e FurrFinder, i loghi e la grafica del servizio appartengono ad AF&amp;B S.r.l.s. Ti concediamo il diritto di usare il servizio per lo scopo per cui è offerto, senza copiarne o rivenderne l'interfaccia. Le parti di software che pubblichiamo con una licenza aperta restano regolate da quella licenza.</p>
+
+    <h3 id="art11">11. Chiusura dell'account da parte tua</h3>
+    <p>Puoi smettere di usare il servizio ed eliminare il tuo account in ogni momento dalle impostazioni, senza costi. Il proprietario elimina i propri dati; le visite e i documenti registrati da una clinica restano nell'archivio della clinica, che ne è titolare e deve conservarli per i propri obblighi. L'amministratore di una struttura può eliminare la struttura e tutti i suoi dati, dopo averne scaricato il backup.</p>
+
+    <h3 id="art12">12. Modifiche ai termini</h3>
+    <p>Possiamo aggiornare questi termini per cambiamenti del servizio o della legge. Le modifiche importanti le annunciamo almeno 15 giorni prima, salvo che dipendano da un obbligo di legge o da esigenze di sicurezza, e ti chiediamo di accettarle al primo accesso successivo, con un riepilogo di cosa cambia. Se non le accetti puoi chiudere l'account e scaricare i tuoi dati.</p>
+
+    <h3 id="art13">13. Legge applicabile</h3>
+    <p>Si applica la legge italiana. Per il foro competente valgono l'<a href="#a6">art. A6</a> per le cliniche e l'<a href="#b4">art. B4</a> per i consumatori.</p>
+
+    <section class="part" id="cliniche">
+      <h2>Parte A – Cliniche e professionisti veterinari</h2>
+      <p class="muted">Si applica a chi usa il servizio per la propria attività professionale (veterinari, strutture, collaboratori e segreterie). In questi rapporti non si applica la disciplina a tutela dei consumatori.</p>
+
+      <h3 id="a1">A1. Responsabilità professionale</h3>
+      <p>Vetroom è uno strumento di organizzazione. Diagnosi, terapie, prescrizioni, referti, certificati, fatture e ogni altro documento restano sotto la piena responsabilità del veterinario o della struttura che li redige, anche quando sono preparati con modelli o funzioni automatiche del servizio. Il veterinario resta responsabile della tenuta della documentazione clinica e degli obblighi deontologici, fiscali e sanitari.</p>
+      <p>L'invio dei dati di spesa al Sistema Tessera Sanitaria è un obbligo della struttura o del veterinario: Vetroom lo esegue su tua richiesta, con le credenziali che inserisci al momento, che non conserviamo. Controlla l'esito di ogni invio nella pagina dedicata e correggi gli eventuali scarti nei termini di legge.</p>
+
+      <h3 id="a2">A2. Dati dei clienti e degli animali</h3>
+      <p>Per i dati dei tuoi clienti la struttura è titolare del trattamento e AF&amp;B ne è responsabile, alle condizioni dell'<a href="/accordo-trattamento-dati.html">accordo sul trattamento dei dati</a>, che fa parte di questi termini e che l'amministratore accetta per conto della struttura. Spetta alla struttura informare i propri clienti, raccogliere i consensi quando servono e rispettarne le scelte, compresa l'opposizione all'invio al Sistema TS. Nell'accordo trovi un modello di informativa da usare.</p>
+
+      <h3 id="a3">A3. Struttura, amministratore e team</h3>
+      <p>Chi crea una struttura ne diventa amministratore: imposta i dati della struttura e il modo di fatturare, invita e rimuove i collaboratori, decide i loro ruoli e risponde dell'uso che ne fanno. Quando un collaboratore lascia la struttura, l'amministratore deve rimuoverlo. La titolarità della struttura si può trasferire a un altro veterinario con la procedura prevista dal servizio; chi la riceve subentra in questi termini e nell'accordo sul trattamento dei dati.</p>
+
+      <h3 id="a4">A4. Limitazione di responsabilità</h3>
+      <p>Il servizio è fornito gratuitamente e nello stato in cui si trova. Salvo dolo o colpa grave, AF&amp;B non risponde di danni indiretti, mancati guadagni, perdita di clientela o interruzioni dell'attività, né della perdita di dati che la struttura avrebbe potuto evitare scaricando i backup messi a disposizione. In ogni altro caso la responsabilità complessiva di AF&amp;B verso la struttura è limitata a 100 euro. Restano salvi i casi in cui la legge non consente limitazioni.</p>
+
+      <h3 id="a5">A5. Cessazione del servizio</h3>
+      <p>Possiamo cessare il servizio, in tutto o in parte, con un preavviso di almeno 60 giorni comunicato per email e dentro Vetroom, durante i quali potrai scaricare tutti i tuoi dati. Resta salvo quanto previsto all'<a href="#art7">art. 7</a> per le violazioni.</p>
+
+      <h3 id="a6">A6. Foro competente</h3>
+      <p>Per ogni controversia con chi usa il servizio per la propria attività professionale è competente in via esclusiva il foro di Roma.</p>
+
+      <h3 id="a7">A7. Approvazione specifica</h3>
+      <p>Ai sensi degli articoli 1341 e 1342 del Codice civile, all'iscrizione e a ogni aggiornamento la struttura approva specificamente, con una spunta separata, le clausole: 7 (sospensione e chiusura), 9 (disponibilità), 12 (modifiche ai termini), A4 (limitazione di responsabilità), A5 (cessazione del servizio) e A6 (foro competente).</p>
+    </section>
+
+    <section class="part" id="proprietari">
+      <h2>Parte B – Proprietari di animali (FurrFinder)</h2>
+
+      <h3 id="b1">B1. FurrFinder non sostituisce il veterinario</h3>
+      <p>FurrFinder serve a conservare e consultare le informazioni sui tuoi animali e a comunicare con le cliniche. Non fornisce diagnosi né consigli medici. <strong>In caso di urgenza non scrivere un messaggio: chiama subito il tuo veterinario o un pronto soccorso veterinario.</strong> I messaggi non hanno tempi di risposta garantiti.</p>
+
+      <h3 id="b2">B2. Condivisione con le cliniche</h3>
+      <p>Decidi tu con quali cliniche condividere il libretto dei tuoi animali e puoi revocare la condivisione in ogni momento. Dopo la revoca la clinica conserva le visite già registrate, come richiedono i suoi obblighi professionali, ma non vede più i tuoi aggiornamenti. Le visite e i documenti che una clinica registra sono suoi: la clinica è titolare di quei dati e risponde del loro contenuto.</p>
+
+      <h3 id="b3">B3. I tuoi diritti di consumatore</h3>
+      <p>Nulla in questi termini limita i diritti che il Codice del Consumo (d.lgs. 206/2005) e le altre leggi ti riconoscono e che non si possono escludere. Il servizio è gratuito: puoi smettere di usarlo quando vuoi, senza penali né motivazioni (<a href="#art11">art. 11</a>). Per eventuali reclami scrivi a info@vetroom.it: ti rispondiamo entro 30 giorni. Puoi anche rivolgerti a un organismo di risoluzione alternativa delle controversie dei consumatori riconosciuto.</p>
+
+      <h3 id="b4">B4. Foro competente</h3>
+      <p>Per le controversie con i consumatori è competente il giudice del luogo in cui il consumatore risiede.</p>
+    </section>
+
+    <h2 id="dpa">Accordo sul trattamento dei dati per le cliniche</h2>
+    <p>L'accordo con cui la struttura nomina AF&amp;B responsabile del trattamento (art. 28 GDPR), con l'elenco dei sub-responsabili, le misure di sicurezza e un modello di informativa per i clienti, è in una pagina dedicata: <a href="/accordo-trattamento-dati.html">Accordo sul trattamento dei dati</a>.</p>
+
+    <h2>Versioni precedenti</h2>
+    <p class="muted">Versione 2026-09 (29 settembre 2026): sostituita da questa. Le novità della versione 2026-10 sono: condizioni separate per cliniche e proprietari, regole su messaggi e segnalazioni, limitazione di responsabilità e cessazione del servizio per le cliniche, accordo sul trattamento dei dati in una pagina dedicata e più completa. Puoi chiedere a info@vetroom.it il testo di qualsiasi versione precedente.</p>
+
+    <p class="muted" style="margin-top:2.5em"><a href="/privacy.html">Informativa privacy e cookie</a> · <a href="/accordo-trattamento-dati.html">Accordo sul trattamento dei dati</a> · <a href="/">Torna al sito</a></p>
   </main>
-  <footer>© 2026 Vetroom è un servizio di AF&amp;B S.r.l.s. · Via Mario Ugo Guattari 48, 00173 Roma (RM) · P.IVA 13698751008 · REA RM-1466364 · Capitale sociale € 2.700,00 i.v. · <a href="/">Torna al sito</a></footer>
+  <footer>© 2026 Vetroom e FurrFinder sono servizi di AF&amp;B S.r.l.s. · Via Mario Ugo Guattari 48, 00173 Roma (RM) · P.IVA 13698751008 · REA RM-1466364 · Capitale sociale € 2.700,00 i.v. · PEC afebsrls@pec.it · <a href="/">Torna al sito</a></footer>
   <script src="/assets/cookie-notice.js" defer></script>
 </body>
 </html>

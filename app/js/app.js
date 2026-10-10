@@ -48,7 +48,7 @@
   // ---------- Monitoraggio errori ----------
   // Ogni errore mostrato all'utente (e ogni errore imprevisto del codice) viene registrato
   // per l'amministratore della piattaforma. Nessun servizio esterno: finisce nel database Vetroom.
-  VR.VERSION = '2026-10-08b';
+  VR.VERSION = '2026-10-10';
   const IGNORE = /Failed to fetch|NetworkError|Load failed|network error|JWT|not authenticated|Accesso richiesto|AbortError|ResizeObserver loop|Area riservata|earlier share has not yet completed|Share canceled|^(redirect|noclinic|suspended)$/i;
   const sent = new Set();
   VR.reportError = (e, where) => {
@@ -89,18 +89,32 @@
   };
 
   // ---------- Termini di servizio e accordo sul trattamento dei dati ----------
-  VR.TERMS_VERSION = '2026-09';
-  VR.requireTerms = ({ profile, clinicId = null, clinicTerms = null, isAdmin = false }) => new Promise((resolve) => {
+  // Quando cambia la versione, a ogni utente viene chiesto di accettare di nuovo al primo accesso.
+  // Le accettazioni restano registrate nel database (con la patch 35 anche lo storico completo).
+  VR.TERMS_VERSION = '2026-10';
+  VR.TERMS_CHANGES = [
+    'Condizioni separate per cliniche e proprietari',
+    'Regole chiare su messaggi, segnalazioni e sospensioni',
+    'Accordo sul trattamento dei dati più completo, con un modello di informativa per i clienti della clinica',
+    'Informativa privacy più dettagliata: tempi di conservazione, fornitori e dati fuori dall\'UE'
+  ];
+  VR.requireTerms = ({ profile, clinicId = null, clinicTerms = null, clinicTermsVersion = null, isAdmin = false }) => new Promise((resolve) => {
     const needUser = !profile?.terms_accepted_at || profile.terms_version !== VR.TERMS_VERSION;
-    const needClinic = !!(isAdmin && clinicId && !clinicTerms);
+    const needClinic = !!(isAdmin && clinicId && (!clinicTerms || clinicTermsVersion !== VR.TERMS_VERSION));
     if (!needUser && !needClinic) return resolve();
+    const updated = !!(profile?.terms_accepted_at || clinicTerms);
     const dlg = document.createElement('dialog');
     dlg.className = 'dlg terms-dlg';
     dlg.innerHTML = `
-      <h2>Prima di continuare</h2>
-      <p class="muted" style="margin-top:0">Per usare il servizio ci serve la tua conferma. Puoi leggere i documenti completi con i link qui sotto.</p>
-      ${needUser ? `<label class="check terms-check"><input type="checkbox" data-t="user"> <span>Ho letto e accetto i <a href="/termini.html" target="_blank" rel="noopener">Termini di servizio</a> e l'<a href="/privacy.html" target="_blank" rel="noopener">Informativa privacy</a></span></label>` : ''}
-      ${needClinic ? `<label class="check terms-check"><input type="checkbox" data-t="clinic"> <span>Per la clinica: accetto l'<a href="/termini.html#dpa" target="_blank" rel="noopener">accordo sul trattamento dei dati</a> e nomino AF&amp;B S.r.l.s. responsabile del trattamento (art. 28 GDPR)</span></label>` : ''}
+      <h2>${updated ? 'Abbiamo aggiornato i documenti' : 'Prima di continuare'}</h2>
+      ${updated
+        ? `<p class="muted" style="margin-top:0">Per continuare a usare il servizio ci serve la tua conferma. In sintesi, cosa cambia:</p>
+           <ul class="terms-changes">${VR.TERMS_CHANGES.map((t) => `<li>${VR.esc(t)}</li>`).join('')}</ul>`
+        : '<p class="muted" style="margin-top:0">Per usare il servizio ci serve la tua conferma. Puoi leggere i documenti completi con i link qui sotto.</p>'}
+      ${needUser ? `<label class="check terms-check"><input type="checkbox" data-t="user"> <span>Ho letto e accetto i <a href="/termini.html" target="_blank" rel="noopener">Termini di servizio</a> e ho letto l'<a href="/privacy.html" target="_blank" rel="noopener">Informativa privacy</a></span></label>` : ''}
+      ${needClinic ? `<p class="terms-sub">Per la struttura, come amministratore:</p>
+        <label class="check terms-check"><input type="checkbox" data-t="clinic"> <span>Accetto l'<a href="/accordo-trattamento-dati.html" target="_blank" rel="noopener">accordo sul trattamento dei dati</a> e nomino AF&amp;B S.r.l.s. responsabile del trattamento dei dati dei clienti della struttura (art. 28 GDPR)</span></label>
+        <label class="check terms-check"><input type="checkbox" data-t="clauses"> <span>Ai sensi degli artt. 1341 e 1342 c.c. approvo specificamente le clausole dei <a href="/termini.html#a7" target="_blank" rel="noopener">Termini</a>: 7 (sospensione e chiusura), 9 (disponibilità), 12 (modifiche), A4 (limitazione di responsabilità), A5 (cessazione del servizio), A6 (foro di Roma)</span></label>` : ''}
       <div class="terms-msg" hidden></div>
       <div class="actions-bar" style="margin-top:14px">
         <button class="btn btn-primary" type="button" data-go disabled>Continua</button>
@@ -114,7 +128,10 @@
     go.addEventListener('click', async () => {
       go.disabled = true;
       try {
-        if (needUser) { const { error } = await VR.sb.rpc('accept_terms', { p_version: VR.TERMS_VERSION }); if (error) throw error; }
+        if (needUser) {
+          const { error } = await VR.sb.rpc('accept_terms', { p_version: VR.TERMS_VERSION }); if (error) throw error;
+          if (profile) { profile.terms_accepted_at = new Date().toISOString(); profile.terms_version = VR.TERMS_VERSION; }
+        }
         if (needClinic) { const { error } = await VR.sb.rpc('accept_clinic_terms', { p_clinic: clinicId, p_version: VR.TERMS_VERSION }); if (error) throw error; }
         dlg.close(); dlg.remove(); resolve();
       } catch (e) {

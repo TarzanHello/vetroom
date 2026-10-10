@@ -108,7 +108,7 @@
         ['Come si fattura', esc(PL.BILLING[st.billing_mode] || '—') + (st.issuers?.length ? ` <span class="faint small">· ${n(st.issuers.length)} ${st.issuers.length === 1 ? 'intestatario' : 'intestatari'}</span>` : '')]] : []),
       ['Codice dello studio (vecchio)', code ? PL.chip(code) : '—'], ['Codice per i clienti', c.affiliation_code ? `<span class="mono">${esc(c.affiliation_code)}</span>` : '—'],
       ['Indirizzo', esc(c.header_address || '—')], ['Telefono', esc(c.header_phone || '—')], ['Email', esc(c.header_email || '—')],
-      ['Termini e accordo GDPR', c.terms_accepted_at ? 'accettati il ' + PL.dt(c.terms_accepted_at) : '<span class="pill warn">non ancora</span>'], ['ID tecnico', `<span class="mono small faint">${id}</span>`]];
+      ['Termini e accordo GDPR', c.terms_accepted_at ? 'accettati il ' + PL.dt(c.terms_accepted_at) + (c.terms_version ? ' · versione ' + esc(c.terms_version) : '') : '<span class="pill warn">non ancora</span>'], ['ID tecnico', `<span class="mono small faint">${id}</span>`]];
     $('#kv').innerHTML = kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
     $('#emails').innerHTML = (card.emails || []).map((e) => `<li><div class="grow">${esc(e.subject)}</div><span class="small dim nowrap">${PL.dt(e.at)} · ${esc(PL.mailStatus(e.status))}</span></li>`).join('') || '<li class="dim">Nessuna email inviata.</li>';
     $('#errs').innerHTML = (card.errors || []).map((e) => `<li><div class="grow">${esc(e.message)}<span class="small faint" style="display:block">${esc(e.page || '')}${e.hits > 1 ? ' · ' + n(e.hits) + ' volte' : ''}</span></div><span class="small dim nowrap">${PL.ago(e.at)}</span></li>`).join('') || '<li class="dim">Nessun errore. 👍</li>';

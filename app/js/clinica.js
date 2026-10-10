@@ -25,7 +25,7 @@
     if (!profile.is_staff) { VR.go('benvenuto.html'); throw new Error('redirect'); }
 
     // patch 26: codice ST-, titolare, tipo e modello di fatturazione (con ripiego se non ancora installata)
-    const base = 'name, affiliation_code, status, suspended_reason, terms_accepted_at';
+    const base = 'name, affiliation_code, status, suspended_reason, terms_accepted_at, terms_version';
     const q = (cols) => VR.sb.from('clinic_members').select(`role, clinic_id, ${cols.includes('bills_own') ? 'bills_own, ' : ''}clinics(${cols.replace('bills_own, ', '')})`)
       .eq('user_id', session.user.id).eq('status', 'active');
     let { data: rows, error } = await q('bills_own, ' + base + ', code, kind, billing_mode, code_owner_id');
@@ -47,7 +47,7 @@
       VR.go('clinica/'); throw new Error('redirect');
     }
     localStorage.setItem(VR.CLINIC_KEY, m.clinic_id);
-    await VR.requireTerms({ profile, clinicId: m.clinic_id, clinicTerms: m.clinics?.terms_accepted_at, isAdmin: m.role === 'admin' });
+    await VR.requireTerms({ profile, clinicId: m.clinic_id, clinicTerms: m.clinics?.terms_accepted_at, clinicTermsVersion: m.clinics?.terms_version, isAdmin: m.role === 'admin' });
     VR.checkPlatformAdmin();
     const isOwner = !!m.clinics?.code_owner_id && m.clinics.code_owner_id === session.user.id;
     if (VR.shellSetClinic) VR.shellSetClinic({ clinic: m.clinics || {}, role: isOwner ? 'owner' : m.role });

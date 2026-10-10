@@ -611,6 +611,9 @@ input[type="time"] { font: inherit; padding: .55em .6em; border: 2px solid var(-
 .terms-dlg { max-width: 560px; }
 .terms-check { align-items: flex-start; font-weight: 500; color: var(--text); margin-top: 10px; line-height: 1.45; }
 .terms-check input { margin-top: 2px; }
+.terms-changes { margin: 6px 0 4px; padding-left: 1.2em; color: var(--text); line-height: 1.45; }
+.terms-changes li { margin: 2px 0; }
+.terms-sub { margin: 14px 0 0; font-weight: 700; color: var(--text); }
 .danger-zone { border: 1px solid #fecaca; }
 .danger-zone h2 { color: #b91c1c; }
 

@@ -8,13 +8,19 @@
   </url>
   <url>
     <loc>https://vetroom.it/privacy.html</loc>
-    <lastmod>2026-09-28</lastmod>
+    <lastmod>2026-10-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>
   </url>
   <url>
     <loc>https://vetroom.it/termini.html</loc>
-    <lastmod>2026-09-29</lastmod>
+    <lastmod>2026-10-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  <url>
+    <loc>https://vetroom.it/accordo-trattamento-dati.html</loc>
+    <lastmod>2026-10-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>
   </url>

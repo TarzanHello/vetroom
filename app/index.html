@@ -46,7 +46,7 @@
       <div class="lang-switch" translate="no">
         <button type="button" data-set-lang="it">Italiano</button> · <button type="button" data-set-lang="en">English</button>
       </div>
-      <p class="small">Stesso accesso per tutti: dopo ti chiediamo chi sei.<br>Accedendo accetti l'<a href="/privacy.html">informativa privacy</a>.</p>
+      <p class="small">Stesso accesso per tutti: dopo ti chiediamo chi sei.<br>Prima di iniziare accetterai i <a href="/termini.html">Termini di servizio</a>. Qui trovi l'<a href="/privacy.html">informativa privacy</a>.</p>
     </div>
   </main>
 
@@ -86,7 +86,7 @@
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b2545');
       VR.$('#switchBrand').innerHTML = '<span>Sei un veterinario?</span> <a href="?per=clinica">Entra in Vetroom</a>';
       const sm = document.querySelector('.vr-login-card .small');
-      if (sm) sm.innerHTML = 'Accedendo accetti l\'<a href="/privacy.html">informativa privacy</a>.';
+      if (sm) sm.innerHTML = 'Prima di iniziare accetterai i <a href="/termini.html">Termini di servizio</a>. Qui trovi l\'<a href="/privacy.html">informativa privacy</a>.';
     } else {
       VR.$('#switchBrand').innerHTML = '<span>Sei un proprietario di pet?</span> <a href="?per=proprietario">Vai a FurrFinder</a>';
     }
