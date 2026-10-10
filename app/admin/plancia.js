@@ -15,6 +15,7 @@
   const I = {
     ponte: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"/></svg>',
     cliniche: '<svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/><path d="M12 8.5v3M10.5 10h3"/></svg>',
+    censimento: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-6-5.6-6-10a6 6 0 0 1 12 0c0 4.4-6 10-6 10z"/><circle cx="12" cy="10.5" r="2.2"/><path d="M3.5 20.5h4M16.5 20.5h4"/></svg>',
     utenti: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.5 14.3c2.6-.3 4.4 1.2 5 4.2"/></svg>',
     prenotazioni: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15"/><path d="M3.5 9.5h17M8 3v4M16 3v4M8 14l2.5 2.5L16 12"/></svg>',
     messaggi: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>',
@@ -32,6 +33,7 @@
     { g: 'Comando', items: [
       { k: 'ponte', l: 'Ponte di comando', h: './' },
       { k: 'cliniche', l: 'Strutture', h: 'cliniche.html' },
+      { k: 'censimento', l: 'Censimento OSM', h: 'censimento.html' },
       { k: 'utenti', l: 'Utenti', h: 'utenti.html' },
       { k: 'prenotazioni', l: 'Prenotazioni', h: 'prenotazioni.html' }
     ] },
