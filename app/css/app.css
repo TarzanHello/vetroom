@@ -1281,5 +1281,6 @@ input[type="time"] { font: inherit; padding: .55em .6em; border: 2px solid var(-
 .route-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 560px) {
   .route-stop { flex-wrap: wrap; }
-  .route-acts { width: 100%; justify-content: flex-start; padding-left: 38px; }
+  .route-acts { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .route-acts > .btn, .route-acts > .arrive, .route-acts > .arrive > summary { width: 100%; }
 }

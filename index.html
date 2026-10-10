@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#033860" />
 
-  <title>Vetroom – Gestionale veterinario gratuito | La stanza digitale</title>
-  <meta name="description" content="Gestionale veterinario gratuito in cloud: cartella clinica, agenda, referti PDF, fatture e invio delle spese veterinarie al Sistema Tessera Sanitaria con un pulsante." />
+  <title>Vetroom – Gestionale veterinario gratuito per studi e veterinari a domicilio</title>
+  <meta name="description" content="Gestionale veterinario gratuito per ambulatori, cliniche e veterinari a domicilio: cartella clinica, agenda con giro del giorno, referti PDF, fatture e Sistema TS." />
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <link rel="canonical" href="https://vetroom.it/" />
 
@@ -19,8 +19,8 @@
   <!-- Open Graph -->
   <meta property="og:locale" content="it_IT" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Vetroom – Gestionale veterinario gratuito in cloud" />
-  <meta property="og:description" content="Gestionale veterinario gratuito: cartella clinica, agenda, referti PDF, fatture e Sistema TS. Con FurrFinder i clienti prenotano, ricevono referti e richiami e scrivono alla clinica." />
+  <meta property="og:title" content="Vetroom – Gestionale veterinario gratuito, anche per veterinari a domicilio" />
+  <meta property="og:description" content="Gestionale veterinario gratuito per studi e veterinari a domicilio: cartella clinica, agenda con giro del giorno, referti PDF, fatture e Sistema TS. Con FurrFinder i clienti prenotano direttamente." />
   <meta property="og:url" content="https://vetroom.it/" />
   <meta property="og:image" content="https://vetroom.it/assets/og-vetroom.png" />
   <meta property="og:image:width" content="1200" />
@@ -28,8 +28,8 @@
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Vetroom – Gestionale veterinario gratuito in cloud" />
-  <meta name="twitter:description" content="Gestionale veterinario gratuito: cartella clinica, agenda, referti PDF, fatture e Sistema TS. Con FurrFinder i clienti prenotano, ricevono referti e richiami e scrivono alla clinica." />
+  <meta name="twitter:title" content="Vetroom – Gestionale veterinario gratuito, anche per veterinari a domicilio" />
+  <meta name="twitter:description" content="Gestionale veterinario gratuito per studi e veterinari a domicilio: cartella clinica, agenda con giro del giorno, referti PDF, fatture e Sistema TS. Con FurrFinder i clienti prenotano direttamente." />
   <meta name="twitter:image" content="https://vetroom.it/assets/og-vetroom.png" />
 
   <!-- Preload logo -->
@@ -796,6 +796,14 @@
       #sistema-ts .ts-band{padding:20px}
     }
     @media (max-width: 520px){ #sistema-ts .ts-steps,#sistema-ts .ts-facts{grid-template-columns:1fr} }
+    /* Veterinari a domicilio */
+    #domicilio .dom-band{ align-items:center; background:linear-gradient(135deg,#f0fdfa,#ecfeff); border:1px solid var(--border); border-radius:var(--radius2); padding:30px; box-shadow:var(--shadow); }
+    #domicilio h2{ margin:6px 0 10px; }
+    #domicilio .ts-kicker{ display:inline-block; font-size:12px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; color:#0f766e; }
+    #domicilio .bullets{ margin:12px 0 18px; }
+    #domicilio .dom-phone{ margin:0; display:flex; justify-content:center; }
+    #domicilio .phone{ width:100%; max-width:260px; transform:none; margin:0; }
+    @media (max-width: 860px){ #domicilio .dom-band{ padding:20px; } #domicilio .phone{ max-width:220px; } }
   </style>
 
   <!-- Structured Data -->
@@ -805,6 +813,7 @@
   "@graph": [
     {
       "@type": "Organization",
+      "@id": "https://vetroom.it/#org",
       "name": "Vetroom",
       "url": "https://vetroom.it/",
       "logo": "https://vetroom.it/assets/logo-vetroom.png",
@@ -812,11 +821,15 @@
     },
     {
       "@type": "SoftwareApplication",
+      "@id": "https://vetroom.it/#app",
       "name": "Vetroom",
       "operatingSystem": "Web",
       "applicationCategory": "BusinessApplication",
+      "applicationSubCategory": "Gestionale veterinario",
       "url": "https://vetroom.it/",
-      "description": "Gestionale veterinario gratuito in cloud per cartella clinica, agenda, documenti e anagrafiche.",
+      "description": "Gestionale veterinario gratuito in cloud per ambulatori, cliniche e veterinari a domicilio: cartella clinica, agenda, referti, fatture e invio al Sistema Tessera Sanitaria.",
+      "audience": { "@type": "BusinessAudience", "audienceType": "Medici veterinari, ambulatori, cliniche e veterinari a domicilio" },
+      "publisher": { "@id": "https://vetroom.it/#org" },
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -824,6 +837,11 @@
         "category": "Free"
       },
       "featureList": [
+        "Cartella clinica veterinaria e referti PDF",
+        "Agenda veterinaria online con prenotazioni dei clienti",
+        "Veterinario a domicilio: indirizzo della visita, giro del giorno su Google Maps e messaggio «Sto arrivando»",
+        "Richieste di visita a domicilio dei clienti senza commissioni",
+        "Richiami vaccinali e promemoria ai clienti",
         "Fatture veterinarie in PDF",
         "Invio delle spese veterinarie al Sistema Tessera Sanitaria"
       ]
@@ -831,6 +849,22 @@
     {
       "@type": "FAQPage",
       "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Vetroom va bene per il veterinario a domicilio?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sì. Alla registrazione scegli «Lavoro a domicilio»: ogni appuntamento ha l'indirizzo della visita con il tasto Naviga, la pagina Oggi mostra il giro della giornata con il percorso su Google Maps e il messaggio «Sto arrivando» parte su WhatsApp con un tocco. Imposti zona servita, diritto di chiamata e tempo tra le visite, e i clienti ti chiedono la visita a casa dall'app FurrFinder."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Vetroom prende una commissione sulle visite?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Vetroom è gratuito e non trattiene percentuali sulle visite, nemmeno su quelle a domicilio prenotate dai clienti: il prezzo lo decidi tu e lo incassi tutto tu."
+          }
+        },
         {
           "@type": "Question",
           "name": "Vetroom invia le spese veterinarie al Sistema Tessera Sanitaria?",
@@ -933,6 +967,7 @@
           <a href="#cosa-fa">Cosa fa</a>
           <a href="#sistema-ts">Fatture e Sistema TS</a>
           <a href="#profilo-pet">Profilo pet</a>
+          <a href="/veterinario-a-domicilio.html">A domicilio</a>
           <a href="#per-chi">Per chi</a>
           <a href="/guida/">Guida</a>
           <a href="#faq">FAQ</a>
@@ -954,12 +989,12 @@
           <div>
             <div class="badge"><span class="dot" aria-hidden="true"></span>Gestionale veterinario gratuito • Cloud • Dal browser</div>
 
-            <p style="margin:14px 0 0"><a class="news" href="#sistema-ts"><b>NOVITÀ</b> Fatture e invio al Sistema Tessera Sanitaria</a></p>
+            <p style="margin:14px 0 0"><a class="news" href="/veterinario-a-domicilio.html"><b>NOVITÀ</b> Per veterinari a domicilio: giro del giorno e prenotazioni senza commissioni</a></p>
 
             <h1>Gestionale veterinario gratuito in cloud: tutto lo studio in ordine.</h1>
 
                         <p class="lead">
-              <strong>Vetroom</strong> è un <strong>gestionale veterinario gratuito</strong> in cloud pensato per la pratica quotidiana:
+              <strong>Vetroom</strong> è un <strong>gestionale veterinario gratuito</strong> in cloud per ambulatori, cliniche e <a href="/veterinario-a-domicilio.html"><strong>veterinari a domicilio</strong></a>, pensato per la pratica quotidiana:
               <strong>cartella clinica</strong>, anagrafiche, <strong>agenda</strong>, documenti e <strong>fatture con invio al Sistema Tessera Sanitaria</strong> nello stesso posto.
               In più stiamo costruendo il <strong>profilo sanitario del pet</strong> <em>owner‑first</em>: la storia clinica segue l’animale e si condivide solo con consenso.
             </p>
@@ -974,6 +1009,7 @@
               <span class="pill"><span class="k" aria-hidden="true"></span>Gratuito per veterinari</span>
               <span class="pill"><span class="k" aria-hidden="true"></span>Niente installazioni</span>
               <span class="pill"><span class="k" aria-hidden="true"></span>Fatture + Sistema TS</span>
+              <span class="pill"><span class="k" aria-hidden="true"></span>Anche a domicilio</span>
               <span class="pill"><span class="k" aria-hidden="true"></span>Owner‑first in arrivo</span>
             </div>
 
@@ -1107,6 +1143,32 @@
       </div>
     </section>
 
+    <section class="section" id="domicilio">
+      <div class="container">
+        <div class="two-col dom-band">
+          <div>
+            <span class="ts-kicker">Novità · Veterinari a domicilio</span>
+            <h2>Gestionale per veterinari a domicilio, senza commissioni</h2>
+            <p>Lavori a casa dei clienti? Vetroom lavora in macchina con te. Scegli <strong>Lavoro a domicilio</strong> alla registrazione, oppure attiva le visite a domicilio nel tuo ambulatorio.</p>
+            <ul class="bullets">
+              <li><strong>Indirizzo in ogni appuntamento</strong>, con citofono e piano, e il tasto Naviga</li>
+              <li><strong>Il giro di oggi</strong>: le visite in ordine e il percorso completo su Google Maps</li>
+              <li><strong>«Sto arrivando»</strong> su WhatsApp con un tocco: tra 10, 20 o 30 minuti</li>
+              <li><strong>Zona servita, diritto di chiamata</strong> e tempo di spostamento tra le visite</li>
+              <li>I clienti ti chiedono la <strong>visita a casa dall'app FurrFinder</strong>: nessuna percentuale, il cliente è tuo</li>
+            </ul>
+            <div class="cta-row">
+              <a class="btn primary" href="/veterinario-a-domicilio.html">Vetroom per il veterinario a domicilio</a>
+              <a class="btn soft" href="/guida/veterinario-a-domicilio.html">Leggi la guida</a>
+            </div>
+          </div>
+          <figure class="dom-phone">
+            <div class="phone"><img src="/assets/domicilio-giro-di-oggi.webp" width="520" height="1067" alt="Gestionale per veterinario a domicilio: il giro di oggi con indirizzi e percorso su Google Maps sul telefono" loading="lazy"></div>
+          </figure>
+        </div>
+      </div>
+    </section>
+
         <section class="section" id="profilo-pet">
       <div class="container">
         <h2>Il profilo sanitario del pet: continuità clinica, owner‑first</h2>
@@ -1170,7 +1232,7 @@
           </div>
           <div class="card" role="listitem">
             <h3>Veterinario a domicilio</h3>
-            <p>In un tocco hai il tuo spazio personale: agenda con l'indirizzo di ogni visita, il giro del giorno su Google Maps, «Sto arrivando» su WhatsApp, referti e fatture a tuo nome. I clienti ti chiedono la visita a casa direttamente, <strong>senza commissioni</strong>. <a href="/guida/veterinario-a-domicilio.html">Come funziona</a></p>
+            <p>In un tocco hai il tuo spazio personale: agenda con l'indirizzo di ogni visita, il giro del giorno su Google Maps, «Sto arrivando» su WhatsApp, referti e fatture a tuo nome. I clienti ti chiedono la visita a casa direttamente, <strong>senza commissioni</strong>. <a href="/veterinario-a-domicilio.html">Vetroom per il veterinario a domicilio</a></p>
           </div>
           <div class="card" role="listitem">
             <h3>Specialista in più strutture</h3>
@@ -1245,6 +1307,26 @@
         </p>
 
         <div class="faq-list">
+
+          <details>
+            <summary>
+              <span>Vetroom va bene per il veterinario a domicilio?</span>
+              <span class="cta-hint" aria-hidden="true">Leggi</span>
+            </summary>
+            <div class="faq-a">
+              <p>Sì. Alla registrazione scegli «Lavoro a domicilio»: ogni appuntamento ha l'indirizzo della visita con il tasto Naviga, la pagina Oggi mostra il giro della giornata con il percorso su Google Maps e il messaggio «Sto arrivando» parte su WhatsApp con un tocco. Imposti zona servita, diritto di chiamata e tempo tra le visite, e i clienti ti chiedono la visita a casa dall'app FurrFinder. <a href="/veterinario-a-domicilio.html">Vetroom per il veterinario a domicilio</a>.</p>
+            </div>
+          </details>
+
+          <details>
+            <summary>
+              <span>Vetroom prende una commissione sulle visite?</span>
+              <span class="cta-hint" aria-hidden="true">Leggi</span>
+            </summary>
+            <div class="faq-a">
+              <p>No. Vetroom è gratuito e non trattiene percentuali sulle visite, nemmeno su quelle a domicilio prenotate dai clienti: il prezzo lo decidi tu e lo incassi tutto tu.</p>
+            </div>
+          </details>
 
           <details>
             <summary>
@@ -1484,6 +1566,7 @@
           <h4>Vetroom</h4>
           <a href="#cosa-fa">Cosa fa</a>
           <a href="#profilo-pet">Profilo pet</a>
+          <a href="/veterinario-a-domicilio.html">Veterinario a domicilio</a>
           <a href="#per-chi">Per chi</a>
           <a href="/guida/">Guida</a>
           <a href="#faq">FAQ</a>

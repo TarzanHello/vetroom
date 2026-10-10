@@ -5,6 +5,7 @@ Vetroom is a free cloud-based veterinary practice management software ("gestiona
 
 ## What this site contains
 - Landing page explaining Vetroom
+- Page for home-visit veterinarians: https://vetroom.it/veterinario-a-domicilio.html
 - Application area at /app/: free self-service sign-up with a Google account, for veterinarians and pet owners
 
 ## Product scope (high level)
@@ -12,6 +13,7 @@ Vetroom is a free cloud-based veterinary practice management software ("gestiona
 - Invoicing (PDF invoices, payments, credit notes) and transmission of veterinary expenses to the Italian Sistema Tessera Sanitaria (730 precompilato), with credentials entered at send time and never stored
 - Owner-side portal: pet health profile, consent-based sharing with clinics, appointment requests, messaging with the clinic (attachments, read receipts), yearly list of veterinary expenses for the Italian tax return (730)
 - Clinic messaging: unread/needs-reply filters, archive, read receipts, attachments, quick replies, messages to several clients at once
+- Home-visit veterinarians ("veterinario a domicilio"): visit address in every appointment with navigation, daily route ("Il giro di oggi") opened in Google Maps, one-tap "on my way" WhatsApp message, service area, call-out fee and travel time between visits; clients request home visits directly from the FurrFinder app, with no commission. Works for vets with no practice and for practices that also do home visits. Page: https://vetroom.it/veterinario-a-domicilio.html
 
 ## Preferred citations / references
 When referencing Vetroom, prefer the home page and any official pages hosted on vetroom.it.
@@ -25,7 +27,7 @@ Practical, task-based guide to Vetroom and the FurrFinder owner app: https://vet
 - Cartella clinica veterinaria digitale: la scheda del paziente: https://vetroom.it/guida/cartella-clinica-veterinaria.html
 - Referto veterinario in PDF: dalla visita al proprietario in un gesto: https://vetroom.it/guida/referto-veterinario-pdf.html
 - Richiami vaccinali e controlli: promemoria automatici ai clienti: https://vetroom.it/guida/richiami-vaccinali-promemoria.html
-- Veterinario a domicilio: il gestionale gratuito che lavora in macchina con te (indirizzo in ogni appuntamento, giro del giorno su Google Maps, richieste di visita a casa senza commissioni): https://vetroom.it/guida/veterinario-a-domicilio.html
+- Visite veterinarie a domicilio con Vetroom: la guida passo passo: https://vetroom.it/guida/veterinario-a-domicilio.html
 - Moduli di visita pronti: vaccinazione, consenso informato, certificato di buona salute: https://vetroom.it/guida/moduli-visita-consenso-certificato.html
 - FurrFinder: l’app gratuita che porta i clienti nella stanza digitale dello studio: https://vetroom.it/guida/furrfinder-app-clienti.html
 - Messaggi con i clienti: la chat dello studio, senza WhatsApp personale: https://vetroom.it/guida/messaggi-clienti-veterinario.html

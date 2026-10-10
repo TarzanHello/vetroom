@@ -7,6 +7,12 @@
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>https://vetroom.it/veterinario-a-domicilio.html</loc>
+    <lastmod>2026-10-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>https://vetroom.it/privacy.html</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>yearly</changefreq>
@@ -50,7 +56,7 @@
   </url>
   <url>
     <loc>https://vetroom.it/guida/agenda-veterinaria-online.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

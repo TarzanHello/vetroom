@@ -50,6 +50,7 @@ img{max-width:100%;height:auto}
 .shot img{display:block;border-radius:14px;border:1px solid var(--border);box-shadow:0 10px 30px rgba(15,23,42,.10);background:#fff}
 .shot.narrow img{max-width:min(420px,100%);margin:0 auto}
 .shot.mid img{max-width:min(680px,100%);margin:0 auto}
+.shot.phone-shot img{max-width:min(300px,100%);margin:0 auto;border-radius:26px}
 .shot figcaption{font-size:13px;color:#6b7280;text-align:center;margin-top:8px}
 .benefits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0}
 .benefits div{border:1px solid var(--border);border-radius:14px;padding:14px;background:#fafbfc}
