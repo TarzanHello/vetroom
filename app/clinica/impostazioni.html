@@ -12,15 +12,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-08b">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-10b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-08b"></script>
-  <script src="../js/app.js?v=2026-10-08b"></script>
-  <script src="../js/i18n.js?v=2026-10-08b"></script>
-  <script src="../js/layout.js?v=2026-10-08b"></script>
-  <script src="../js/clinica.js?v=2026-10-08b"></script>
+  <script src="../js/config.js?v=2026-10-10b"></script>
+  <script src="../js/app.js?v=2026-10-10b"></script>
+  <script src="../js/i18n.js?v=2026-10-10b"></script>
+  <script src="../js/layout.js?v=2026-10-10b"></script>
+  <script src="../js/clinica.js?v=2026-10-10b"></script>
   <script src="../vendor/jspdf-2.5.2.min.js"></script>
-  <script src="../js/pdf.js?v=2026-10-08b"></script>
+  <script src="../js/pdf.js?v=2026-10-10b"></script>
 </head>
 <body data-shell="clinic" data-nav="impostazioni">
 
@@ -56,6 +56,31 @@
       <div class="actions-bar"><button class="btn btn-primary" type="submit" id="save">Salva impostazioni</button></div>
       <div id="msg2" hidden></div>
     </form>
+
+    <!-- Visite a domicilio (patch 36) -->
+    <section class="panel" id="homePanel" hidden style="margin-top:12px">
+      <h2>Visite a domicilio</h2>
+      <label class="check" id="hmOnBox"><input type="checkbox" id="hmOn"> <span>Faccio visite a domicilio</span></label>
+      <p class="hint-small" id="hmOnlyHint" hidden style="margin-top:0">Lavori a domicilio: in agenda ogni appuntamento ha l'indirizzo della visita, e nella pagina Oggi trovi il giro della giornata con la navigazione.</p>
+      <div id="hmFields">
+        <div class="grid">
+          <div class="s12"><label for="hmArea">Zona servita</label>
+            <input type="text" id="hmArea" maxlength="300" placeholder="Es. Roma Sud, EUR, Ostia, Acilia, Pomezia"></div>
+          <div class="s4"><label for="hmFee">Diritto di chiamata (€)</label>
+            <input type="number" id="hmFee" min="0" max="9999" step="0.5" inputmode="decimal" placeholder="Es. 20"></div>
+          <div class="s8"><label for="hmTravel">Tempo da tenere libero tra due visite</label>
+            <select id="hmTravel">
+              <option value="0">Nessuno</option><option value="10">10 minuti</option><option value="15">15 minuti</option>
+              <option value="20">20 minuti</option><option value="30">30 minuti</option><option value="45">45 minuti</option><option value="60">1 ora</option>
+            </select></div>
+          <div class="s12"><label for="hmNotes">Note per i clienti (facoltative)</label>
+            <textarea id="hmNotes" rows="3" maxlength="600" placeholder="Es. Tieni pronto il libretto sanitario. Per le urgenze serali chiama il 333…"></textarea></div>
+        </div>
+        <p class="hint-small">Zona, diritto di chiamata e note li vedono i tuoi clienti su FurrFinder quando chiedono una visita a casa. Il tempo tra due visite serve per lo spostamento: negli orari prenotabili online resta libero prima e dopo ogni appuntamento.</p>
+      </div>
+      <div class="actions-bar" style="margin-top:10px"><button class="btn btn-primary btn-small" type="button" id="hmSave">Salva</button></div>
+      <div id="hmMsg" hidden></div>
+    </section>
 
     <section class="panel" id="stylePanel" hidden style="margin-top:12px">
       <h2>Stile del referto</h2>
@@ -193,6 +218,46 @@
       VR.show(VR.$('#readonly'));
       [...form.elements].forEach((el) => el.disabled = true);
       document.querySelectorAll('#images input, #images button').forEach((el) => el.disabled = true);
+    }
+
+    // ---------- Visite a domicilio (compare solo dopo la patch 36) ----------
+    if ('home_visits' in clinic) {
+      const homeOnly = clinic.kind === 'domicilio';
+      const on = VR.$('#hmOn');
+      on.checked = homeOnly || !!clinic.home_visits;
+      if (homeOnly) { VR.hide(VR.$('#hmOnBox')); VR.show(VR.$('#hmOnlyHint')); }
+      VR.$('#hmArea').value = clinic.home_area || '';
+      VR.$('#hmFee').value = clinic.home_fee ?? '';
+      VR.$('#hmTravel').value = String(clinic.home_travel_min || 0);
+      if (![...VR.$('#hmTravel').options].some((o) => o.value === VR.$('#hmTravel').value)) {
+        VR.$('#hmTravel').insertAdjacentHTML('beforeend', `<option value="${clinic.home_travel_min}">${clinic.home_travel_min} minuti</option>`);
+        VR.$('#hmTravel').value = String(clinic.home_travel_min);
+      }
+      VR.$('#hmNotes').value = clinic.home_notes || '';
+      const syncHome = () => { (on.checked ? VR.show : VR.hide)(VR.$('#hmFields')); };
+      on.addEventListener('change', syncHome); syncHome();
+      if (!isAdmin) document.querySelectorAll('#homePanel input, #homePanel select, #homePanel textarea, #homePanel button').forEach((el) => { el.disabled = true; });
+      VR.show(VR.$('#homePanel'));
+      VR.$('#hmSave').addEventListener('click', async (ev) => {
+        const b = ev.currentTarget, hm = VR.$('#hmMsg');
+        VR.hide(hm);
+        const feeTxt = VR.$('#hmFee').value.trim().replace(',', '.');
+        const fee = feeTxt === '' ? null : Number(feeTxt);
+        if (fee !== null && (!isFinite(fee) || fee < 0 || fee >= 10000)) { VR.say(hm, 'Controlla il diritto di chiamata: scrivi solo la cifra, per esempio 20.', 'error'); return; }
+        const v = {
+          home_visits: homeOnly || on.checked,
+          home_area: VR.$('#hmArea').value.trim() || null,
+          home_fee: fee,
+          home_travel_min: Number(VR.$('#hmTravel').value) || 0,
+          home_notes: VR.$('#hmNotes').value.trim() || null
+        };
+        b.disabled = true;
+        const { error: e } = await VR.sb.from('clinics').update(v).eq('id', ctx.clinicId);
+        b.disabled = false;
+        if (e) { VR.say(hm, VR.errorText(e), 'error'); return; }
+        Object.assign(clinic, v);
+        VR.say(hm, v.home_visits ? 'Salvato. In agenda ora puoi segnare le visite a domicilio con il loro indirizzo.' : 'Salvato.', 'ok');
+      });
     }
 
     // ---------- Stile del referto ----------

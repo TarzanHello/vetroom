@@ -25,11 +25,16 @@
     if (!profile.is_staff) { VR.go('benvenuto.html'); throw new Error('redirect'); }
 
     // patch 26: codice ST-, titolare, tipo e modello di fatturazione (con ripiego se non ancora installata)
+    // patch 36: visite a domicilio. Si prova dalla versione più recente alla più vecchia.
     const base = 'name, affiliation_code, status, suspended_reason, terms_accepted_at, terms_version';
     const q = (cols) => VR.sb.from('clinic_members').select(`role, clinic_id, ${cols.includes('bills_own') ? 'bills_own, ' : ''}clinics(${cols.replace('bills_own, ', '')})`)
       .eq('user_id', session.user.id).eq('status', 'active');
-    let { data: rows, error } = await q('bills_own, ' + base + ', code, kind, billing_mode, code_owner_id');
-    if (error && /column|does not exist|schema cache/i.test(error.message || '')) ({ data: rows, error } = await q(base));
+    const p26 = 'bills_own, ' + base + ', code, kind, billing_mode, code_owner_id';
+    let rows, error;
+    for (const cols of [p26 + ', home_visits, home_travel_min', p26, base]) {
+      ({ data: rows, error } = await q(cols));
+      if (!error || !/column|does not exist|schema cache/i.test(error.message || '')) break;
+    }
     if (error) throw error;
     if (!rows || rows.length === 0) {
       // nessuna struttura (o richiesta di adesione in attesa): si sceglie dove lavorare
@@ -57,7 +62,9 @@
       clinicId: m.clinic_id, role: m.role, clinic: m.clinics || {},
       isVet: m.role === 'admin' || m.role === 'vet',
       isOwner, billsOwn: !!m.bills_own,
-      billingMode: m.clinics?.billing_mode || 'struttura'
+      billingMode: m.clinics?.billing_mode || 'struttura',
+      isHome: VR.isHomeClinic(m.clinics),          // fa visite a domicilio (anche se ha uno studio)
+      homeOnly: m.clinics?.kind === 'domicilio'    // lavora solo a domicilio, senza studio
     };
     return VR.ctx;
   };
@@ -174,9 +181,33 @@
   VR.mailLink = (email, subject, text) => `mailto:${encodeURIComponent(email || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
   VR.OWNER_PORTAL = 'https://vetroom.it/app/?per=proprietario';
   VR.fmtWhen = (d) => new Date(d).toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-  VR.apptMessage = ({ pet, startsAt, clinic }) =>
-    `Buongiorno, le ricordiamo l'appuntamento${pet ? ' per ' + pet : ''} ${VR.fmtWhen(startsAt).replace(',', ' alle')} presso ${clinic}. ` +
-    `Se non potesse venire, ci avvisi rispondendo a questo messaggio. Grazie!`;
+  VR.apptMessage = ({ pet, startsAt, clinic, atHome = false, address = '' }) => atHome
+    ? `Buongiorno, le ricordiamo la visita a domicilio${pet ? ' per ' + pet : ''} ${VR.fmtWhen(startsAt).replace(',', ' alle')}${address ? ' in ' + address : ''}. ` +
+      `Se ci fossero cambiamenti, ci avvisi rispondendo a questo messaggio. Grazie!\n${clinic}`
+    : `Buongiorno, le ricordiamo l'appuntamento${pet ? ' per ' + pet : ''} ${VR.fmtWhen(startsAt).replace(',', ' alle')} presso ${clinic}. ` +
+      `Se non potesse venire, ci avvisi rispondendo a questo messaggio. Grazie!`;
+
+  // ---------- Visite a domicilio (patch 36) ----------
+  VR.isHomeClinic = (c) => !!(c && (c.home_visits || c.kind === 'domicilio'));
+  // Indirizzo del proprietario su una riga: "Via Roma 3, 00100 Roma (RM)"
+  VR.addressLine = (c) => {
+    if (!c) return '';
+    const street = [c.address_street, c.address_number].filter(Boolean).join(' ');
+    const city = [c.address_zip, c.address_city].filter(Boolean).join(' ') + (c.address_province ? ` (${c.address_province})` : '');
+    return [street, city.trim()].filter(Boolean).join(', ');
+  };
+  // Navigazione con Google Maps (sul telefono apre l'app Maps; si può scegliere anche Waze dal link "Apri con")
+  VR.navLink = (addr) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}&travelmode=driving`;
+  // Percorso con più tappe, partendo dalla posizione attuale. Google accetta al massimo 9 tappe intermedie.
+  VR.routeLink = (addrs) => {
+    const list = addrs.filter(Boolean).slice(0, 10);
+    if (!list.length) return '';
+    const dest = list[list.length - 1], way = list.slice(0, -1);
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}` +
+      (way.length ? `&waypoints=${encodeURIComponent(way.join('|'))}` : '') + '&travelmode=driving';
+  };
+  VR.onMyWayMessage = ({ pet, minutes, clinic }) =>
+    `Buongiorno, sono in arrivo per la visita${pet ? ' di ' + pet : ''}: ${minutes ? 'sarò da lei tra circa ' + minutes + ' minuti' : 'sarò da lei a breve'}. A tra poco!\n${clinic}`;
   VR.reminderMessage = ({ pet, title, due, clinic }) =>
     `Buongiorno, per ${pet} è in scadenza: ${title} (entro il ${new Date(due + 'T00:00:00').toLocaleDateString('it-IT')}). ` +
     `Può prenotare rispondendo a questo messaggio oppure dal libretto FurrFinder: ${VR.OWNER_PORTAL}\n${clinic}`;

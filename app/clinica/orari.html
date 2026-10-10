@@ -12,20 +12,20 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-08b">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-10b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-08b"></script>
-  <script src="../js/app.js?v=2026-10-08b"></script>
-  <script src="../js/i18n.js?v=2026-10-08b"></script>
-  <script src="../js/layout.js?v=2026-10-08b"></script>
-  <script src="../js/clinica.js?v=2026-10-08b"></script>
+  <script src="../js/config.js?v=2026-10-10b"></script>
+  <script src="../js/app.js?v=2026-10-10b"></script>
+  <script src="../js/i18n.js?v=2026-10-10b"></script>
+  <script src="../js/layout.js?v=2026-10-10b"></script>
+  <script src="../js/clinica.js?v=2026-10-10b"></script>
 </head>
 <body data-shell="clinic" data-nav="agenda">
 
   <main class="wrap">
     <a class="back" href="agenda.html">← Torna all'agenda</a>
-    <h1>Orari di apertura</h1>
-    <p class="muted">Servono all'agenda per mostrare le fasce aperte e, più avanti, ai proprietari per chiedere un appuntamento negli orari liberi.</p>
+    <h1 id="title">Orari di apertura</h1>
+    <p class="muted" id="intro">Servono all'agenda per mostrare le fasce aperte e ai proprietari per chiedere un appuntamento negli orari liberi.</p>
 
     <p class="loader" id="loading">Caricamento…</p>
     <div id="msg" hidden></div>
@@ -58,6 +58,11 @@
       return;
     }
 
+    if (ctx.homeOnly) {
+      VR.$('#title').textContent = 'Orari delle visite';
+      VR.$('#intro').textContent = 'Le fasce in cui fai visite a domicilio. Le vedi in agenda e i tuoi clienti su FurrFinder possono chiedere una visita negli orari liberi.';
+      document.title = 'Orari delle visite – Vetroom';
+    }
     const DAYS = [[1,'Lunedì'],[2,'Martedì'],[3,'Mercoledì'],[4,'Giovedì'],[5,'Venerdì'],[6,'Sabato'],[0,'Domenica']];
     const { data, error } = await VR.sb.from('availabilities').select('*').eq('clinic_id', ctx.clinicId);
     VR.hide(loading);

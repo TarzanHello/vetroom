@@ -12,23 +12,23 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-08b">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-10b">
   <script src="../vendor/supabase-2.117.2.js"></script>
   <script src="../vendor/qrcode-generator.js"></script>
   <script src="../vendor/jspdf-2.5.2.min.js"></script>
-  <script src="../js/config.js?v=2026-10-08b"></script>
-  <script src="../js/app.js?v=2026-10-08b"></script>
-  <script src="../js/i18n.js?v=2026-10-08b"></script>
-  <script src="../js/layout.js?v=2026-10-08b"></script>
-  <script src="../js/clinica.js?v=2026-10-08b"></script>
-  <script src="../js/demo.js?v=2026-10-08b"></script>
-  <script src="../js/pdf.js?v=2026-10-08b"></script>
+  <script src="../js/config.js?v=2026-10-10b"></script>
+  <script src="../js/app.js?v=2026-10-10b"></script>
+  <script src="../js/i18n.js?v=2026-10-10b"></script>
+  <script src="../js/layout.js?v=2026-10-10b"></script>
+  <script src="../js/clinica.js?v=2026-10-10b"></script>
+  <script src="../js/demo.js?v=2026-10-10b"></script>
+  <script src="../js/pdf.js?v=2026-10-10b"></script>
 </head>
 <body data-shell="clinic" data-nav="home">
   <main class="wrap">
     <div class="page-head">
       <div>
-        <h1>Oggi in studio</h1>
+        <h1 id="dayTitle">Oggi in studio</h1>
         <p class="muted" id="today" style="margin:0"></p>
       </div>
       <select id="clinicSwitch" aria-label="Scegli la clinica" hidden style="width:auto"></select>
@@ -59,6 +59,16 @@
 
       <!-- Adesso: il paziente in corso o il prossimo -->
       <section class="panel now-card" id="nowCard" hidden></section>
+
+      <!-- Il giro di oggi: visite a domicilio in ordine, con la navigazione -->
+      <section class="panel" id="routePanel" hidden>
+        <div class="page-head" style="margin-bottom:8px">
+          <h2 style="margin:0">Il giro di oggi <span class="muted" id="routeSummary" style="font-size:.85rem;font-weight:600"></span></h2>
+          <a class="btn btn-primary btn-small" id="routeAll" href="#" target="_blank" rel="noopener">Percorso su Google Maps</a>
+        </div>
+        <ol class="route-list" id="routeList"></ol>
+        <p class="hint-small" id="routeHint" style="margin:.6rem 0 0"></p>
+      </section>
 
       <!-- Da fare: tutto quello che aspetta un'azione, in un solo posto -->
       <section class="panel" id="todoPanel" hidden>
@@ -162,11 +172,11 @@
 
     // ---------- Caricamento (tutto in parallelo) ----------
     const [todayRes, reqRes, tomRes, remRes, openVisRes, ownersRes, petsRes, clinicRes, hoursRes, teamRes, demoRes, appRes] = await Promise.all([
-      VR.sb.from('appointments').select('*, pets(id, name, species, notes), clients(first_name, last_name, phone)')
+      VR.sb.from('appointments').select('*, pets(id, name, species, notes), clients(first_name, last_name, phone, address_street, address_number, address_zip, address_city, address_province)')
         .eq('clinic_id', cid).gte('starts_at', dayStart.toISOString()).lt('starts_at', dayEnd.toISOString()).order('starts_at'),
-      VR.sb.from('appointments').select('*, pets(id, name), clients(first_name, last_name, phone)')
+      VR.sb.from('appointments').select('*, pets(id, name), clients(first_name, last_name, phone, address_street, address_number, address_zip, address_city, address_province)')
         .eq('clinic_id', cid).eq('status', 'requested').gte('starts_at', new Date().toISOString()).order('starts_at').limit(30),
-      VR.sb.from('appointments').select('*, pets(id, name), clients(first_name, last_name, phone)')
+      VR.sb.from('appointments').select('*, pets(id, name), clients(first_name, last_name, phone, address_street, address_number, address_zip, address_city, address_province)')
         .eq('clinic_id', cid).in('status', ['confirmed', 'requested']).gte('starts_at', dayEnd.toISOString()).lt('starts_at', tomEnd.toISOString()).order('starts_at'),
       VR.sb.from('reminders').select('*, pets(id, name), clients(first_name, last_name, phone, email)')
         .eq('clinic_id', cid).eq('status', 'open').lte('due_date', inWeek.toLocaleDateString('sv-SE')).order('due_date').limit(50),
@@ -193,6 +203,27 @@
     const ownerOf = (a) => (a.clients ? VR.clientName(a.clients) : '');
     const whoOf = (a) => a.pets?.name || (a.notes_internal || 'Appuntamento').split('\n')[0].slice(0, 40);
 
+    // ---------- Visite a domicilio (patch 36) ----------
+    // Chi lavora solo a domicilio: ogni appuntamento è una visita a casa (anche quelli creati prima della patch)
+    const isHomeAppt = (a) => ctx.isHome && (!!a.at_home || ctx.homeOnly);
+    const addrOf = (a) => (isHomeAppt(a) ? (a.visit_address || VR.addressLine(a.clients)) : '');
+    const remind = (a) => VR.apptMessage({ pet: a.pets?.name, startsAt: a.starts_at, clinic: clinicName, atHome: isHomeAppt(a), address: addrOf(a) });
+    // "Sto arrivando": un tocco e parte il messaggio su WhatsApp con i minuti
+    const arriveMenu = (a, small = false) => {
+      const phone = a.clients?.phone;
+      if (!phone || !VR.waPhone(phone)) return '';
+      const link = (m) => VR.esc(VR.waLink(phone, VR.onMyWayMessage({ pet: a.pets?.name, minutes: m, clinic: clinicName })));
+      return `<details class="arrive"><summary class="btn btn-ghost${small ? ' btn-small' : ''}">Sto arrivando</summary>
+        <div class="arrive-menu">${[10, 20, 30].map((m) => `<a target="_blank" rel="noopener" href="${link(m)}">Tra circa ${m} minuti</a>`).join('')}<a target="_blank" rel="noopener" href="${link(0)}">A breve</a></div></details>`;
+    };
+    document.addEventListener('click', (ev) => {
+      document.querySelectorAll('details.arrive[open]').forEach((d) => { if (!d.contains(ev.target) || ev.target.closest('.arrive-menu a')) d.open = false; });
+    });
+    if (ctx.homeOnly) {
+      VR.$('#dayTitle').textContent = 'Oggi a domicilio';
+      const q = document.querySelector('.wb-q'); if (q) q.textContent = 'Nuovo cliente? ';
+    }
+
     // ---------- Adesso: in corso o prossimo ----------
     const renderNow = () => {
       const now = Date.now();
@@ -206,7 +237,10 @@
       const lbl = cur ? 'In corso' : mins <= 60 ? `Tra ${mins} min` : `Prossimo alle ${hm(a.starts_at)}`;
       const phone = a.clients?.phone;
       const acts = [];
-      if (ctx.isVet && a.pets) acts.push(`<a class="btn btn-primary" href="visita.html?animale=${a.pets.id}&apt=${a.id}&tipo=${encodeURIComponent(a.type || '')}">${VR.icon('add_visit')}Inizia visita</a>`);
+      const addr = addrOf(a);
+      if (addr && !cur) acts.push(`<a class="btn btn-primary" target="_blank" rel="noopener" href="${VR.esc(VR.navLink(addr))}">Naviga</a>`);
+      if (isHomeAppt(a) && !cur) acts.push(arriveMenu(a));
+      if (ctx.isVet && a.pets) acts.push(`<a class="btn ${addr && !cur ? 'btn-ghost' : 'btn-primary'}" href="visita.html?animale=${a.pets.id}&apt=${a.id}&tipo=${encodeURIComponent(a.type || '')}">${VR.icon('add_visit')}Inizia visita</a>`);
       if (a.pets) acts.push(`<a class="btn btn-ghost" href="animale.html?id=${a.pets.id}">Scheda</a>`);
       if (phone) acts.push(`<a class="btn btn-ghost" href="${tel(phone)}">Chiama</a>`);
       if (phone && VR.waPhone(phone)) acts.push(`<a class="btn btn-ghost" target="_blank" rel="noopener" href="${VR.esc(VR.waLink(phone, ''))}">WhatsApp</a>`);
@@ -214,6 +248,7 @@
       box.innerHTML = `
         <div class="now-top"><span class="now-when ${cur ? 'is-live' : ''}">${lbl}</span><span class="muted">${hm(a.starts_at)} · ${a.duration_min || 30} min${a.type ? ' · ' + VR.esc(a.type) : ''}</span></div>
         <div class="now-who"><strong>${VR.esc(whoOf(a))}</strong>${a.pets?.species ? ` <span class="muted">${VR.esc(a.pets.species)}</span>` : ''}${ownerOf(a) ? `<span class="now-owner">${VR.esc(ownerOf(a))}${phone ? ' · ' + VR.esc(phone) : ''}</span>` : ''}</div>
+        ${isHomeAppt(a) ? `<div class="now-addr">${addr ? VR.esc(addr) : 'Manca l\'indirizzo della visita'}<small>${addr ? 'Visita a domicilio' : `<a href="agenda.html?apt=${a.id}">Aggiungilo nell'appuntamento</a>`}</small></div>` : ''}
         ${a.pets?.notes ? `<div class="pet-alert"><b>Da sapere:</b> ${VR.esc(a.pets.notes)}</div>` : ''}
         ${a.status === 'requested' ? '<p class="hint-small" style="margin:.4rem 0 0">Richiesta online non ancora confermata.</p>' : ''}
         <div class="actions-bar now-acts">${acts.join('')}</div>`;
@@ -226,7 +261,7 @@
       const { error } = await VR.sb.from('appointments').update({ status: 'no_show' }).eq('id', b.dataset.noshow);
       if (error) { b.disabled = false; VR.say(msg, VR.errorText(error), 'error'); return; }
       const a = today.find((x) => x.id === b.dataset.noshow); if (a) a.status = 'no_show';
-      renderNow(); renderToday();
+      renderNow(); renderToday(); renderRoute();
     });
 
     // ---------- Agenda di oggi ----------
@@ -239,17 +274,55 @@
         const past = new Date(a.starts_at).getTime() + (a.duration_min || 30) * 60000 < now;
         const acts = [];
         if (ctx.isVet && a.pets && live(a)) acts.push(`<a class="btn btn-primary btn-small" href="visita.html?animale=${a.pets.id}&apt=${a.id}&tipo=${encodeURIComponent(a.type || '')}">Inizia visita</a>`);
-        if (a.clients?.phone && live(a) && !past) acts.push(`<a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="${VR.esc(VR.waLink(a.clients.phone, VR.apptMessage({ pet: a.pets?.name, startsAt: a.starts_at, clinic: clinicName })))}">WhatsApp</a>`);
+        const addr = addrOf(a);
+        if (addr && live(a) && !past) acts.push(`<a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="${VR.esc(VR.navLink(addr))}">Naviga</a>`);
+        if (a.clients?.phone && live(a) && !past) acts.push(`<a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="${VR.esc(VR.waLink(a.clients.phone, remind(a)))}">WhatsApp</a>`);
         return `<div class="appt-card st-${a.status} ${past && live(a) ? 'is-past' : ''}">
           <a class="appt-link" href="agenda.html?apt=${a.id}"><span class="appt-time">${hm(a.starts_at)}</span>
-          <div class="appt-main"><strong>${VR.esc(whoOf(a))}</strong><span>${VR.esc([ownerOf(a), a.type, STATUS[a.status]].filter(Boolean).join(' · '))}</span></div></a>
+          <div class="appt-main"><strong>${VR.esc(whoOf(a))}</strong><span>${VR.esc([ownerOf(a), a.type, STATUS[a.status]].filter(Boolean).join(' · '))}</span>${isHomeAppt(a) ? `<span class="home-addr">${ctx.homeOnly ? '' : '⌂ '}${VR.esc(addrOf(a) || 'a domicilio, indirizzo da aggiungere')}</span>` : ''}</div></a>
           ${acts.length ? `<div class="appt-acts">${acts.join('')}</div>` : ''}
         </div>`;
       }).join('');
       (today.length ? VR.hide : VR.show)(VR.$('#noToday'));
     };
-    renderNow(); renderToday();
-    setInterval(() => { renderNow(); }, 60000);
+    const renderRoute = () => {
+      const box = VR.$('#routePanel');
+      const stops = today.filter((a) => isHomeAppt(a) && !['cancelled', 'no_show'].includes(a.status));
+      // Il giro serve da due visite a domicilio in su (con una sola basta "Naviga")
+      if (stops.length < 2) { VR.hide(box); return; }
+      const now = Date.now();
+      const endOf = (a) => new Date(a.starts_at).getTime() + (a.duration_min || 30) * 60000;
+      const todo = stops.filter((a) => a.status !== 'done' && endOf(a) > now);
+      const withAddr = todo.filter((a) => addrOf(a));
+      VR.$('#routeSummary').textContent = `· ${stops.length} visite${todo.length < stops.length ? `, ${todo.length} da fare` : ''}`;
+      VR.$('#routeList').innerHTML = stops.map((a, i) => {
+        const addr = addrOf(a), past = a.status === 'done' || endOf(a) <= now;
+        const phone = a.clients?.phone;
+        const acts = [];
+        if (!past && addr) acts.push(`<a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="${VR.esc(VR.navLink(addr))}">Naviga</a>`);
+        if (!past) acts.push(arriveMenu(a, true));
+        if (!past && phone) acts.push(`<a class="btn btn-ghost btn-small" href="${tel(phone)}">Chiama</a>`);
+        if (!past && ctx.isVet && a.pets) acts.push(`<a class="btn btn-ghost btn-small" href="visita.html?animale=${a.pets.id}&apt=${a.id}&tipo=${encodeURIComponent(a.type || '')}">Visita</a>`);
+        return `<li class="route-stop ${past ? 'is-past' : ''}">
+          <span class="route-num">${i + 1}</span>
+          <div class="route-main"><strong>${hm(a.starts_at)} · ${VR.esc(whoOf(a))}${a.status === 'requested' ? ' <span class="muted">(da confermare)</span>' : ''}</strong>
+            <span>${addr ? VR.esc(addr) : `<a class="late" href="agenda.html?apt=${a.id}">Manca l'indirizzo: aggiungilo</a>`}</span>
+            ${ownerOf(a) ? `<span>${VR.esc(ownerOf(a))}${phone ? ' · ' + VR.esc(phone) : ''}</span>` : ''}</div>
+          <div class="route-acts">${acts.join('')}</div>
+        </li>`;
+      }).join('');
+      const all = VR.$('#routeAll');
+      if (withAddr.length >= 1) { all.href = VR.routeLink(withAddr.map(addrOf)); VR.show(all); } else VR.hide(all);
+      const notes = [];
+      if (withAddr.length) notes.push('Il percorso parte dalla tua posizione e segue l\'ordine degli orari.');
+      if (withAddr.length > 10) notes.push('Google Maps accetta fino a 10 tappe: il percorso comprende le prossime 10.');
+      if (todo.length > withAddr.length) notes.push('Le visite senza indirizzo non sono nel percorso.');
+      if (!todo.length) notes.push('Giro finito per oggi.');
+      VR.$('#routeHint').textContent = notes.join(' ');
+      VR.show(box);
+    };
+    renderNow(); renderToday(); renderRoute();
+    setInterval(() => { renderNow(); renderRoute(); }, 60000);
 
     // ---------- Da fare ----------
     const NKEY = 'vetroom_avvisati_' + cid;
@@ -266,7 +339,7 @@
         <div class="todo-row" data-kind="req" data-id="${a.id}">
           <span class="todo-tag tag-req">Richiesta</span>
           <div class="todo-main"><strong>${VR.esc(new Date(a.starts_at).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))} · ${VR.esc(a.pets?.name || 'senza paziente')}</strong>
-            <span>${VR.esc([ownerOf(a), a.type, a.notes_owner ? '“' + a.notes_owner + '”' : ''].filter(Boolean).join(' · '))}</span></div>
+            <span>${VR.esc([ownerOf(a), a.type, isHomeAppt(a) ? 'a domicilio' + (addrOf(a) ? ': ' + addrOf(a) : '') : '', a.notes_owner ? '“' + a.notes_owner + '”' : ''].filter(Boolean).join(' · '))}</span></div>
           <div class="todo-acts"><button class="btn btn-primary btn-small" type="button" data-ok>Approva</button><button class="btn btn-danger btn-small" type="button" data-no>Rifiuta</button></div>
         </div>`));
       const tomTodo = tom.filter((a) => !notified.has(a.id));
@@ -274,7 +347,7 @@
         <div class="todo-row" data-kind="tom" data-id="${a.id}">
           <span class="todo-tag tag-tom">Domani</span>
           <div class="todo-main"><strong>${hm(a.starts_at)} · ${VR.esc(whoOf(a))}</strong><span>${VR.esc(ownerOf(a))} · ricordagli l'appuntamento</span></div>
-          <div class="todo-acts"><a class="btn btn-ghost btn-small" data-wa target="_blank" rel="noopener" href="${VR.esc(VR.waLink(a.clients.phone, VR.apptMessage({ pet: a.pets?.name, startsAt: a.starts_at, clinic: clinicName })))}">WhatsApp</a><button class="btn btn-ghost btn-small" type="button" data-skip title="Togli dalla lista">✓</button></div>
+          <div class="todo-acts"><a class="btn btn-ghost btn-small" data-wa target="_blank" rel="noopener" href="${VR.esc(VR.waLink(a.clients.phone, remind(a)))}">WhatsApp</a><button class="btn btn-ghost btn-small" type="button" data-skip title="Togli dalla lista">✓</button></div>
         </div>`));
       rems.forEach((r) => {
         const late = r.due_date < todayStr;
@@ -333,11 +406,11 @@
         const a = reqs.find((x) => x.id === id);
         reqs = reqs.filter((x) => x.id !== id);
         const t = today.find((x) => x.id === id); if (t) t.status = ok ? 'confirmed' : 'cancelled';
-        renderTodo(); renderNow(); renderToday();
+        renderTodo(); renderNow(); renderToday(); renderRoute();
         // Dopo l'approvazione: conferma al proprietario con un tocco
         if (ok && a?.clients?.phone && VR.waPhone(a.clients.phone)) {
           msg.className = 'notice notice-ok';
-          msg.innerHTML = `Richiesta approvata. <a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="${VR.esc(VR.waLink(a.clients.phone, VR.apptMessage({ pet: a.pets?.name, startsAt: a.starts_at, clinic: clinicName })))}">Conferma su WhatsApp</a>`;
+          msg.innerHTML = `Richiesta approvata. <a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="${VR.esc(VR.waLink(a.clients.phone, remind(a)))}">Conferma su WhatsApp</a>`;
           VR.show(msg);
         }
       }
@@ -365,7 +438,8 @@
     const clinic = clinicRes.data || {};
     const steps = [
       { done: !!(clinic.header_address || clinic.header_phone || clinic.logo_path), t: 'Completa l\'intestazione dei referti', h: 'impostazioni.html' },
-      { done: (hoursRes.count || 0) > 0, t: 'Imposta gli orari di apertura', h: 'orari.html' },
+      { done: (hoursRes.count || 0) > 0, t: ctx.homeOnly ? 'Imposta gli orari delle visite' : 'Imposta gli orari di apertura', h: 'orari.html' },
+      ...(ctx.isHome && 'home_area' in clinic ? [{ done: !!(clinic.home_area || clinic.home_fee != null), t: 'Indica la zona servita e il diritto di chiamata', h: 'impostazioni.html#homePanel', optional: true }] : []),
       { done: (ownersRes.count || 0) > 0, t: 'Registra il primo proprietario (o importa il tuo archivio da Excel)', h: (ownersRes.count || 0) > 0 ? 'clienti.html' : 'importa.html' },
       { done: (teamRes.count || 0) > 1, t: 'Invita colleghi o segreteria (facoltativo)', h: 'team.html', optional: true },
       { done: (appRes.count || 0) > 0, t: 'Porta i primi clienti su FurrFinder: tornano da soli e chiamano di meno', h: 'furrfinder.html', optional: true }

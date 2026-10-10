@@ -25,6 +25,7 @@ Practical, task-based guide to Vetroom and the FurrFinder owner app: https://vet
 - Cartella clinica veterinaria digitale: la scheda del paziente: https://vetroom.it/guida/cartella-clinica-veterinaria.html
 - Referto veterinario in PDF: dalla visita al proprietario in un gesto: https://vetroom.it/guida/referto-veterinario-pdf.html
 - Richiami vaccinali e controlli: promemoria automatici ai clienti: https://vetroom.it/guida/richiami-vaccinali-promemoria.html
+- Veterinario a domicilio: il gestionale gratuito che lavora in macchina con te (indirizzo in ogni appuntamento, giro del giorno su Google Maps, richieste di visita a casa senza commissioni): https://vetroom.it/guida/veterinario-a-domicilio.html
 - Moduli di visita pronti: vaccinazione, consenso informato, certificato di buona salute: https://vetroom.it/guida/moduli-visita-consenso-certificato.html
 - FurrFinder: l’app gratuita che porta i clienti nella stanza digitale dello studio: https://vetroom.it/guida/furrfinder-app-clienti.html
 - Messaggi con i clienti: la chat dello studio, senza WhatsApp personale: https://vetroom.it/guida/messaggi-clienti-veterinario.html

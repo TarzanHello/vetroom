@@ -1252,3 +1252,34 @@ input[type="time"] { font: inherit; padding: .55em .6em; border: 2px solid var(-
 /* ---------- Utilità ---------- */
 .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .notice-warn { background: #fef3c7; color: #92400e; }
+
+/* ---------- Visite a domicilio (patch 36) ---------- */
+.addr-row { display: flex; gap: 8px; align-items: center; }
+.addr-row input { flex: 1; min-width: 0; }
+.cal-appt.is-home { border-left-style: dashed; }
+.home-tag { font-style: normal; font-weight: 800; color: var(--teal-dark, #0f766e); }
+.home-addr { display: block; color: var(--muted); font-size: .85rem; margin-top: 2px; }
+.home-addr a { color: inherit; }
+.now-addr { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--teal-soft, #E6F4F2); color: var(--ink, #0b2545); font-weight: 600; }
+.now-addr small { display: block; font-weight: 500; color: var(--muted); }
+.arrive { position: relative; display: inline-block; }
+.arrive > summary { list-style: none; cursor: pointer; }
+.arrive > summary::-webkit-details-marker { display: none; }
+.arrive[open] > summary { background: var(--teal-soft, #E6F4F2); }
+.arrive-menu { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; display: flex; flex-direction: column; min-width: 180px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 10px 30px rgba(3,56,96,.15); }
+.arrive-menu a { padding: 8px 10px; border-radius: 8px; color: var(--ink, #0b2545); text-decoration: none; font-weight: 600; }
+.arrive-menu a:hover { background: #f3f4f6; }
+.route-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.route-stop { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #f9fafb; }
+.route-stop.is-past { opacity: .6; }
+.route-num { flex: 0 0 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: .85rem; color: #fff; background: var(--teal, #34AEA7); }
+.route-stop.is-past .route-num { background: #8193A3; }
+.route-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.route-main strong { color: var(--ink, #0b2545); }
+.route-main span { color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
+.route-main .late { color: #b45309; }
+.route-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 560px) {
+  .route-stop { flex-wrap: wrap; }
+  .route-acts { width: 100%; justify-content: flex-start; padding-left: 38px; }
+}

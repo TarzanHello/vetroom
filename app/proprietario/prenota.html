@@ -12,14 +12,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="FurrFinder">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-08b">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-10b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-08b"></script>
-  <script src="../js/app.js?v=2026-10-08b"></script>
-  <script src="../js/i18n.js?v=2026-10-08b"></script>
-  <script src="../js/layout.js?v=2026-10-08b"></script>
-  <script src="../js/clinica.js?v=2026-10-08b"></script>
-  <script src="../js/proprietario.js?v=2026-10-08b"></script>
+  <script src="../js/config.js?v=2026-10-10b"></script>
+  <script src="../js/app.js?v=2026-10-10b"></script>
+  <script src="../js/i18n.js?v=2026-10-10b"></script>
+  <script src="../js/layout.js?v=2026-10-10b"></script>
+  <script src="../js/clinica.js?v=2026-10-10b"></script>
+  <script src="../js/proprietario.js?v=2026-10-10b"></script>
 </head>
 <body data-shell="owner" data-nav="cliniche">
 
@@ -31,8 +31,23 @@
     <div id="msg" hidden></div>
 
     <div id="page" hidden>
+      <!-- Visita a domicilio (patch 36) -->
+      <section class="panel" id="homePanel" hidden>
+        <h2 id="homeTitle">Dove fare la visita</h2>
+        <div class="seg seg-big" role="group" aria-label="Dove" id="placeSeg" hidden>
+          <button type="button" data-place="studio" aria-pressed="true">In clinica</button>
+          <button type="button" data-place="home" aria-pressed="false">A casa mia</button>
+        </div>
+        <div id="homeInfo" class="notice notice-info" style="margin-top:.8rem" hidden></div>
+        <div id="addrBox" hidden style="margin-top:.8rem">
+          <label for="addr">Indirizzo della visita</label>
+          <input type="text" id="addr" maxlength="300" autocomplete="street-address" placeholder="Via, civico, città · citofono, piano">
+          <p class="hint-small" style="margin:.35rem 0 0">Aggiungi citofono, piano o come arrivare: aiuta il veterinario a trovarti.</p>
+        </div>
+      </section>
+
       <section class="panel">
-        <h2>1. Scegli un orario</h2>
+        <h2 id="slotTitle">1. Scegli un orario</h2>
         <div id="days"></div>
         <div class="actions-bar" style="margin-top:1rem">
           <button class="btn btn-ghost btn-small" type="button" id="more" hidden>Mostra altri giorni</button>
@@ -40,7 +55,7 @@
       </section>
 
       <form class="panel" id="form" hidden novalidate>
-        <h2>2. Conferma la richiesta</h2>
+        <h2 id="confirmTitle">2. Conferma la richiesta</h2>
         <p id="chosen" class="notice notice-info" style="margin-top:0"></p>
         <div class="grid">
           <div><label for="type">Motivo</label>
@@ -48,14 +63,14 @@
           <div class="s12"><label for="note">Messaggio per la clinica (facoltativo)</label>
             <textarea id="note" rows="3" maxlength="600" placeholder="Es. da due giorni mangia poco"></textarea></div>
         </div>
-        <p class="hint-small">La clinica riceverà la richiesta e la confermerà. In caso di urgenza, telefona direttamente.</p>
+        <p class="hint-small" id="sendHint">La clinica riceverà la richiesta e la confermerà. In caso di urgenza, telefona direttamente.</p>
         <div class="actions-bar"><button class="btn btn-primary" type="submit" id="send">Invia richiesta</button></div>
         <div id="msg2" hidden></div>
       </form>
 
       <div id="done" hidden class="panel">
         <h2>Richiesta inviata</h2>
-        <p>La clinica vedrà la tua richiesta nella sua agenda. Troverai lo stato dell'appuntamento nella pagina <a href="./">I miei animali</a>.</p>
+        <p><span id="doneWho">La clinica</span> vedrà la tua richiesta nella sua agenda. Troverai lo stato dell'appuntamento nella pagina <a href="./">I miei animali</a>.</p>
       </div>
     </div>
   </main>
@@ -73,18 +88,23 @@
     const fail = (t) => { VR.hide(loading); VR.say(msg, t, 'error'); };
     if (!petId || !clinicId) return fail('Apri questa pagina dalla scheda del tuo animale.');
 
-    const [{ data: pet }, { data: clinics }, { data: acc }, { data: hours }] = await Promise.all([
+    const [{ data: pet }, { data: clinics }, { data: acc }, { data: hours }, homeRes] = await Promise.all([
       VR.sb.from('pets').select('id, name').eq('id', petId).eq('owner_user_id', ctx.uid).maybeSingle(),
       VR.sb.rpc('owner_pet_clinics', { p_pet: petId }),
       VR.sb.from('pet_access').select('client_id, status').eq('pet_id', petId).eq('clinic_id', clinicId).maybeSingle(),
-      VR.sb.from('availabilities').select('*').eq('clinic_id', clinicId)
+      VR.sb.from('availabilities').select('*').eq('clinic_id', clinicId),
+      VR.sb.rpc('clinic_home_info', { p_clinic: clinicId })   // patch 36: senza, si prenota come prima
     ]);
+    const home = (!homeRes.error && homeRes.data && homeRes.data[0]) || null;
+    const homeOn = !!(home && home.home_visits);
+    const homeOnly = !!(home && home.kind === 'domicilio');
     const clinic = (clinics || []).find((c) => c.clinic_id === clinicId);
     if (!pet) return fail('Animale non trovato.');
     if (!clinic || clinic.status !== 'active' || acc?.status !== 'active') return fail('Questo animale non è condiviso con la clinica: collegalo prima dalla sua scheda.');
     VR.$('#sub').textContent = `${pet.name} · ${clinic.name}`;
+    const who = homeOnly ? 'Il veterinario' : 'La clinica';
     if (!hours || !hours.length) {
-      return fail(`${clinic.name} non ha ancora pubblicato i suoi orari su Vetroom.` + (clinic.header_phone ? ` Puoi chiamare al ${clinic.header_phone}.` : ''));
+      return fail(`${clinic.name} non ha ancora pubblicato i suoi orari su FurrFinder.` + (clinic.header_phone ? ` Puoi chiamare al ${clinic.header_phone}.` : ''));
     }
 
     // ---------- Calcolo degli orari liberi ----------
@@ -100,27 +120,58 @@
     const busyRanges = (busy || []).map((b) => { const s = new Date(b.starts_at).getTime(); return [s, s + b.duration_min * 60000]; });
     const minStart = Date.now() + 2 * 3600e3; // almeno 2 ore di preavviso
 
-    const days = [];
-    for (let i = 0; i < DAYS; i++) {
-      const d = new Date(start); d.setDate(d.getDate() + i);
-      const h = hours.find((x) => x.weekday === d.getDay());
-      if (!h) continue;
-      const slot = h.slot_minutes || 30;
-      const ranges = [[toMin(h.start_time), toMin(h.end_time)], [toMin(h.start_time2), toMin(h.end_time2)]].filter((r) => r[0] != null && r[1] != null);
-      const slots = [];
-      ranges.forEach(([a, b]) => {
-        for (let m = a; m + slot <= b; m += slot) {
-          const t = new Date(d); t.setHours(Math.floor(m / 60), m % 60, 0, 0);
-          const s = t.getTime(), e = s + slot * 60000;
-          if (s < minStart) continue;
-          if (busyRanges.some(([bs, be]) => bs < e && be > s)) continue;
-          slots.push({ t, slot });
-        }
-      });
-      if (slots.length) days.push({ d, slots });
-    }
+    // ---------- Dove: in clinica o a casa ----------
+    let atHome = homeOnly;
+    // Visita a casa: resta libero il tempo di spostamento prima e dopo gli altri appuntamenti
+    const gap = () => (atHome && home ? (Number(home.home_travel_min) || 0) * 60000 : 0);
+    let days = [];
+    const computeDays = () => {
+      days = [];
+      const g = gap();
+      for (let i = 0; i < DAYS; i++) {
+        const d = new Date(start); d.setDate(d.getDate() + i);
+        const h = hours.find((x) => x.weekday === d.getDay());
+        if (!h) continue;
+        const slot = h.slot_minutes || 30;
+        const ranges = [[toMin(h.start_time), toMin(h.end_time)], [toMin(h.start_time2), toMin(h.end_time2)]].filter((r) => r[0] != null && r[1] != null);
+        const slots = [];
+        ranges.forEach(([a, b]) => {
+          for (let m = a; m + slot <= b; m += slot) {
+            const t = new Date(d); t.setHours(Math.floor(m / 60), m % 60, 0, 0);
+            const s = t.getTime(), e = s + slot * 60000;
+            if (s < minStart) continue;
+            if (busyRanges.some(([bs, be]) => bs - g < e && be + g > s)) continue;
+            slots.push({ t, slot });
+          }
+        });
+        if (slots.length) days.push({ d, slots });
+      }
+    };
+    computeDays();
     VR.hide(loading);
-    if (!days.length) return fail('Nelle prossime settimane non ci sono orari liberi prenotabili online. Contatta direttamente la clinica.');
+    const noSlots = () => `Nelle prossime settimane non ci sono orari liberi prenotabili online. Contatta direttamente ${homeOnly ? 'il veterinario' : 'la clinica'}` +
+      (clinic.header_phone ? ` al ${clinic.header_phone}.` : '.');
+    if (!days.length) return fail(noSlots());
+
+    // Pannello del domicilio: zona, diritto di chiamata, note, indirizzo
+    const p = ctx.profile || {};
+    const ownAddr = [[p.address_street, p.address_number].filter(Boolean).join(' '),
+      ([p.address_zip, p.address_city].filter(Boolean).join(' ') + (p.address_province ? ` (${p.address_province})` : '')).trim()].filter(Boolean).join(', ');
+    if (homeOn) {
+      const info = [];
+      if (home.home_area) info.push(`<b>Zona servita:</b> ${VR.esc(home.home_area)}`);
+      if (home.home_fee != null) info.push(`<b>Diritto di chiamata:</b> ${Number(home.home_fee) > 0 ? '€ ' + Number(home.home_fee).toLocaleString('it-IT', { minimumFractionDigits: 2 }) : 'gratuito'}, oltre alla prestazione`);
+      if (home.home_notes) info.push(VR.esc(home.home_notes));
+      if (info.length) { VR.$('#homeInfo').innerHTML = info.join('<br>'); }
+      VR.$('#addr').value = ownAddr;
+      if (homeOnly) VR.$('#homeTitle').textContent = 'Visita a domicilio';
+      else VR.show(VR.$('#placeSeg'));
+      VR.$('#slotTitle').textContent = '2. Scegli un orario';
+      VR.$('#confirmTitle').textContent = '3. Conferma la richiesta';
+      VR.show(VR.$('#homePanel'));
+    }
+    VR.$('#sendHint').textContent = `${who} riceverà la richiesta e la confermerà. In caso di urgenza, telefona direttamente.`;
+    VR.$('#doneWho').textContent = who;
 
     let shown = 3, chosen = null;
     const render = () => {
@@ -132,31 +183,55 @@
       (shown < days.length ? VR.show : VR.hide)(VR.$('#more'));
     };
     VR.$('#more').addEventListener('click', () => { shown += 3; render(); });
+    const setPlace = (h) => {
+      atHome = h;
+      document.querySelectorAll('#placeSeg [data-place]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.place === 'home') === atHome)));
+      (atHome ? VR.show : VR.hide)(VR.$('#addrBox'));
+      (atHome && VR.$('#homeInfo').innerHTML ? VR.show : VR.hide)(VR.$('#homeInfo'));
+      // con il tempo di spostamento gli orari liberi cambiano: si ricalcolano
+      const was = chosen ? chosen.t.getTime() : null;
+      computeDays();
+      chosen = was ? (days.flatMap((d) => d.slots).find((x) => x.t.getTime() === was) || null) : null;
+      if (!chosen) VR.hide(VR.$('#form'));
+      if (!days.length) { VR.$('#days').innerHTML = `<p class="muted" style="margin:0">${VR.esc(noSlots())}</p>`; VR.hide(VR.$('#more')); return; }
+      render();
+    };
+    if (homeOn) {
+      VR.$('#placeSeg').addEventListener('click', (ev) => { const b = ev.target.closest('[data-place]'); if (b) setPlace(b.dataset.place === 'home'); });
+    }
     VR.$('#days').addEventListener('click', (ev) => {
       const b = ev.target.closest('.slot'); if (!b) return;
       chosen = days[Number(b.dataset.d)].slots[Number(b.dataset.s)];
       render();
-      VR.$('#chosen').textContent = `${pet.name} · ${VR.fmtDateTime(chosen.t)} · ${clinic.name}`;
+      VR.$('#chosen').textContent = `${pet.name} · ${VR.fmtDateTime(chosen.t)} · ${clinic.name}${atHome ? ' · a domicilio' : ''}`;
       VR.show(VR.$('#form'));
       VR.$('#form').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-    render();
+    if (homeOn) setPlace(atHome); else render();
     VR.show(VR.$('#page'));
 
     // ---------- Invio ----------
     VR.$('#form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       if (!chosen) return;
-      const b = VR.$('#send'); b.disabled = true;
-      const { error } = await VR.sb.from('appointments').insert({
+      const addr = VR.$('#addr').value.trim();
+      if (homeOn && atHome && addr.length < 6) {
+        VR.say(VR.$('#msg2'), 'Scrivi l\'indirizzo dove fare la visita.', 'error');
+        VR.$('#homePanel').scrollIntoView({ behavior: 'smooth', block: 'start' }); VR.$('#addr').focus(); return;
+      }
+      VR.hide(VR.$('#msg2'));
+      const row = {
         clinic_id: clinicId, pet_id: petId, client_id: acc?.client_id || null,
         starts_at: chosen.t.toISOString(), duration_min: chosen.slot,
         type: VR.$('#type').value, status: 'requested', booked_by: ctx.uid,
         notes_owner: VR.$('#note').value.trim() || null
-      });
+      };
+      if (homeOn) { row.at_home = atHome; row.visit_address = atHome ? addr : null; }
+      const b = VR.$('#send'); b.disabled = true;
+      const { error } = await VR.sb.from('appointments').insert(row);
       b.disabled = false;
       if (error) { VR.say(VR.$('#msg2'), VR.errorText(error), 'error'); return; }
-      VR.hide(VR.$('#form')); VR.hide(VR.$('#days').closest('.panel'));
+      VR.hide(VR.$('#form')); VR.hide(VR.$('#days').closest('.panel')); VR.hide(VR.$('#homePanel'));
       VR.show(VR.$('#done'));
     });
   })();
