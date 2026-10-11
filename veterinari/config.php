@@ -14,6 +14,9 @@ define('VR_SITO', getenv('VR_SITO') ?: 'https://vetroom.it');
 define('VR_MOSTRA_TELEFONO', true);
 define('VR_MOSTRA_SITO', true);
 
+// Conta in forma anonima le visite alle schede e i tocchi sui pulsanti (niente cookie). Per spegnerlo metti false.
+define('VR_CONTA_VISITE', true);
+
 // Ogni quanti secondi rileggere le strutture dal database (3600 = un'ora)
 define('VR_CACHE_SECONDI', 3600);
 

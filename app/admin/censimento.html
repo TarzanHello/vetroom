@@ -11,8 +11,9 @@
   <script src="../vendor/supabase-2.117.2.js"></script>
   <script src="../js/config.js?v=2026-10-11b"></script>
   <script src="../js/app.js?v=2026-10-11b"></script>
-  <script src="plancia.js?v=2026-10-11b"></script>
+  <script src="plancia.js?v=2026-10-11c"></script>
   <script src="censimento-dati.js?v=2026-10-11b"></script>
+  <script src="censimento-lettere.js?v=2026-10-11c"></script>
   <style>
     .cz-steps { list-style: none; margin: 14px 0 0; padding: 0; }
     .cz-steps li { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(31, 49, 80, .45); align-items: center; color: var(--faint); }
@@ -59,6 +60,7 @@
       #tbl tbody td { display: block; grid-column: 2; padding: 3px 0; border: 0; width: auto; }
       #tbl tbody td:first-child { grid-column: 1; grid-row: 1 / span 4; padding-top: 2px; }
       #tbl tbody td.empty { grid-column: 1 / -1; }
+      #tbl tbody td.hide-m { display: none; }
       #tbl tr.is-bad td:first-child { box-shadow: none; }
       #tbl tr.is-bad { box-shadow: inset 3px 0 var(--red); }
       #tbl tr.cz-on td { background: none; }
@@ -377,8 +379,11 @@ foreach->.v(
   // ================================================================
   //  Archivio: numeri, storico, elenco
   // ================================================================
-  let all = [], filtro = 'attive', regione = '', dop = new Map();
+  let all = [], filtro = 'attive', regione = '', dop = new Map(), stat = null;
   const key = (r) => r.t + '/' + r.i;
+  const sk = (r) => String(r.t || '').charAt(0) + r.i;
+  const vistaDi = (r) => Number(stat?.per_struttura?.[sk(r)]?.vista) || 0;
+  const letteraDi = (r) => stat?.ultima_lettera?.[sk(r)] || null;
   const sel = new Set();       // strutture selezionate (restano selezionate anche cambiando filtro)
   let ultimaSel = null;        // per Maiusc+clic
   const valida = (r) => r.attivo && r.revisione !== 'escluso';
@@ -413,6 +418,7 @@ foreach->.v(
     ['telefono', 'Con telefono', (r) => valida(r) && r.telefono],
     ['luogo', 'Senza comune o provincia', incompleta],
     ['cambiati', 'Contatti cambiati', (r) => valida(r) && r.cambi > 0],
+    ['viste', 'Più viste (30 gg)', (r) => valida(r) && vistaDi(r) > 0],
     ['escluse', 'Escluse', (r) => r.revisione === 'escluso'],
     ['sparite', 'Non più su OSM', (r) => !r.attivo]
   ];
@@ -436,10 +442,13 @@ foreach->.v(
           r.approvata && !r.su_vetroom ? '<a class="pill info" href="rivendicazioni.html?stato=approvata">rivendicazione approvata</a>' : '',
           r.richieste > 0 ? `<a class="pill warn" href="rivendicazioni.html">${n(r.richieste)} ${r.richieste === 1 ? 'richiesta' : 'richieste'} di rivendicazione</a>` : '',
           manca.length ? `<span class="pill">manca: ${esc(manca.join(', '))}</span>` : '',
+          vistaDi(r) ? `<span class="pill info" title="Aperture della scheda pubblica negli ultimi 30 giorni">${n(vistaDi(r))} ${vistaDi(r) === 1 ? 'visita' : 'visite'} in 30 gg</span>` : '',
+          letteraDi(r) ? `<span class="pill" title="Ultima lettera preparata per posta">lettera del ${PL.d(letteraDi(r))}</span>` : '',
           r.avviso && valida(r) && r.revisione !== 'ok' ? `<span class="pill warn">${esc(r.avviso)}</span>` : '',
           ...(d || []).map((x) => `<span class="pill warn">possibile doppione di «${esc(x.nome || 'senza nome')}» (${esc(x.perche)})</span>`)].filter(Boolean).join(' ');
         return `<strong${r.nome ? '' : ' class="dim"'}>${esc(nomeDi(r))}</strong><span class="sub">${esc([[r.via, r.civico].filter(Boolean).join(' '), r.cap].filter(Boolean).join(', ') || 'indirizzo non indicato')}</span>${avvisi ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${avvisi}</div>` : ''}`;
       } },
+      { k: 'viste', l: 'Visite', cls: 'num', hideM: true, sort: (r) => vistaDi(r), render: (r) => vistaDi(r) ? `<span class="mono">${n(vistaDi(r))}</span>` : '<span class="faint">—</span>' },
       { k: 'luogo', l: 'Comune', sort: (r) => [r.regione || '~', r.provincia || '~', r.comune || '~', r.nome || ''].join('|').toLowerCase(), render: (r) => r.comune ? `${esc(r.comune)}${r.provincia ? ` <span class="faint">(${esc(r.provincia)})</span>` : ''}<span class="sub">${esc(r.regione || 'regione da trovare')}</span>` : '<span class="faint">da trovare</span>' },
       { k: 'contatti', l: 'Contatti', render: (r) => [r.telefono ? `<span class="mono small nowrap">${esc(r.telefono)}</span>` : '', r.email ? `<span class="sub">${esc(r.email)}</span>` : '', r.sito && /^https?:\/\//.test(r.sito) ? `<span class="sub"><a href="${esc(r.sito)}" target="_blank" rel="noopener nofollow">${esc(r.sito.replace(/^https?:\/\/(www\.)?/, ''))}</a></span>` : ''].join('') || '<span class="faint">nessuno</span>' },
       { k: 'rev', l: 'Stato', sort: (r) => (r.revisione || '') + (r.cambi > 0 ? '1' : '0'), render: (r) => `<div style="display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-bottom:6px">
@@ -479,7 +488,7 @@ foreach->.v(
   };
   const caricaTutto = async () => {
     let stato, elenco;
-    try { [stato, elenco] = await Promise.all([PL.rpc('osm_stato'), PL.rpc('osm_elenco'), caricaRequisiti()]); }
+    try { [stato, elenco, , stat] = await Promise.all([PL.rpc('osm_stato'), PL.rpc('osm_elenco'), caricaRequisiti(), PL.try('osm_statistiche', { p_giorni: 30 }, null)]); }
     catch (e) {
       $('#tbl').innerHTML = `<p class="note warn">${esc(e.message)}</p>`;
       $('#gauges').innerHTML = ''; $('#go').disabled = !!e.missing;
@@ -519,6 +528,7 @@ foreach->.v(
       <button class="btn sm" data-bulk="ok">Abilita</button>
       <button class="btn sm" data-bulk="escluso">Escludi</button>
       <button class="btn sm ghost" data-bulk="nulla">Da decidere</button>
+      <button class="btn sm ghost" data-bulk="lettere" title="Un PDF con una lettera per struttura, da stampare e spedire">Lettere</button>
       <button class="btn sm ghost" data-bulk="csv">Esporta</button>
       <button class="btn sm danger" data-bulk="elimina">Elimina</button>
       <button class="btn sm ghost" data-bulk="via" title="Togli la selezione" aria-label="Togli la selezione">✕</button>`;
@@ -555,6 +565,7 @@ foreach->.v(
     const righe = all.filter((r) => sel.has(key(r)));
     if (azione === 'via') { sel.clear(); $$('#tbl .cz-chk').forEach((c) => { c.checked = false; c.closest('tr')?.classList.remove('cz-on'); }); barra(); return; }
     if (azione === 'csv') { esporta(righe, 'selezione'); return; }
+    if (azione === 'lettere') { await lettere(righe, b); return; }
     if (azione === 'ok' || azione === 'nulla') {
       if (!(await PL.ask({ title: azione === 'ok' ? `Abilitare ${quante}?` : `Riportare ${quante} da decidere?`, ok: azione === 'ok' ? 'Abilita' : 'Conferma',
         html: azione === 'ok' ? 'Compaiono nella ricerca pubblica "Trova la tua struttura" e i titolari possono rivendicarle. Spariscono da "Da controllare".' : 'Tolgo la decisione (abilitata o esclusa): non sono più rivendicabili e tornano come appena censite.' }))) return;
@@ -580,6 +591,36 @@ foreach->.v(
     sel.clear(); ultimaSel = null;
     disegna();
   });
+
+  // ---------- Lettere per posta ----------
+  const lettere = async (righe, btn) => {
+    const ok = [], no = new Map();
+    righe.forEach((r) => { const m = CZL.motivoEsclusione(r); if (m) no.set(m, (no.get(m) || 0) + 1); else ok.push(r); });
+    const giaInviate = ok.filter(letteraDi).length;
+    const scarti = [...no].map(([m, k]) => `<li>${n(k)} ${esc(m)}</li>`).join('');
+    if (!ok.length) { await PL.ask({ title: 'Nessuna lettera da preparare', ok: 'Ho capito', html: `Le strutture selezionate non possono ricevere la lettera:<ul>${scarti}</ul>Seleziona strutture abilitate, con indirizzo completo e non ancora su Vetroom.` }); return; }
+    ok.sort((a, b) => [a.provincia, a.comune, a.nome].join('|').localeCompare([b.provincia, b.comune, b.nome].join('|'), 'it'));
+    const v = await PL.ask({ title: `Preparare ${ok.length === 1 ? '1 lettera' : n(ok.length) + ' lettere'}?`, ok: 'Crea il PDF',
+      html: `Un PDF A4 con una lettera per struttura, in ordine di provincia e comune: il destinatario è nella posizione della finestra delle buste DL (11 × 22 cm, finestra a destra). Ogni lettera ha un QR che porta alla pagina per rivendicare la scheda.${scarti ? `<br><br>Ne salto ${n(righe.length - ok.length)}:<ul>${scarti}</ul>` : ''}${giaInviate ? `<br><b>${n(giaInviate)}</b> ${giaInviate === 1 ? 'ha' : 'hanno'} già ricevuto una lettera.` : ''}`,
+      fields: [
+        { name: 'firma', label: 'Firma in fondo alla lettera', value: PL.session?.user?.user_metadata?.full_name || PL.session?.user?.user_metadata?.name || 'Il team di Vetroom' },
+        { name: 'etichette', type: 'checkbox', value: false, label: 'Aggiungi in fondo le etichette adesive (A4, 3 × 8) per buste senza finestra' },
+        { name: 'segna', type: 'checkbox', value: true, label: 'Segna oggi come data della lettera per queste strutture' }] });
+    if (!v) return;
+    try { if (btn) btn.disabled = true; await CZL.genera(ok, { firma: { nome: v.firma.trim() }, etichette: v.etichette }); }
+    catch (e) { PL.toast(e.message || 'Non riesco a creare il PDF.', 'bad'); return; }
+    finally { if (btn) btn.disabled = false; }
+    if (v.segna) {
+      const k = await PL.try('osm_lettere_registra', { p_chiavi: ok.map((r) => [r.t, Number(r.i)]) }, null);
+      if (k === null) { PL.toast('PDF pronto. Per ricordare le lettere spedite esegui la patch SQL v8.', 'info'); return; }
+      const ora = new Date().toISOString();
+      stat = stat || { per_struttura: {}, ultima_lettera: {} };
+      stat.ultima_lettera = stat.ultima_lettera || {};
+      ok.forEach((r) => { stat.ultima_lettera[sk(r)] = ora; });
+      disegna();
+    }
+    PL.toast(`PDF pronto: ${n(ok.length)} ${ok.length === 1 ? 'lettera' : 'lettere'}.`, 'ok');
+  };
 
   // ---------- Eliminazione (barra in basso e "Elimina le incomplete") ----------
   const elimina = async (keys, btn, motivoPredefinito) => {
@@ -688,7 +729,7 @@ foreach->.v(
     disegna();
   });
 
-  $('#fil').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; disegna(); } });
+  $('#fil').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; if (filtro === 'viste') T.sort?.('viste', -1); disegna(); } });
   $('#gauges').addEventListener('click', (e) => { const a = e.target.closest('[data-f]'); if (a) { filtro = a.dataset.f; disegna(); } });
   $('#reg').addEventListener('change', (e) => { regione = e.target.value; disegna(); });
   let tq; $('#q').addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(disegna, 180); });

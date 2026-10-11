@@ -161,26 +161,33 @@ $s = vr_struttura($m[1]);
 if (!$s) vr_errore(410, 'Scheda non più disponibile', 'Questa struttura non è più nel nostro elenco. Cerca un altro veterinario nella stessa zona.');
 if ($path !== $s['url']) vr_redirect($s['url']);
 $Rs = $D['regioni'][$s['rs']]; $Ps = $Rs['province'][$s['ps']]; $Cs = $Ps['comuni'][$s['cs']];
-$nome = vr_nome($s); $orari = vr_orari($s['orari'] ?? '');
+$nome = vr_nome($s); $orari = $s['righe_orari'];
 $tel = VR_MOSTRA_TELEFONO ? ($s['telefono'] ?? '') : '';
 $sito = VR_MOSTRA_SITO && !empty($s['sito']) && preg_match('#^https?://#', $s['sito']) ? $s['sito'] : '';
 $ind = vr_indirizzo($s);
+$telLink = vr_tel_link($tel);
+$viaBreve = $s['indirizzo_vr'] ?: trim(($s['via'] ?? '') . ' ' . ($s['civico'] ?? ''));
+$prenota = !empty($s['su_vetroom']) && $s['codice'] ? '/app/?codice=' . rawurlencode($s['codice']) : '';
 
 $frase = h($nome) . ' è una struttura veterinaria a ' . h($s['comune']) . ' (' . h($s['provincia']) . ')'
-  . (!empty($s['via']) ? ', in ' . h(trim($s['via'] . ' ' . ($s['civico'] ?? ''))) : '') . '.'
+  . ($viaBreve ? ', in ' . h($viaBreve) : '') . '.'
+  . ($s['domicilio'] ? ' Fa anche visite a domicilio' . ($s['zona'] ? ' (' . h($s['zona']) . ')' : '') . '.' : '')
   . ($orari ? ' Orari: ' . h(implode('; ', $orari)) . '.' : '')
-  . ($tel ? ' Per un appuntamento puoi telefonare al ' . h(vr_telefono($tel)) . '.' : '');
+  . ($prenota ? ' Puoi chiedere un appuntamento online con FurrFinder' . ($tel ? ' oppure telefonare al ' . h(vr_telefono($tel)) : '') . '.'
+    : ($tel ? ' Per un appuntamento puoi telefonare al ' . h(vr_telefono($tel)) . '.' : ''));
 $b = '<article class="vt-scheda"><section class="vt-head"><h1>' . h($nome) . '</h1><p class="vt-sub">Veterinario a ' . h($s['comune']) . ' (' . h($s['provincia']) . ')' . (!empty($s['su_vetroom']) ? ' <span class="vt-on">Usa Vetroom</span>' : '') . '</p></section>';
 $b .= '<div class="vt-cols"><div class="vt-info"><p>' . $frase . '</p><dl class="vt-dl">';
 if ($ind) $b .= '<dt>Indirizzo</dt><dd>' . h($ind) . '</dd>';
+if ($s['domicilio']) $b .= '<dt>Servizi</dt><dd>Visite a domicilio' . ($s['zona'] ? ' · zona: ' . h($s['zona']) : '') . '</dd>';
 if ($orari) $b .= '<dt>Orari</dt><dd><ul class="vt-orari"><li>' . implode('</li><li>', array_map('h', $orari)) . '</li></ul></dd>';
-if ($tel) $b .= '<dt>Telefono</dt><dd><a class="vt-tel" href="tel:' . h(preg_replace('/[^\d+]/', '', $tel)) . '">' . h(vr_telefono($tel)) . '</a></dd>';
-if ($sito) $b .= '<dt>Sito</dt><dd><a href="' . h($sito) . '" target="_blank" rel="nofollow noopener">' . h(preg_replace('#^https?://(www\.)?#', '', $sito)) . '</a></dd>';
+if ($tel) $b .= '<dt>Telefono</dt><dd><a class="vt-tel" data-ev="chiama" href="tel:' . h($telLink) . '">' . h(vr_telefono($tel)) . '</a></dd>';
+if ($sito) $b .= '<dt>Sito</dt><dd><a data-ev="sito" href="' . h($sito) . '" target="_blank" rel="nofollow noopener">' . h(preg_replace('#^https?://(www\.)?#', '', $sito)) . '</a></dd>';
 $b .= '</dl>';
-if ($s['lat'] !== null) {
-  $b .= '<p class="vt-actions"><a class="btn small" href="https://www.google.com/maps/dir/?api=1&amp;destination=' . h($s['lat'] . ',' . $s['lon']) . '" target="_blank" rel="noopener">Indicazioni stradali</a>'
-    . ($tel ? ' <a class="btn small primary" href="tel:' . h(preg_replace('/[^\d+]/', '', $tel)) . '">Chiama</a>' : '') . '</p>';
-}
+$azioni = [];
+if ($prenota) $azioni[] = '<a class="btn small primary" data-ev="prenota" href="' . h($prenota) . '">Prenota con FurrFinder</a>';
+if ($tel) $azioni[] = '<a class="btn small' . ($prenota ? '' : ' primary') . '" data-ev="chiama" href="tel:' . h($telLink) . '">Chiama</a>';
+if ($s['lat'] !== null) $azioni[] = '<a class="btn small" data-ev="indicazioni" href="https://www.google.com/maps/dir/?api=1&amp;destination=' . h($s['lat'] . ',' . $s['lon']) . '" target="_blank" rel="noopener">Indicazioni stradali</a>';
+if ($azioni) $b .= '<p class="vt-actions">' . implode(' ', $azioni) . '</p>';
 $b .= '</div>';
 if ($s['lat'] !== null) {
   $d = 0.004; $bbox = ($s['lon'] - $d * 1.5) . ',' . ($s['lat'] - $d) . ',' . ($s['lon'] + $d * 1.5) . ',' . ($s['lat'] + $d);
@@ -200,17 +207,19 @@ if ($vicine) {
 $b .= '<p class="vt-more"><a href="' . h($Cs['url']) . '">Tutti i veterinari a ' . h($s['comune']) . '</a> · <a href="' . h($Ps['url']) . '">in provincia di ' . h($Ps['nome']) . '</a></p></article>';
 
 $ld = ['@context' => 'https://schema.org', '@type' => 'VeterinaryCare', 'name' => $nome, 'url' => VR_SITO . $s['url'],
-  'address' => array_filter(['@type' => 'PostalAddress', 'streetAddress' => trim(($s['via'] ?? '') . ' ' . ($s['civico'] ?? '')) ?: null,
-    'postalCode' => $s['cap'] ?? null, 'addressLocality' => $s['comune'], 'addressRegion' => $s['provincia'], 'addressCountry' => 'IT'])];
+  'address' => array_filter(['@type' => 'PostalAddress', 'streetAddress' => $viaBreve ?: null,
+    'postalCode' => $s['indirizzo_vr'] ? null : ($s['cap'] ?? null), 'addressLocality' => $s['comune'], 'addressRegion' => $s['provincia'], 'addressCountry' => 'IT'])];
 if ($s['lat'] !== null) $ld['geo'] = ['@type' => 'GeoCoordinates', 'latitude' => $s['lat'], 'longitude' => $s['lon']];
-if ($tel) $ld['telephone'] = $tel;
+if ($tel) $ld['telephone'] = $telLink;
 if ($sito) $ld['sameAs'] = [$sito];
-$oh = vr_orari_schema($s['orari'] ?? ''); if ($oh) $ld['openingHours'] = $oh;
+if ($s['schema_orari']) $ld['openingHours'] = $s['schema_orari'];
+if ($s['domicilio']) $ld['description'] = 'Visite veterinarie anche a domicilio' . ($s['zona'] ? ' (' . $s['zona'] . ')' : '') . '.';
 
 vr_pagina(['url' => $s['url'], 'indicizza' => $s['indicizza'],
   'title' => $nome . ' – Veterinario a ' . $s['comune'] . ' (' . $s['provincia'] . ') | Vetroom',
   'og' => $nome . ', veterinario a ' . $s['comune'],
-  'description' => $nome . ', struttura veterinaria a ' . $s['comune'] . (!empty($s['via']) ? ' in ' . trim($s['via'] . ' ' . ($s['civico'] ?? '')) : '') . '.' . ($orari ? ' Orari: ' . implode('; ', $orari) . '.' : '') . ($tel ? ' Telefono ' . vr_telefono($tel) . '.' : '') . ' Indirizzo, mappa e altri veterinari vicini.',
+  'description' => $nome . ', struttura veterinaria a ' . $s['comune'] . ($viaBreve ? ' in ' . $viaBreve : '') . '.' . ($prenota ? ' Prenota online con FurrFinder.' : '') . ($orari ? ' Orari: ' . implode('; ', $orari) . '.' : '') . ($tel ? ' Telefono ' . vr_telefono($tel) . '.' : '') . ' Indirizzo, mappa e altri veterinari vicini.',
   'crumbs' => [['Vetroom', '/'], ['Veterinari', '/veterinari/'], [$Rs['nome'], $Rs['url']], ['Provincia di ' . $Ps['nome'], $Ps['url']], [$s['comune'], $Cs['url']], [$nome, $s['url']]],
   'jsonld' => [$ld],
+  'evento' => [$s['t'], (int)$s['i']],
   'body' => $b]);
