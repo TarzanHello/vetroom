@@ -28,6 +28,11 @@
     .cz-log .warn { color: var(--amber); } .cz-log .bad { color: var(--red); } .cz-log .ok { color: var(--green); }
     .cz-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
     .cz-filters select { max-width: 220px; }
+    .cz-req { display: flex; flex-wrap: wrap; gap: 8px; }
+    .cz-req label { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--edge-hi); background: var(--hull-2); cursor: pointer; font-size: 14px; }
+    .cz-req label:has(input:checked) { border-color: var(--signal); background: var(--signal-soft); }
+    .cz-req input { width: 17px; height: 17px; accent-color: var(--signal); margin: 0; }
+    .cz-req .n { font: 12px var(--mono); color: var(--faint); }
     .cz-chk { width: 18px; height: 18px; accent-color: var(--signal); cursor: pointer; margin: 2px 0 0; }
     #tbl td:first-child { width: 34px; }
     #tbl td { overflow-wrap: anywhere; }
@@ -84,6 +89,13 @@
       <div id="outcome" style="margin-top:12px"></div>
     </div>
     <details style="margin-top:10px"><summary class="small dim">Importazioni precedenti</summary><ul class="list" id="hist" style="margin-top:8px"></ul></details>
+  </section>
+
+  <section class="pn" id="requisiti">
+    <div class="pn-h"><h2>Requisiti delle strutture</h2><div class="tools"><span class="small dim" id="reqSaved"></span></div></div>
+    <p class="dim" style="margin-top:-6px">Spunta i dati che una struttura deve avere. Quelle a cui ne manca anche uno solo finiscono tra le <b>Incomplete</b>, che puoi rivedere o eliminare in blocco. La scelta vale per tutti gli amministratori e per tutti i dispositivi.</p>
+    <div class="cz-req" id="req"></div>
+    <div id="reqEsito" style="margin-top:14px"></div>
   </section>
 
   <section class="pn" id="elenco">
@@ -225,7 +237,7 @@ foreach->.v(
       // 0. cosa c'è già in archivio
       const stato = await PL.rpc('osm_stato');
       const note = new Map((stato.note || []).map(([t, i, lat, lon, loc]) => [t + '/' + i, { lat, lon, loc }]));
-      const scartate = new Set((stato.scartate || []).map(([t, i]) => t + '/' + i));
+      const scartate = new Map((stato.scartate || []).map(([t, i, motivo]) => [t + '/' + i, motivo || '']));
       const attivePrima = Number(stato.attive || 0);
 
       // 1. scarico
@@ -236,8 +248,14 @@ foreach->.v(
       let saltate = 0;
       for (const el of els) {
         const k = el.type + '/' + el.id; if (seen.has(k)) continue; seen.add(k);
-        if (scartate.has(k)) { saltate++; continue; }   // eliminate da te: non rientrano
-        const r = CZ.riga(el); if (r) rows.push(r);
+        const r = CZ.riga(el); if (!r) continue;
+        if (scartate.has(k)) {
+          // eliminate da te: restano fuori, tranne quelle tolte per dati incompleti che ora li hanno
+          if (scartate.get(k).startsWith(MOT_INCOMPLETO) && requisiti.length && completa(r, true)) { r._rientro = true; rows.push(r); }
+          else saltate++;
+          continue;
+        }
+        rows.push(r);
       }
       esito.trovate = rows.length + saltate; esito.eliminate_saltate = saltate;
       const avvisi = rows.filter((r) => r.avviso).length;
@@ -291,6 +309,19 @@ foreach->.v(
         }
         step('luoghi', 'ok', `${n(esito.localizzate)} localizzate${falliti ? ', ' + n(falliti) + ' rimandate' : ''}`);
         log(`Localizzate ${n(esito.localizzate)} strutture.`, 'ok');
+      }
+
+      // 2b. le eliminate per dati incompleti che ora sono complete rientrano
+      const candidate = rows.filter((r) => r._rientro);
+      if (candidate.length) {
+        const ok = candidate.filter((r) => completa(r)), no = new Set(candidate.filter((r) => !completa(r)));
+        if (no.size) { for (let i = rows.length - 1; i >= 0; i--) if (no.has(rows[i])) rows.splice(i, 1); saltate += no.size; }
+        if (ok.length) {
+          await PL.rpc('osm_ripristina_scartate', { p_chiavi: ok.map((r) => [r.osm_type, r.osm_id]) });
+          esito.rientrate = ok.length;
+          log(`${n(ok.length)} strutture eliminate per dati incompleti ora sono complete: rientrano.`, 'ok');
+        }
+        rows.forEach((r) => { delete r._rientro; });
       }
 
       // 3. salvo
@@ -352,16 +383,37 @@ foreach->.v(
   const valida = (r) => r.attivo && r.revisione !== 'escluso';
   const daControllare = (r) => valida(r) && r.revisione !== 'ok' && (r.avviso || dop.has(key(r)));
   const incompleta = (r) => valida(r) && (!r.comune || !r.provincia || !r.regione);
+  // ---------- Requisiti: quali dati deve avere una struttura ----------
+  const CAMPI = [
+    ['nome', 'Nome', (r) => !!r.nome],
+    ['contatto', 'Almeno un contatto', (r) => !!(r.telefono || r.email || r.sito), 'telefono, email o sito'],
+    ['telefono', 'Telefono', (r) => !!r.telefono],
+    ['email', 'Email', (r) => !!r.email],
+    ['sito', 'Sito web', (r) => !!r.sito],
+    ['via', 'Indirizzo', (r) => !!r.via],
+    ['civico', 'Numero civico', (r) => !!r.civico],
+    ['cap', 'CAP', (r) => !!r.cap],
+    ['comune', 'Comune', (r) => !!r.comune, null, true],
+    ['provincia', 'Provincia', (r) => !!r.provincia, null, true],
+    ['orari', 'Orari', (r) => !!r.orari]
+  ];
+  let requisiti = [];
+  const mancanti = (r, senzaLuogo) => CAMPI.filter(([k, , ok, , luogo]) => requisiti.includes(k) && !(senzaLuogo && luogo) && !ok(r)).map(([, l]) => l.toLowerCase());
+  const completa = (r, senzaLuogo) => !mancanti(r, senzaLuogo).length;
+  const MOT_INCOMPLETO = 'Dati incompleti';
+
   const FILTRI = [
     ['attive', 'Attive', valida],
+    ['complete', 'Complete', (r) => valida(r) && completa(r)],
+    ['incomplete', 'Incomplete', (r) => valida(r) && !completa(r)],
     ['controllare', 'Da controllare', daControllare],
     ['telefono', 'Con telefono', (r) => valida(r) && r.telefono],
-    ['incomplete', 'Senza comune o provincia', incompleta],
+    ['luogo', 'Senza comune o provincia', incompleta],
     ['cambiati', 'Contatti cambiati', (r) => valida(r) && r.cambi > 0],
     ['escluse', 'Escluse', (r) => r.revisione === 'escluso'],
     ['sparite', 'Non più su OSM', (r) => !r.attivo]
   ];
-  const MOTIVI = ['Non è una struttura veterinaria', 'Doppione di un\'altra scheda', 'Chiusa o trasferita', 'Il titolare ha chiesto di toglierla', 'Altro'];
+  const MOTIVI = ['Non è una struttura veterinaria', MOT_INCOMPLETO, 'Doppione di un\'altra scheda', 'Chiusa o trasferita', 'Il titolare ha chiesto di toglierla', 'Altro'];
   const nomeDi = (r) => r.nome || 'Struttura senza nome';
   const decisione = (r) => {
     if (r.revisione === 'escluso') return `<span class="pill bad" title="${esc(PL.dt(r.revisionato_il))}">esclusa</span>${r.revisione_nota ? `<span class="sub">${esc(r.revisione_nota)}</span>` : ''}<div class="actions" style="margin-top:6px"><button class="btn sm ghost" data-rev="" data-k="${esc(key(r))}">Ripristina</button></div>`;
@@ -376,7 +428,9 @@ foreach->.v(
       { k: 'sel', l: '', render: (r) => `<input type="checkbox" class="cz-chk" data-sel="${esc(key(r))}" aria-label="Seleziona ${esc(nomeDi(r))}" ${sel.has(key(r)) ? 'checked' : ''}>` },
       { k: 'nome', l: 'Struttura', sort: (r) => (r.nome || '~').toLowerCase(), render: (r) => {
         const d = valida(r) && r.revisione !== 'ok' ? dop.get(key(r)) : null;
-        const avvisi = [r.avviso && valida(r) && r.revisione !== 'ok' ? `<span class="pill warn">${esc(r.avviso)}</span>` : '',
+        const manca = requisiti.length && valida(r) ? mancanti(r) : [];
+        const avvisi = [manca.length ? `<span class="pill">manca: ${esc(manca.join(', '))}</span>` : '',
+          r.avviso && valida(r) && r.revisione !== 'ok' ? `<span class="pill warn">${esc(r.avviso)}</span>` : '',
           ...(d || []).map((x) => `<span class="pill warn">possibile doppione di «${esc(x.nome || 'senza nome')}» (${esc(x.perche)})</span>`)].filter(Boolean).join(' ');
         return `<strong${r.nome ? '' : ' class="dim"'}>${esc(nomeDi(r))}</strong><span class="sub">${esc([[r.via, r.civico].filter(Boolean).join(' '), r.cap].filter(Boolean).join(', ') || 'indirizzo non indicato')}</span>${avvisi ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${avvisi}</div>` : ''}`;
       } },
@@ -400,8 +454,8 @@ foreach->.v(
     const g = (val, label, f, tone) => `<a class="gauge" href="#elenco" data-f="${f}"><b${tone && val ? ` style="color:var(--${tone})"` : ''}>${n(val)}</b><span>${label}</span></a>`;
     $('#gauges').innerHTML = g(c(valida), 'Strutture attive', 'attive')
       + g(c(daControllare), 'Da controllare', 'controllare', 'amber')
-      + g(c((r) => valida(r) && r.telefono), 'Con telefono', 'telefono')
-      + g(c(incompleta), 'Senza comune o provincia', 'incomplete')
+      + (requisiti.length ? g(c((r) => valida(r) && completa(r)), 'Complete', 'complete') + g(c((r) => valida(r) && !completa(r)), 'Incomplete', 'incomplete', 'amber') : g(c((r) => valida(r) && r.telefono), 'Con telefono', 'telefono'))
+      + g(c(incompleta), 'Senza comune o provincia', 'luogo')
       + g(c((r) => valida(r) && r.cambi > 0), 'Contatti cambiati', 'cambiati')
       + g(c((r) => r.revisione === 'escluso'), 'Escluse', 'escluse')
       + g(c((r) => !r.attivo), 'Non più su OSM', 'sparite');
@@ -409,6 +463,7 @@ foreach->.v(
   const disegna = () => {
     dop = CZ.doppioni(all.filter(valida));
     numeri();
+    disegnaRequisiti();
     $('#fil').innerHTML = FILTRI.map(([k, l, f]) => `<button type="button" data-f="${k}" aria-pressed="${filtro === k}">${l}<span class="n">${n(all.filter(f).length)}</span></button>`).join('');
     const rows = visibili();
     $('#cnt').textContent = n(rows.length);
@@ -418,7 +473,7 @@ foreach->.v(
   };
   const caricaTutto = async () => {
     let stato, elenco;
-    try { [stato, elenco] = await Promise.all([PL.rpc('osm_stato'), PL.rpc('osm_elenco')]); }
+    try { [stato, elenco] = await Promise.all([PL.rpc('osm_stato'), PL.rpc('osm_elenco'), caricaRequisiti()]); }
     catch (e) {
       $('#tbl').innerHTML = `<p class="note warn">${esc(e.message)}</p>`;
       $('#gauges').innerHTML = ''; $('#go').disabled = !!e.missing;
@@ -513,19 +568,79 @@ foreach->.v(
       righe.forEach((r) => Object.assign(r, { revisione: 'escluso', revisione_nota: nota, revisionato_il: new Date().toISOString() }));
     }
     if (azione === 'elimina') {
-      const v = await PL.ask({ title: `Eliminare ${quante}?`, ok: 'Elimina', danger: true, word: N >= 10 ? 'ELIMINA' : null,
-        html: `Cancello <b>tutti i dati</b> di ${N === 1 ? 'questa struttura' : 'queste strutture'} dall'archivio e tengo solo il numero della scheda OpenStreetMap, così il censimento non ${N === 1 ? 'la' : 'le'} rimette dentro. Usalo per chi non è veterinario o per chi ha chiesto di essere tolto. Se cambi idea puoi ripristinare, ma i dati tornano solo al censimento successivo.`,
-        fields: [{ name: 'motivo', label: 'Motivo', type: 'select', value: MOTIVI[0], options: MOTIVI.map((m) => [m, m]) }] });
-      if (!v) return;
-      const fatto = await PL.run(b, () => aGruppi(keys, (c) => PL.rpc('osm_elimina', { p_chiavi: c, p_motivo: v.motivo })), (x) => `${n(x)} eliminate.`);
-      if (fatto === undefined) return;
-      const via = new Set(keys);
-      all = all.filter((r) => !via.has(key(r)));
-      scartateList = [...keys.map((k) => { const [t, i] = k.split('/'); return [t, Number(i), v.motivo, new Date().toISOString()]; }), ...scartateList];
-      disegnaScartate();
+      const fatto = await elimina(keys, b, filtro === 'incomplete' ? MOT_INCOMPLETO : MOTIVI[0]);
+      if (!fatto) return;
     }
     sel.clear(); ultimaSel = null;
     disegna();
+  });
+
+  // ---------- Eliminazione (barra in basso e "Elimina le incomplete") ----------
+  const elimina = async (keys, btn, motivoPredefinito) => {
+    const N = keys.length, quante = N === 1 ? '1 struttura' : `${n(N)} strutture`;
+    const v = await PL.ask({ title: `Eliminare ${quante}?`, ok: 'Elimina', danger: true, word: N >= 10 ? 'ELIMINA' : null,
+      html: `Cancello <b>tutti i dati</b> di ${N === 1 ? 'questa struttura' : 'queste strutture'} dall'archivio e tengo solo il numero della scheda OpenStreetMap, così il censimento non ${N === 1 ? 'la' : 'le'} rimette dentro.<br><br>Con il motivo <b>${MOT_INCOMPLETO}</b> fanno eccezione: se in futuro qualcuno completa i loro dati su OpenStreetMap secondo i tuoi requisiti, rientrano da sole al censimento.`,
+      fields: [{ name: 'motivo', label: 'Motivo', type: 'select', value: motivoPredefinito || MOTIVI[0], options: MOTIVI.map((m) => [m, m]) }] });
+    if (!v) return false;
+    const fatto = await PL.run(btn, () => aGruppi(keys, (c) => PL.rpc('osm_elimina', { p_chiavi: c, p_motivo: v.motivo })), (x) => `${n(x)} eliminate.`);
+    if (fatto === undefined) return false;
+    const via = new Set(keys);
+    all = all.filter((r) => !via.has(key(r)));
+    keys.forEach((k) => sel.delete(k));
+    scartateList = [...keys.map((k) => { const [t, i] = k.split('/'); return [t, Number(i), v.motivo, new Date().toISOString()]; }), ...scartateList];
+    disegnaScartate();
+    return true;
+  };
+
+  // ---------- Pannello dei requisiti ----------
+  const disegnaRequisiti = () => {
+    const att = all.filter(valida);
+    if (!$('#req').dataset.ok) {   // le caselle si disegnano una volta; i numeri si aggiornano
+      $('#req').innerHTML = CAMPI.map(([k, l, , nota]) => `<label title="${esc(nota || '')}"><input type="checkbox" data-req="${k}" ${requisiti.includes(k) ? 'checked' : ''}> ${esc(l)}${nota ? ` <span class="small dim">(${esc(nota)})</span>` : ''} <span class="n" data-reqn="${k}"></span></label>`).join('');
+      $('#req').dataset.ok = '1';
+    }
+    CAMPI.forEach(([k, , ok]) => {
+      const box = $(`#req [data-req="${k}"]`); if (box) box.checked = requisiti.includes(k);
+      const el = $(`#req [data-reqn="${k}"]`); if (el) el.textContent = `${n(att.filter(ok).length)}/${n(att.length)}`;
+    });
+    if (!requisiti.length) { $('#reqEsito').innerHTML = '<p class="small dim" style="margin:0">Nessun requisito scelto: tutte le strutture sono considerate complete.</p>'; return; }
+    const inc = att.filter((r) => !completa(r)).length;
+    $('#reqEsito').innerHTML = `<p style="margin:0 0 10px">Con questi requisiti: <b>${n(att.length - inc)}</b> complete e <b style="color:var(--${inc ? 'amber' : 'green'})">${n(inc)}</b> incomplete.</p>
+      ${inc ? `<div class="actions"><button class="btn sm" type="button" id="reqVedi">Mostra le incomplete</button><button class="btn sm danger" type="button" id="reqVia">Elimina le ${n(inc)} incomplete</button></div>` : ''}`;
+  };
+  let tReq;
+  const salvaRequisiti = () => {
+    clearTimeout(tReq);
+    $('#reqSaved').textContent = 'Salvo…';
+    tReq = setTimeout(async () => {
+      try { await PL.rpc('osm_impostazione_set', { p_chiave: 'requisiti', p_valore: { campi: requisiti } }); $('#reqSaved').textContent = 'Salvati per tutti'; }
+      catch (e) {
+        try { localStorage.setItem('vetroom_osm_requisiti', JSON.stringify(requisiti)); } catch { /* niente memoria locale */ }
+        $('#reqSaved').textContent = e.missing ? 'Salvati solo su questo dispositivo: esegui la patch SQL v4' : 'Non salvati: ' + e.message;
+      }
+    }, 500);
+  };
+  const caricaRequisiti = async () => {
+    try {
+      const v = await PL.rpc('osm_impostazione_get', { p_chiave: 'requisiti' });
+      requisiti = (v && Array.isArray(v.campi) ? v.campi : []).filter((k) => CAMPI.some(([c]) => c === k));
+    } catch (e) {
+      try { requisiti = JSON.parse(localStorage.getItem('vetroom_osm_requisiti') || '[]'); } catch { requisiti = []; }
+      if (e.missing) $('#reqSaved').textContent = 'Esegui la patch SQL v4 per salvarli per tutti';
+    }
+  };
+  $('#req').addEventListener('change', (e) => {
+    const k = e.target.dataset.req; if (!k) return;
+    requisiti = CAMPI.map(([c]) => c).filter((c) => (c === k ? e.target.checked : requisiti.includes(c)));
+    salvaRequisiti();
+    disegna();
+  });
+  $('#reqEsito').addEventListener('click', async (e) => {
+    if (e.target.id === 'reqVedi') { filtro = 'incomplete'; disegna(); $('#elenco').scrollIntoView({ behavior: 'smooth' }); }
+    if (e.target.id === 'reqVia') {
+      const keys = all.filter((r) => valida(r) && !completa(r)).map(key);
+      if (keys.length && await elimina(keys, e.target, MOT_INCOMPLETO)) disegna();
+    }
   });
 
   // ---------- Strutture eliminate ----------
@@ -576,6 +691,7 @@ foreach->.v(
       ['Nome', (r) => r.nome], ['Via', (r) => r.via], ['Civico', (r) => r.civico], ['CAP', (r) => r.cap], ['Comune', (r) => r.comune],
       ['Provincia', (r) => r.provincia], ['Regione', (r) => r.regione], ['Telefono', (r) => r.telefono], ['Email', (r) => r.email], ['Sito', (r) => r.sito],
       ['Orari', (r) => r.orari], ['Su OSM', (r) => (r.attivo ? 'sì' : 'non più')], ['Contatti attuali dal', (r) => PL.d(r.contatti_dal)],
+      ['Campi mancanti', (r) => mancanti(r).join(', ')],
       ['Da controllare', (r) => [r.avviso, ...(dop.get(key(r)) || []).map((x) => 'possibile doppione di ' + (x.nome || 'senza nome') + ' (' + x.perche + ')')].filter(Boolean).join(' · ')],
       ['Decisione', (r) => ({ ok: 'verificata', escluso: 'esclusa' }[r.revisione] || '')], ['Nota', (r) => r.revisione_nota],
       ['Latitudine', (r) => r.lat], ['Longitudine', (r) => r.lon], ['Scheda OSM', (r) => `https://www.openstreetmap.org/${r.t}/${r.i}`]
