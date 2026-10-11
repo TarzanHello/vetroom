@@ -13,6 +13,7 @@
     { key: 'studio', title: 'Studio', items: [
       { k: 'home', l: 'Dashboard', h: 'clinica/', i: 'dashboard' },
       { k: 'agenda', l: 'Agenda', h: 'clinica/agenda.html', i: 'agenda' },
+      { k: 'turni', l: 'Turni', h: 'clinica/turni.html', i: 'shifts', teamOnly: true },
       { k: 'cassa', l: 'Cassa', h: 'clinica/cassa.html', i: 'cash' },
       { k: 'furrfinder', l: 'FurrFinder', h: 'clinica/furrfinder.html', i: '../furrfinder-mark' },
       { k: 'messaggi', l: 'Messaggi', h: 'clinica/messaggi.html', i: 'owner_profile', badge: true }
@@ -109,7 +110,7 @@
           </button>
           <div class="vr-nav-group-items">
             ${g.items.map((it) => `
-              <a href="${it.anchor ? it.h : VR.url(it.h)}" ${it.blank ? 'target="_blank" rel="noopener"' : ''} ${it.badge ? 'data-has-badge' : ''} ${it.open ? `data-open-search="${it.open}"` : ''} class="vr-nav-item ${it.k === active ? 'active' : ''}" ${it.adminOnly ? 'data-admin-only hidden' : ''} ${it.platformOnly ? 'data-platform-only hidden' : ''} title="${it.l}" ${it.k === active ? 'aria-current="page"' : ''}>
+              <a href="${it.anchor ? it.h : VR.url(it.h)}" ${it.blank ? 'target="_blank" rel="noopener"' : ''} ${it.badge ? 'data-has-badge' : ''} ${it.open ? `data-open-search="${it.open}"` : ''} class="vr-nav-item ${it.k === active ? 'active' : ''}" ${it.adminOnly ? 'data-admin-only hidden' : ''} ${it.teamOnly && it.k !== active ? 'data-team-only hidden' : ''} ${it.platformOnly ? 'data-platform-only hidden' : ''} title="${it.l}" ${it.k === active ? 'aria-current="page"' : ''}>
                 <img class="vr-nav-icon" src="${icon(it.i)}" alt="" aria-hidden="true">
                 <span class="vr-nav-label">${it.l}</span>
               </a>`).join('')}
@@ -135,7 +136,7 @@
 
       // Telefono e tablet: barra in basso con le 5 cose che servono ogni giorno.
       // Il resto del menu (con le stesse icone) si apre da "Menu".
-      const tabActive = isPlat ? '' : (['home', 'agenda', 'animali'].includes(active) ? active : (['clienti', 'impostazioni', 'team', 'piattaforma', 'furrfinder', 'cassa'].includes(active) ? 'menu' : ''));
+      const tabActive = isPlat ? '' : (['home', 'agenda', 'animali'].includes(active) ? active : (['clienti', 'impostazioni', 'team', 'turni', 'piattaforma', 'furrfinder', 'cassa'].includes(active) ? 'menu' : ''));
       const bar = document.createElement('nav');
       bar.className = 'vr-tabbar';
       bar.setAttribute('aria-label', 'Menu rapido');
