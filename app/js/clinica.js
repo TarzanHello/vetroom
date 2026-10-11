@@ -57,6 +57,8 @@
     const isOwner = !!m.clinics?.code_owner_id && m.clinics.code_owner_id === session.user.id;
     if (VR.shellSetClinic) VR.shellSetClinic({ clinic: m.clinics || {}, role: isOwner ? 'owner' : m.role });
 
+    VR.showTeamItems(m.clinic_id);
+
     VR.ctx = {
       session, profile, memberships: rows,
       clinicId: m.clinic_id, role: m.role, clinic: m.clinics || {},
@@ -67,6 +69,22 @@
       homeOnly: m.clinics?.kind === 'domicilio'    // lavora solo a domicilio, senza studio
     };
     return VR.ctx;
+  };
+
+  // Voci del menu utili solo a chi lavora con altre persone (Turni): compaiono con almeno 2 persone attive.
+  // Il conteggio si ricorda per 10 minuti, così non si rifà a ogni pagina.
+  VR.showTeamItems = async (clinicId) => {
+    const key = 'vetroom_team_n_' + clinicId;
+    let n = null;
+    try { const c = JSON.parse(sessionStorage.getItem(key) || 'null'); if (c && Date.now() - c.t < 6e5) n = c.n; } catch { /* ok */ }
+    if (n === null) {
+      const { count, error } = await VR.sb.from('clinic_members').select('user_id', { count: 'exact', head: true })
+        .eq('clinic_id', clinicId).eq('status', 'active');
+      if (error) return;
+      n = count || 0;
+      try { sessionStorage.setItem(key, JSON.stringify({ n, t: Date.now() })); } catch { /* ok */ }
+    }
+    if (n >= 2) document.querySelectorAll('[data-team-only]').forEach((x) => x.removeAttribute('hidden'));
   };
 
   // Crea in un colpo proprietario (se serve) + animale + collegamento alla clinica.

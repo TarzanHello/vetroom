@@ -12,15 +12,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="FurrFinder">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-11b">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-11d">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-11b"></script>
-  <script src="../js/app.js?v=2026-10-11b"></script>
-  <script src="../js/i18n.js?v=2026-10-11b"></script>
-  <script src="../js/layout.js?v=2026-10-11b"></script>
-  <script src="../js/clinica.js?v=2026-10-11b"></script>
-  <script src="../js/proprietario.js?v=2026-10-11b"></script>
-  <script src="../js/documenti.js?v=2026-10-11b"></script>
+  <script src="../js/config.js?v=2026-10-11d"></script>
+  <script src="../js/app.js?v=2026-10-11d"></script>
+  <script src="../js/i18n.js?v=2026-10-11d"></script>
+  <script src="../js/layout.js?v=2026-10-11d"></script>
+  <script src="../js/clinica.js?v=2026-10-11d"></script>
+  <script src="../js/proprietario.js?v=2026-10-11d"></script>
+  <script src="../js/documenti.js?v=2026-10-11d"></script>
 </head>
 <body data-shell="owner" data-nav="animali">
 
@@ -43,6 +43,11 @@
             <p class="hint-small">La foto viene ridotta automaticamente prima del caricamento.</p>
           </div>
         </div>
+      </section>
+
+      <!-- Smarrito (patch 38) -->
+      <section class="panel" id="lostPanel" hidden>
+        <div class="lost-cta" id="lostBox"></div>
       </section>
 
       <!-- Veterinari -->
@@ -198,6 +203,16 @@
     });
 
     if (!pet) return;
+
+    // ---------- Smarrito ----------
+    VR.sb.rpc('smarrito_miei').then(({ data, error }) => {
+      if (error) return;   // aggiornamento del database non ancora fatto: il riquadro resta nascosto
+      const sm = (data || []).find((x) => x.pet_id === pet.id && ['aperto', 'sospeso'].includes(x.stato));
+      VR.$('#lostBox').innerHTML = sm
+        ? `<p><b style="color:#991b1b">${VR.esc(pet.name)} risulta ${pet.sex === 'F' ? 'smarrita' : 'smarrito'}</b>${sm.nuovi ? ` · <b class="lost-new">${sm.nuovi} ${sm.nuovi === 1 ? 'nuovo avvistamento' : 'nuovi avvistamenti'}</b>` : ''}</p><a class="btn btn-danger btn-small" href="smarrito.html?id=${sm.id}">Apri l'avviso</a>`
+        : `<p><b>Si è perso?</b> Pubblica l'avviso in un minuto: pagina pubblica, locandina da condividere e segnalazioni di chi lo vede.</p><a class="btn btn-danger btn-small" href="smarrito.html?animale=${pet.id}">Si è perso</a>`;
+      VR.show(VR.$('#lostPanel'));
+    }, () => {});
 
     // ---------- Veterinari ----------
     const vetsMsg = VR.$('#vetsMsg');

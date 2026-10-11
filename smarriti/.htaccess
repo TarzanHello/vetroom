@@ -1,0 +1,19 @@
+# FurrFinder · sezione pubblica /smarriti/ (pagine generate da index.php)
+DirectoryIndex index.php
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /smarriti/
+# La copia locale dei dati (se finisce qui) non si apre dal browser
+RewriteRule ^cache/ - [F,L]
+RewriteRule ^sitemap\.xml$ index.php?sitemap=1 [L,QSA]
+# Tutto il resto (tranne i file veri: foglio di stile, script) va a index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ index.php?p=$1 [L,QSA]
+</IfModule>
+
+# I file di servizio non si aprono dal browser
+<FilesMatch "^(funzioni|guide)\.php$">
+    Require all denied
+</FilesMatch>

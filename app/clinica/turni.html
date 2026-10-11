@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Turni – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vetroom">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-11d">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-11d"></script>
+  <script src="../js/app.js?v=2026-10-11d"></script>
+  <script src="../js/i18n.js?v=2026-10-11d"></script>
+  <script src="../js/layout.js?v=2026-10-11d"></script>
+  <script src="../js/clinica.js?v=2026-10-11d"></script>
+</head>
+<body data-shell="clinic" data-nav="turni">
+
+  <main class="wrap wrap-wide">
+    <div class="page-head">
+      <div>
+        <h1>Turni</h1>
+        <p class="muted" id="range" style="margin:0"></p>
+      </div>
+      <div class="actions-bar tw-bar" id="bar" hidden>
+        <button class="btn btn-ghost btn-small" id="prev" type="button" aria-label="Settimana precedente">←</button>
+        <button class="btn btn-ghost btn-small" id="today" type="button">Questa settimana</button>
+        <button class="btn btn-ghost btn-small" id="next" type="button" aria-label="Settimana successiva">→</button>
+        <button class="btn btn-ghost btn-small" id="copyWeek" type="button">Copia la settimana prima</button>
+        <button class="btn btn-ghost btn-small" id="print" type="button">Stampa</button>
+        <button class="btn btn-primary btn-small" id="add" type="button">Nuovo turno</button>
+      </div>
+    </div>
+
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+    <div id="mine" hidden></div>
+
+    <section class="panel tw-panel" id="weekPanel" hidden>
+      <div class="tw-grid" id="grid"></div>
+      <div class="tw-days" id="days"></div>
+      <div class="tw-legend"><span class="tw-k-turno">Turno</span><span class="tw-k-reperibilita">Reperibilità</span><span class="tw-k-assenza">Assenza</span></div>
+    </section>
+    <p class="hint-small tw-hint" id="hint" hidden>Tocca un giorno per aggiungere un turno, oppure un turno per cambiarlo. Tutti nel team possono modificare i turni: ogni modifica resta nello storico qui sotto, con chi l'ha fatta e quando.</p>
+
+    <section class="panel" id="logPanel" hidden>
+      <div class="tw-log-head">
+        <h2 style="margin:0">Storico delle modifiche</h2>
+        <select id="logWho" aria-label="Filtra per persona" style="width:auto"></select>
+      </div>
+      <ol class="tw-log" id="log" translate="no"></ol>
+      <button class="btn btn-ghost btn-small" type="button" id="logMore" hidden>Mostra le modifiche precedenti</button>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="dlg" class="dlg">
+    <form id="form" novalidate>
+      <h2 id="dlgTitle">Nuovo turno</h2>
+      <div class="grid">
+        <div class="s8"><label for="fWho">Persona</label><select id="fWho" required></select></div>
+        <div class="s4"><label for="fDate">Giorno</label><input type="date" id="fDate" required></div>
+        <div class="s12">
+          <span class="qp-lbl">Tipo</span>
+          <div class="seg seg-big" role="group" aria-label="Tipo" id="fKind">
+            <button type="button" data-kind="turno" aria-pressed="true">Turno</button>
+            <button type="button" data-kind="reperibilita" aria-pressed="false">Reperibilità</button>
+            <button type="button" data-kind="assenza" aria-pressed="false">Assenza</button>
+          </div>
+        </div>
+        <div class="s12 tw-quick" id="fQuick"></div>
+        <div class="s4"><label for="fStart">Dalle</label><input type="time" id="fStart" step="300" required></div>
+        <div class="s4"><label for="fEnd">Alle</label><input type="time" id="fEnd" step="300" required></div>
+        <div class="s4 tw-dur" id="fDur" aria-live="polite"></div>
+        <div class="s12"><label for="fNote">Nota (facoltativa)</label><input type="text" id="fNote" maxlength="200" placeholder="Per esempio: cambio con un collega, sala operatoria, solo telefono"></div>
+        <div class="s12" id="fRepeatBox">
+          <span class="qp-lbl">Ripeti nella stessa settimana</span>
+          <div class="tw-repeat" id="fRepeat"></div>
+        </div>
+      </div>
+      <div id="fWarn" class="notice notice-warn" hidden></div>
+      <div id="fMsg" hidden></div>
+      <div class="actions-bar" style="margin-top:14px">
+        <button class="btn btn-primary" type="submit" id="fSave">Salva</button>
+        <button class="btn btn-danger" type="button" id="fDel" hidden>Elimina</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" type="button" id="fClose">Annulla</button>
+      </div>
+      <div id="fHistBox" hidden>
+        <h3 style="margin:16px 0 6px">Storia di questo turno</h3>
+        <ol class="tw-log tw-log-small" id="fHist" translate="no"></ol>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+  (async () => {
+    const msg = VR.$('#msg'), loading = VR.$('#loading');
+    let ctx;
+    try { ctx = await VR.loadClinicContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const EN = VR.lang === 'en';
+    const L = (it, en) => (EN ? en : it);
+    const me = ctx.session.user.id;
+    const LOC = EN ? 'en-GB' : 'it-IT';
+
+    // ---------- Date (sempre nell'ora locale del dispositivo) ----------
+    const pad = (n) => String(n).padStart(2, '0');
+    const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+    const mondayOf = (d) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+    const parseYmd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+    const dayName = (d, len = 'short') => { const s = d.toLocaleDateString(LOC, { weekday: len }); return s.charAt(0).toUpperCase() + s.slice(1); };
+    const dayLabel = (d) => d.toLocaleDateString(LOC, { weekday: 'short', day: 'numeric', month: 'short' });
+    const KIND = { turno: L('Turno', 'Shift'), reperibilita: L('Reperibilità', 'On call'), assenza: L('Assenza', 'Absence') };
+    const isAllDay = (s, e) => hm(s) === '00:00' && e - s === 864e5;
+    const timeText = (s, e) => {
+      if (isAllDay(s, e)) return L('tutto il giorno', 'all day');
+      return `${hm(s)}–${hm(e)}${ymd(e) !== ymd(s) && hm(e) !== '00:00' ? ' (+1)' : ''}`;
+    };
+    const hoursText = (ms) => { const m = Math.round(ms / 6e4); const h = Math.floor(m / 60), r = m % 60; return r ? `${h} h ${r}′` : `${h} h`; };
+
+    // ---------- La patch 37 c'è? ----------
+    const probe = await VR.sb.from('shifts').select('id').eq('clinic_id', ctx.clinicId).limit(1);
+    if (probe.error) {
+      VR.hide(loading);
+      if (/does not exist|schema cache|relation/i.test(probe.error.message || '')) {
+        VR.say(msg, L('La pagina Turni non è ancora attiva: va eseguito l\'aggiornamento del database (patch 37). Chiedi all\'amministratore della piattaforma.',
+          'The Shifts page is not active yet: the database update (patch 37) has to be installed. Ask the platform administrator.'), 'info');
+      } else VR.say(msg, VR.errorText(probe.error), 'error');
+      return;
+    }
+
+    // ---------- Persone della struttura ----------
+    const [{ data: mem, error: memErr }, { data: av }] = await Promise.all([
+      VR.sb.from('clinic_members').select('user_id, role, status').eq('clinic_id', ctx.clinicId),
+      VR.sb.from('availabilities').select('*').eq('clinic_id', ctx.clinicId)
+    ]);
+    if (memErr) { VR.hide(loading); VR.say(msg, VR.errorText(memErr), 'error'); return; }
+    const hours = av || [];
+    const people = new Map();   // user_id -> {id, name, role, active}
+    const ROLE_ORDER = { owner: 0, admin: 1, vet: 2, secretary: 3 };
+    const ownerId = ctx.clinic.code_owner_id || null;
+    const addPeople = async (rows) => {
+      const ids = rows.map((r) => r.user_id).filter((id) => !people.has(id));
+      if (!ids.length) return;
+      const { data: profs } = await VR.sb.from('profiles').select('id, full_name, first_name, last_name, email').in('id', ids);
+      const P = Object.fromEntries((profs || []).map((p) => [p.id, p]));
+      rows.forEach((r) => {
+        if (people.has(r.user_id)) return;
+        const p = P[r.user_id] || {};
+        const name = (p.full_name || [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || r.name || L('Persona', 'Person')).trim();
+        const role = r.user_id === ownerId ? 'owner' : r.role;
+        people.set(r.user_id, { id: r.user_id, name, role, active: r.status === 'active' });
+      });
+    };
+    await addPeople((mem || []).filter((m) => m.status === 'active'));
+    const roleLabel = (p) => (p.active ? (VR.ROLE[p.role] || '') : L('non più nel team', 'no longer in the team'));
+    const sortedPeople = () => [...people.values()].sort((a, b) =>
+      (b.active - a.active) || ((ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9)) || a.name.localeCompare(b.name));
+    const nameOf = (id, fallback) => people.get(id)?.name || fallback || L('Persona', 'Person');
+    const who = (id, fallback) => `<b>${VR.esc(id === me ? L('Tu', 'You') : nameOf(id, fallback))}</b>`;
+
+    // ---------- Stato ----------
+    let monday = mondayOf(new Date());
+    const wk = VR.param('settimana');
+    if (wk && /^\d{4}-\d{2}-\d{2}$/.test(wk)) monday = mondayOf(parseYmd(wk));
+    let shifts = [];
+    const toast = (text) => {
+      const t = VR.$('#toast'); t.textContent = text; VR.show(t);
+      clearTimeout(t._h); t._h = setTimeout(() => VR.hide(t), 3500);
+    };
+
+    // ---------- Settimana ----------
+    const load = async () => {
+      const end = addDays(monday, 7);
+      const { data, error } = await VR.sb.from('shifts').select('*').eq('clinic_id', ctx.clinicId)
+        .gte('starts_at', monday.toISOString()).lt('starts_at', end.toISOString()).order('starts_at');
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      shifts = (data || []).map((s) => ({ ...s, s: new Date(s.starts_at), e: new Date(s.ends_at) }));
+      // turni di persone che hanno lasciato la struttura: restano visibili
+      const missing = shifts.filter((s) => !people.has(s.user_id)).map((s) => ({ user_id: s.user_id, role: '', status: 'removed' }));
+      if (missing.length) await addPeople(missing);
+      render();
+    };
+
+    const chip = (s) => `<button type="button" class="tw-chip tw-k-${s.kind}" data-id="${s.id}" title="${VR.esc(KIND[s.kind] + (s.note ? ' · ' + s.note : ''))}">
+        <span class="tw-t">${timeText(s.s, s.e)}</span>${s.kind !== 'turno' ? `<span class="tw-kl">${KIND[s.kind]}</span>` : ''}${s.note ? `<span class="tw-note" translate="no">${VR.esc(s.note)}</span>` : ''}
+      </button>`;
+
+    const render = () => {
+      const days = [...Array(7)].map((_, i) => addDays(monday, i));
+      const todayStr = ymd(new Date());
+      const sunday = days[6];
+      const sameMonth = monday.getMonth() === sunday.getMonth();
+      VR.$('#range').textContent = `${monday.toLocaleDateString(LOC, { day: 'numeric', ...(sameMonth ? {} : { month: 'long' }) })} – ${sunday.toLocaleDateString(LOC, { day: 'numeric', month: 'long', year: 'numeric' })}`;
+      const list = sortedPeople().filter((p) => p.active || shifts.some((s) => s.user_id === p.id));
+      const of = (uid, d) => shifts.filter((s) => s.user_id === uid && ymd(s.s) === ymd(d));
+
+      // Griglia: una riga per persona, una colonna per giorno (computer e tablet)
+      VR.$('#grid').innerHTML = `
+        <div class="tw-row tw-head">
+          <div class="tw-name">${L('Persona', 'Person')}</div>
+          ${days.map((d) => `<div class="tw-dh ${ymd(d) === todayStr ? 'is-today' : ''}">${dayName(d)} <b>${d.getDate()}</b></div>`).join('')}
+        </div>
+        ${list.map((p) => {
+          const tot = shifts.filter((s) => s.user_id === p.id && s.kind === 'turno').reduce((m, s) => m + (s.e - s.s), 0);
+          return `<div class="tw-row ${p.id === me ? 'is-me' : ''} ${p.active ? '' : 'is-gone'}">
+            <div class="tw-name"><span translate="no">${VR.esc(p.name)}</span><small>${VR.esc(roleLabel(p))}${tot ? ` · ${hoursText(tot)}` : ''}</small></div>
+            ${days.map((d) => `<div class="tw-cell ${ymd(d) === todayStr ? 'is-today' : ''}" data-user="${p.id}" data-date="${ymd(d)}">
+              ${of(p.id, d).map(chip).join('')}
+              ${p.active ? `<button type="button" class="tw-add" data-user="${p.id}" data-date="${ymd(d)}" aria-label="${VR.esc(L('Aggiungi un turno a ', 'Add a shift for ') + p.name + ', ' + dayLabel(d))}">+</button>` : ''}
+            </div>`).join('')}
+          </div>`;
+        }).join('')}
+        <div class="tw-row tw-foot">
+          <div class="tw-name">${L('In servizio', 'On duty')}</div>
+          ${days.map((d) => {
+            const n = new Set(shifts.filter((s) => s.kind === 'turno' && ymd(s.s) === ymd(d)).map((s) => s.user_id)).size;
+            const open = !hours.length || hours.some((h) => h.weekday === d.getDay());
+            return `<div class="tw-dh ${ymd(d) === todayStr ? 'is-today' : ''} ${n || !open ? '' : 'is-zero'}" ${n || open ? '' : `title="${L('Struttura chiusa', 'Closed')}"`}>${n || (open ? 0 : '–')}</div>`;
+          }).join('')}
+        </div>`;
+
+      // Elenco per giorno (telefono)
+      VR.$('#days').innerHTML = days.map((d) => {
+        const items = shifts.filter((s) => ymd(s.s) === ymd(d))
+          .sort((a, b) => a.s - b.s || nameOf(a.user_id).localeCompare(nameOf(b.user_id)));
+        return `<div class="tw-day ${ymd(d) === todayStr ? 'is-today' : ''}">
+          <div class="tw-day-h"><span>${VR.esc(dayName(d, 'long'))} ${d.getDate()}</span>
+            <button type="button" class="btn btn-ghost btn-small tw-add-day" data-date="${ymd(d)}">+ ${L('Turno', 'Shift')}</button></div>
+          ${items.length ? items.map((s) => `<button type="button" class="tw-line tw-k-${s.kind}" data-id="${s.id}">
+              <span class="tw-line-who" translate="no">${VR.esc(nameOf(s.user_id))}</span>
+              <span class="tw-line-t">${timeText(s.s, s.e)}${s.kind !== 'turno' ? ' · ' + KIND[s.kind] : ''}</span>
+              ${s.note ? `<span class="tw-note" translate="no">${VR.esc(s.note)}</span>` : ''}
+            </button>`).join('') : `<p class="tw-empty">${L('Nessun turno', 'No shifts')}</p>`}
+        </div>`;
+      }).join('');
+    };
+
+    const go = (d) => {
+      monday = mondayOf(d);
+      const u = new URL(location.href); u.searchParams.set('settimana', ymd(monday)); history.replaceState(null, '', u);
+      load(); loadLog(true);
+    };
+    VR.$('#prev').addEventListener('click', () => go(addDays(monday, -7)));
+    VR.$('#next').addEventListener('click', () => go(addDays(monday, 7)));
+    VR.$('#today').addEventListener('click', () => go(new Date()));
+    VR.$('#print').addEventListener('click', () => window.print());
+    VR.$('#add').addEventListener('click', () => openDialog({ user: people.has(me) ? me : sortedPeople()[0]?.id, date: ymd(new Date()) >= ymd(monday) && ymd(new Date()) < ymd(addDays(monday, 7)) ? ymd(new Date()) : ymd(monday) }));
+    VR.$('#weekPanel').addEventListener('click', (ev) => {
+      const c = ev.target.closest('[data-id]');
+      if (c) { const s = shifts.find((x) => x.id === c.dataset.id); if (s) openDialog({ shift: s }); return; }
+      const a = ev.target.closest('.tw-add, .tw-add-day');
+      if (a) { openDialog({ user: a.dataset.user || (people.has(me) ? me : sortedPeople()[0]?.id), date: a.dataset.date }); return; }
+      const cell = ev.target.closest('.tw-cell');
+      if (cell && people.get(cell.dataset.user)?.active) openDialog({ user: cell.dataset.user, date: cell.dataset.date });
+    });
+
+    VR.$('#copyWeek').addEventListener('click', async (ev) => {
+      const from = addDays(monday, -7);
+      const fromLbl = from.toLocaleDateString(LOC, { day: 'numeric', month: 'long' });
+      if (!confirm(L(`Copio in questa settimana i turni della settimana del ${fromLbl}?\nI turni che ci sono già restano, e quelli uguali non vengono duplicati.`,
+        `Copy the shifts from the week of ${fromLbl} into this week?\nExisting shifts stay, and identical ones are not duplicated.`))) return;
+      const b = ev.currentTarget; b.disabled = true;
+      const { data, error } = await VR.sb.rpc('shifts_copy_week', { p_clinic: ctx.clinicId, p_from: ymd(from), p_to: ymd(monday) });
+      b.disabled = false;
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      toast(data ? (data === 1 ? L('Copiato 1 turno.', '1 shift copied.') : L(`Copiati ${data} turni.`, `${data} shifts copied.`)) : L('Nessun turno da copiare.', 'No shifts to copy.'));
+      load(); loadLog(true);
+    });
+
+    // ---------- Finestra del turno ----------
+    const dlg = VR.$('#dlg'), form = VR.$('#form');
+    let editing = null, kind = 'turno';
+    const setKind = (k) => { kind = k; VR.$('#fKind').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.kind === k)); quick(); };
+    VR.$('#fKind').addEventListener('click', (ev) => { const b = ev.target.closest('[data-kind]'); if (b) setKind(b.dataset.kind); });
+
+    // Scorciatoie dagli orari di apertura del giorno scelto
+    const quick = () => {
+      const d = VR.$('#fDate').value ? parseYmd(VR.$('#fDate').value) : new Date();
+      const h = hours.find((x) => x.weekday === d.getDay());
+      const t = (v) => (v || '').slice(0, 5);
+      let opts = [];
+      if (kind === 'assenza') opts = [[L('Tutto il giorno', 'All day'), '00:00', '00:00']];
+      if (h) {
+        if (h.start_time2 && h.end_time2) {
+          opts.push([L('Mattina', 'Morning'), t(h.start_time), t(h.end_time)], [L('Pomeriggio', 'Afternoon'), t(h.start_time2), t(h.end_time2)], [L('Giornata', 'Full day'), t(h.start_time), t(h.end_time2)]);
+        } else opts.push([L('Orario di apertura', 'Opening hours'), t(h.start_time), t(h.end_time)]);
+      } else if (kind !== 'assenza') {
+        opts.push([L('Mattina', 'Morning'), '08:00', '14:00'], [L('Pomeriggio', 'Afternoon'), '14:00', '20:00']);
+      }
+      if (kind === 'reperibilita') opts.push([L('Notte', 'Night'), '20:00', '08:00']);
+      VR.$('#fQuick').innerHTML = opts.map(([l, s, e]) => `<button type="button" class="tw-q" data-s="${s}" data-e="${e}">${VR.esc(l)} <small>${s === e ? '' : `${s}–${e}`}</small></button>`).join('');
+    };
+    VR.$('#fQuick').addEventListener('click', (ev) => {
+      const b = ev.target.closest('.tw-q'); if (!b) return;
+      VR.$('#fStart').value = b.dataset.s; VR.$('#fEnd').value = b.dataset.e; dur();
+    });
+
+    // Durata e turno che finisce il giorno dopo
+    const span = () => {
+      const date = VR.$('#fDate').value, s = VR.$('#fStart').value, e = VR.$('#fEnd').value;
+      if (!date || !s || !e) return null;
+      const start = new Date(`${date}T${s}`);
+      let end = new Date(`${date}T${e}`);
+      if (end <= start) end = addDays(end, 1);
+      return { start, end };
+    };
+    const dur = () => {
+      const x = span(), el = VR.$('#fDur');
+      if (!x) { el.textContent = ''; return; }
+      const next = ymd(x.end) !== ymd(x.start) && hm(x.end) !== '00:00';
+      el.innerHTML = isAllDay(x.start, x.end) ? L('Tutto il giorno', 'All day')
+        : `${hoursText(x.end - x.start)}${next ? `<small>${L('finisce il giorno dopo', 'ends the next day')}</small>` : ''}`;
+    };
+    ['#fStart', '#fEnd'].forEach((s) => VR.$(s).addEventListener('input', dur));
+    VR.$('#fDate').addEventListener('change', () => { quick(); dur(); repeatBoxes(); });
+
+    // Ripeti in altri giorni della stessa settimana (solo per i turni nuovi)
+    const repeatBoxes = () => {
+      const base = VR.$('#fDate').value ? parseYmd(VR.$('#fDate').value) : monday;
+      const mon = mondayOf(base);
+      VR.$('#fRepeat').innerHTML = [...Array(7)].map((_, i) => {
+        const d = addDays(mon, i), same = ymd(d) === ymd(base);
+        return `<label class="tw-rp ${same ? 'is-base' : ''}"><input type="checkbox" value="${ymd(d)}" ${same ? 'checked disabled' : ''}><span>${dayName(d).slice(0, 3)}<b>${d.getDate()}</b></span></label>`;
+      }).join('');
+    };
+
+    const fillWho = (selected) => {
+      VR.$('#fWho').innerHTML = sortedPeople().filter((p) => p.active || p.id === selected)
+        .map((p) => `<option value="${p.id}" ${p.id === selected ? 'selected' : ''}>${VR.esc(p.name)}${p.role && VR.ROLE[p.role] ? ' · ' + VR.esc(p.active ? VR.ROLE[p.role] : roleLabel(p)) : ''}</option>`).join('');
+    };
+
+    const openDialog = ({ shift = null, user = null, date = null }) => {
+      editing = shift;
+      VR.hide(VR.$('#fMsg')); VR.hide(VR.$('#fWarn')); delete VR.$('#fWarn').dataset.ok;
+      VR.$('#dlgTitle').textContent = shift ? L('Modifica turno', 'Edit shift') : L('Nuovo turno', 'New shift');
+      fillWho(shift ? shift.user_id : user);
+      VR.$('#fDate').value = shift ? ymd(shift.s) : (date || ymd(monday));
+      setKind(shift ? shift.kind : 'turno');
+      if (shift) { VR.$('#fStart').value = hm(shift.s); VR.$('#fEnd').value = hm(shift.e); }
+      else {
+        const first = VR.$('#fQuick').querySelector('.tw-q');
+        VR.$('#fStart').value = first ? first.dataset.s : '09:00'; VR.$('#fEnd').value = first ? first.dataset.e : '13:00';
+      }
+      VR.$('#fNote').value = shift?.note || '';
+      repeatBoxes();
+      VR.$('#fRepeatBox').hidden = !!shift;
+      VR.$('#fDel').hidden = !shift;
+      VR.$('#fSave').disabled = false;
+      dur();
+      VR.$('#fHistBox').hidden = !shift;
+      if (shift) loadShiftHistory(shift.id);
+      dlg.showModal();
+    };
+    VR.$('#fClose').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const fMsg = VR.$('#fMsg'), warn = VR.$('#fWarn');
+      VR.hide(fMsg);
+      const x = span(), uid = VR.$('#fWho').value;
+      if (!uid) { VR.say(fMsg, L('Scegli la persona.', 'Choose the person.'), 'error'); return; }
+      if (!x) { VR.say(fMsg, L('Indica giorno, inizio e fine del turno.', 'Enter day, start and end of the shift.'), 'error'); return; }
+      const note = VR.$('#fNote').value.trim() || null;
+      const dates = editing ? [VR.$('#fDate').value]
+        : [VR.$('#fDate').value, ...[...VR.$('#fRepeat').querySelectorAll('input:checked:not(:disabled)')].map((i) => i.value)];
+      const rows = dates.map((d) => {
+        const off = (parseYmd(d) - parseYmd(VR.$('#fDate').value)) / 864e5;
+        const s = addDays(x.start, off), e = addDays(x.end, off);
+        return { clinic_id: ctx.clinicId, user_id: uid, starts_at: s.toISOString(), ends_at: e.toISOString(), kind, note, _s: s, _e: e };
+      });
+      // Sovrapposizioni con altri turni della stessa persona: si avvisa, poi si può salvare lo stesso
+      if (!warn.dataset.ok) {
+        const lo = new Date(Math.min(...rows.map((r) => r._s))), hi = new Date(Math.max(...rows.map((r) => r._e)));
+        const { data: near } = await VR.sb.from('shifts').select('id, starts_at, ends_at, kind').eq('clinic_id', ctx.clinicId).eq('user_id', uid)
+          .lt('starts_at', hi.toISOString()).gt('ends_at', lo.toISOString());
+        const clash = (near || []).filter((n) => n.id !== editing?.id && rows.some((r) => new Date(n.starts_at) < r._e && new Date(n.ends_at) > r._s));
+        if (clash.length) {
+          warn.innerHTML = `${VR.esc(L(`${nameOf(uid)} ha già un turno che si sovrappone:`, `${nameOf(uid)} already has an overlapping shift:`))} ` +
+            clash.map((n) => { const s = new Date(n.starts_at), e = new Date(n.ends_at); return `<b>${VR.esc(dayLabel(s))} ${timeText(s, e)}</b>${n.kind !== 'turno' ? ' (' + KIND[n.kind] + ')' : ''}`; }).join(', ') +
+            `. ${VR.esc(L('Premi di nuovo Salva per confermare.', 'Press Save again to confirm.'))}`;
+          warn.dataset.ok = '1'; VR.show(warn); return;
+        }
+      }
+      const btn = VR.$('#fSave'); btn.disabled = true;
+      const clean = rows.map(({ _s, _e, ...r }) => r);
+      const { error } = editing
+        ? await VR.sb.from('shifts').update({ user_id: clean[0].user_id, starts_at: clean[0].starts_at, ends_at: clean[0].ends_at, kind, note }).eq('id', editing.id)
+        : await VR.sb.from('shifts').insert(clean);
+      btn.disabled = false;
+      if (error) { VR.say(fMsg, VR.errorText(error), 'error'); return; }
+      dlg.close();
+      toast(editing ? L('Turno aggiornato.', 'Shift updated.') : clean.length > 1 ? L(`${clean.length} turni aggiunti.`, `${clean.length} shifts added.`) : L('Turno aggiunto.', 'Shift added.'));
+      // se il turno è finito in un'altra settimana, ci si sposta lì
+      const target = mondayOf(rows[0]._s);
+      if (ymd(target) !== ymd(monday)) go(target); else { load(); loadLog(true); }
+    });
+    VR.$('#fWho').addEventListener('change', () => delete VR.$('#fWarn').dataset.ok);
+    ['#fDate', '#fStart', '#fEnd'].forEach((s) => VR.$(s).addEventListener('change', () => { delete VR.$('#fWarn').dataset.ok; VR.hide(VR.$('#fWarn')); }));
+
+    VR.$('#fDel').addEventListener('click', async () => {
+      if (!editing) return;
+      if (!confirm(L(`Elimino il turno di ${nameOf(editing.user_id)} di ${dayLabel(editing.s)}, ${timeText(editing.s, editing.e)}?\nResterà comunque nello storico.`,
+        `Delete ${nameOf(editing.user_id)}'s shift on ${dayLabel(editing.s)}, ${timeText(editing.s, editing.e)}?\nIt will still appear in the history.`))) return;
+      const { data, error } = await VR.sb.from('shifts').delete().eq('id', editing.id).select('id');
+      if (error || !data?.length) { VR.say(VR.$('#fMsg'), error ? VR.errorText(error) : L('Turno non eliminato: forse non hai i permessi.', 'Shift not deleted: you may not have permission.'), 'error'); return; }
+      dlg.close(); toast(L('Turno eliminato.', 'Shift deleted.'));
+      load(); loadLog(true);
+    });
+
+    // ---------- Storico ----------
+    // Ogni riga dice chi, quando e cosa: lo scrive il database, non si può cambiare dall'app.
+    const whenText = (iso) => {
+      const d = new Date(iso), today = ymd(new Date()), yest = ymd(addDays(new Date(), -1));
+      const day = ymd(d) === today ? L('oggi', 'today') : ymd(d) === yest ? L('ieri', 'yesterday') : d.toLocaleDateString(LOC, { day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+      return `${day} ${L('alle', 'at')} ${hm(d)}`;
+    };
+    const snapWhen = (o) => { const s = new Date(o.starts_at), e = new Date(o.ends_at); return `${dayLabel(s)}, ${timeText(s, e)}`; };
+    const kindTxt = (o) => (o.kind && o.kind !== 'turno' ? ` (${KIND[o.kind] || o.kind})` : '');
+    const target = (o) => (o.user_id === me ? L('te', 'you') : VR.esc(nameOf(o.user_id, o.user_name)));
+    const targetOf = (o) => (o.user_id === me ? L('il tuo turno', 'your shift') : `${L('il turno di', 'the shift of')} ${VR.esc(nameOf(o.user_id, o.user_name))}`);
+    const describe = (r) => {
+      // chi l'ha fatto: "Hai aggiunto…" se sei tu, "Giulia Neri ha aggiunto…" se è un collega
+      const self = r.changed_by && r.changed_by === me;
+      const actor = self ? '' : r.changed_by ? who(r.changed_by, r.changed_by_name) + ' ' : `<b>${L('Il sistema', 'The system')}</b> `;
+      const V = (it, en) => (self ? (EN ? 'You ' + en : it.charAt(0).toUpperCase() + it.slice(1)) : (EN ? en : 'ha ' + it.replace(/^hai /, '')));
+      const b = r.before || {}, a = r.after || {};
+      let main = '', changes = [];
+      if (r.action === 'creato') {
+        main = `${actor}${V('hai aggiunto un turno a', 'added a shift for')} <b>${target(a)}</b>: ${snapWhen(a)}${kindTxt(a)}`;
+        if (a.note) changes.push(`${L('nota', 'note')}: «${VR.esc(a.note)}»`);
+      } else if (r.action === 'eliminato') {
+        main = `${actor}${V('hai eliminato', 'deleted')} <b>${targetOf(b)}</b>: ${snapWhen(b)}${kindTxt(b)}`;
+      } else {
+        main = `${actor}${V('hai modificato', 'changed')} <b>${targetOf(b)}</b> ${L('di', 'on')} ${dayLabel(new Date(b.starts_at))}`;
+        if (b.user_id !== a.user_id) changes.push(`${L('persona', 'person')}: ${VR.esc(b.user_name || nameOf(b.user_id))} → <b>${VR.esc(a.user_name || nameOf(a.user_id))}</b>`);
+        if (b.starts_at !== a.starts_at || b.ends_at !== a.ends_at) {
+          const bs = new Date(b.starts_at), as = new Date(a.starts_at);
+          const sameDay = ymd(bs) === ymd(as);
+          changes.push(`${L('orario', 'time')}: ${sameDay ? timeText(bs, new Date(b.ends_at)) : snapWhen(b)} → <b>${sameDay ? timeText(as, new Date(a.ends_at)) : snapWhen(a)}</b>`);
+        }
+        if (b.kind !== a.kind) changes.push(`${L('tipo', 'type')}: ${KIND[b.kind] || b.kind} → <b>${KIND[a.kind] || a.kind}</b>`);
+        if ((b.note || '') !== (a.note || '')) changes.push(`${L('nota', 'note')}: ${b.note ? '«' + VR.esc(b.note) + '»' : '—'} → <b>${a.note ? '«' + VR.esc(a.note) + '»' : '—'}</b>`);
+      }
+      return `<li class="tw-ev tw-ev-${r.action}">
+        <span class="tw-ev-when">${whenText(r.changed_at)}</span>
+        <span class="tw-ev-what">${main}${changes.length ? `<span class="tw-ev-ch">${changes.join(' · ')}</span>` : ''}${r.reason ? `<span class="tw-ev-why">${VR.esc(EN ? r.reason.replace(/^Copiato dalla settimana del /, 'Copied from the week of ') : r.reason)}</span>` : ''}</span>
+      </li>`;
+    };
+
+    const PAGE = 30;
+    let logOffset = 0, logWho = '';
+    const loadLog = async (reset = false) => {
+      if (reset) logOffset = 0;
+      let q = VR.sb.from('shift_log').select('*').eq('clinic_id', ctx.clinicId).order('changed_at', { ascending: false }).order('id', { ascending: false });
+      if (logWho) q = q.or(`after->>user_id.eq.${logWho},before->>user_id.eq.${logWho},changed_by.eq.${logWho}`);
+      const { data, error } = await q.range(logOffset, logOffset + PAGE - 1);
+      const box = VR.$('#log');
+      if (error) { box.innerHTML = `<li class="notice notice-error">${VR.esc(VR.errorText(error))}</li>`; return; }
+      const missing = [...new Set((data || []).flatMap((r) => [r.changed_by, r.before?.user_id, r.after?.user_id]).filter((id) => id && !people.has(id)))];
+      if (missing.length) await addPeople(missing.map((id) => ({ user_id: id, role: '', status: 'removed' })));
+      const html = (data || []).map(describe).join('');
+      if (reset) box.innerHTML = html || `<li class="tw-empty">${L('Ancora nessuna modifica.', 'No changes yet.')}</li>`;
+      else box.insertAdjacentHTML('beforeend', html);
+      logOffset += (data || []).length;
+      VR.$('#logMore').hidden = !data || data.length < PAGE;
+    };
+    VR.$('#logMore').addEventListener('click', () => loadLog(false));
+    VR.$('#logWho').addEventListener('change', (e) => { logWho = e.target.value; loadLog(true); });
+
+    const loadShiftHistory = async (id) => {
+      const box = VR.$('#fHist'); box.innerHTML = `<li class="tw-empty">${L('Caricamento…', 'Loading…')}</li>`;
+      const { data, error } = await VR.sb.from('shift_log').select('*').eq('shift_id', id).order('changed_at', { ascending: false }).order('id', { ascending: false }).limit(50);
+      if (editing?.id !== id) return;
+      box.innerHTML = error ? `<li class="notice notice-error">${VR.esc(VR.errorText(error))}</li>` : (data || []).map(describe).join('') || `<li class="tw-empty">—</li>`;
+    };
+
+    // ---------- Cosa è cambiato nei miei turni da quando sono passato l'ultima volta ----------
+    const SEEN = 'vetroom_turni_visto_' + ctx.clinicId;
+    const mine = async () => {
+      let seen = null;
+      try { seen = localStorage.getItem(SEEN); localStorage.setItem(SEEN, new Date().toISOString()); } catch { /* niente memoria locale */ }
+      if (!seen) return;
+      const { data } = await VR.sb.from('shift_log').select('*').eq('clinic_id', ctx.clinicId).gt('changed_at', seen).neq('changed_by', me)
+        .or(`after->>user_id.eq.${me},before->>user_id.eq.${me}`).order('changed_at', { ascending: false }).limit(10);
+      if (!data || !data.length) return;
+      const box = VR.$('#mine');
+      box.className = 'notice notice-info tw-mine';
+      box.innerHTML = `<div class="tw-mine-h"><strong>${data.length === 1 ? L('Un collega ha cambiato un tuo turno', 'A colleague changed one of your shifts') : L(`${data.length} modifiche ai tuoi turni fatte da colleghi`, `${data.length} changes to your shifts made by colleagues`)}</strong>
+        <button type="button" class="toast-x" aria-label="${L('Chiudi', 'Close')}" style="color:inherit">×</button></div>
+        <ol class="tw-log tw-log-small" translate="no">${data.map(describe).join('')}</ol>`;
+      box.querySelector('.toast-x').addEventListener('click', () => VR.hide(box));
+      VR.show(box);
+    };
+
+    // ---------- Avvio ----------
+    VR.$('#logWho').innerHTML = `<option value="">${L('Tutte le persone', 'Everyone')}</option>` +
+      sortedPeople().map((p) => `<option value="${p.id}">${VR.esc(p.name)}</option>`).join('');
+    await load();
+    VR.hide(loading);
+    ['#bar', '#weekPanel', '#hint', '#logPanel'].forEach((s) => VR.show(VR.$(s)));
+    loadLog(true);
+    mine();
+    if (VR.param('nuovo')) VR.$('#add').click();
+  })();
+  </script>
+</body>
+</html>

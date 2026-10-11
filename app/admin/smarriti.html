@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Smarriti · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-11d">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-11d"></script>
+  <script src="../js/app.js?v=2026-10-11d"></script>
+  <script src="plancia.js?v=2026-10-11d"></script>
+</head>
+<body class="pl" data-station="smarriti">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Smarriti</h1><p>Gli avvisi di animali smarriti pubblicati su FurrFinder: quanti sono, quanto girano, quanti tornano a casa. Da qui sospendi un avviso falso o segnalato.</p></div>
+    <div class="actions"><a class="btn" href="/smarriti/" target="_blank" rel="noopener">Pagine pubbliche ↗</a><button class="btn" type="button" id="csv">Esporta CSV</button></div></div>
+
+  <section class="pn">
+    <div class="pn-h"><h2>Andamento</h2><div class="tools"><div class="seg" role="group" aria-label="Periodo" id="per"></div></div></div>
+    <div class="gauges" id="gg" style="margin-top:0"><p class="loader">Caricamento</p></div>
+    <p class="small dim" id="canali" style="margin:12px 0 0"></p>
+  </section>
+
+  <section class="pn">
+    <div class="pn-h">
+      <div class="seg" role="group" aria-label="Quali" id="fSt"></div>
+      <div class="tools"><input type="search" class="search" id="q" placeholder="Nome, città, codice o email"></div>
+    </div>
+    <div id="tbl"><p class="loader">Caricamento</p></div>
+  </section>
+
+  <section class="pn" id="det" hidden>
+    <div class="pn-h"><h2 id="detTitle">Dettaglio</h2><div class="tools" id="detAct"></div></div>
+    <div id="detBody"></div>
+  </section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc } = PL;
+  const qs = new URLSearchParams(location.search);
+  let st = qs.get('stato') || 'aperto', giorni = 30, rows = [];
+  const STS = [['aperto', 'Aperti'], ['segnalati', 'Segnalati'], ['ritrovato', 'Ritrovati'], ['scaduto', 'Scaduti'], ['chiuso', 'Chiusi'], ['sospeso', 'Sospesi'], ['', 'Tutti']];
+  const PILL = { aperto: '<span class="pill bad">Aperto</span>', ritrovato: '<span class="pill ok">Ritrovato</span>', scaduto: '<span class="pill">Scaduto</span>', chiuso: '<span class="pill">Chiuso</span>', sospeso: '<span class="pill warn">Sospeso</span>' };
+  const n = PL.n;
+
+  // ---------- numeri ----------
+  const stat = async () => {
+    $('#per').innerHTML = [[7, '7 giorni'], [30, '30 giorni'], [90, '90 giorni'], [365, 'Un anno']].map(([g, l]) => `<button type="button" data-g="${g}" aria-pressed="${g === giorni}">${l}</button>`).join('');
+    let s;
+    try { s = await PL.rpc('smarriti_admin_stat', { p_giorni: giorni }); } catch (e) { $('#gg').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; return; }
+    const ev = s.eventi || {}, somma = (p) => Object.entries(ev).filter(([k]) => k.startsWith(p)).reduce((t, [, v]) => t + Number(v), 0);
+    const ore = s.ore_ritrovamento;
+    $('#gg').innerHTML = [
+      [s.aperti, 'Aperti adesso'], [s.nuovi, 'Nuovi avvisi'], [s.ritrovati, 'Tornati a casa'],
+      [ore == null ? '—' : ore < 48 ? ore + ' h' : Math.round(ore / 24) + ' g', 'Tempo medio per ritrovarli'],
+      [somma('vista'), 'Visite alle pagine'], [somma('condividi') + somma('locandina'), 'Condivisioni e locandine'],
+      [s.avvistamenti, 'Avvistamenti ricevuti'], [ev.registrati || 0, 'Tocchi su "Crea la scheda"'],
+      [s.segnalazioni, 'Segnalazioni da guardare']
+    ].map(([v, l]) => `<div class="gauge"><b>${typeof v === 'number' ? n(v) : esc(String(v))}</b><span>${l}</span></div>`).join('');
+    const canali = Object.entries(ev).filter(([k]) => k.startsWith('vista:')).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k.slice(6))} <b>${n(v)}</b>`);
+    $('#canali').innerHTML = canali.length ? 'Da dove arrivano le visite: ' + canali.join(' · ') : '';
+  };
+  $('#per').addEventListener('click', (e) => { const b = e.target.closest('[data-g]'); if (b) { giorni = Number(b.dataset.g); stat(); } });
+
+  // ---------- elenco ----------
+  const T = PL.table({ el: $('#tbl'), pageSize: 50, empty: 'Nessun avviso con questi criteri.', onRow: (r) => { apri(r.id); return null; }, cols: [
+    { k: 'nome', l: 'Animale', sort: (r) => r.nome, render: (r) => `<b>${esc(r.nome)}</b><span class="sub">${esc([r.specie, r.citta].filter(Boolean).join(' · '))} · <span class="mono">${esc(r.codice)}</span></span>` },
+    { k: 'owner', l: 'Proprietario', hideM: true, sort: (r) => r.owner_email || '', render: (r) => `${esc(r.owner_nome || '')}<span class="sub">${esc(r.owner_email || '')}</span>` },
+    { k: 'st', l: 'Stato', sort: (r) => r.stato, render: (r) => (PILL[r.stato] || esc(r.stato)) + (r.segnalazioni ? ` <span class="pill bad">${r.segnalazioni} segnal.</span>` : '') },
+    { k: 'quando', l: 'Perso il', sort: (r) => new Date(r.perso_il).getTime(), render: (r) => `<span class="nowrap">${PL.d(r.perso_il)}</span><span class="sub">pubblicato ${PL.ago(r.creato_il)}</span>` },
+    { k: 'num', l: 'Visite · cond. · avv.', hideM: true, sort: (r) => Number(r.visite), render: (r) => `<span class="mono">${n(r.visite)} · ${n(r.condivisioni)} · ${n(r.avvistamenti)}</span>` },
+    { k: 'go', l: '', render: (r) => `<a class="btn sm ghost" href="${esc(r.url)}" target="_blank" rel="noopener">Pagina ↗</a>` }] });
+  const segs = () => { $('#fSt').innerHTML = STS.map(([k, l]) => `<button type="button" data-s="${k}" aria-pressed="${st === k}">${l}</button>`).join(''); };
+  const load = async () => {
+    try { rows = await PL.rpc('smarriti_admin', { p_stato: st || null, p_q: $('#q').value.trim() || null }) || []; T.set(rows); }
+    catch (e) { $('#tbl').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
+    const u = new URL(location.href); if (st) u.searchParams.set('stato', st); else u.searchParams.delete('stato'); history.replaceState(null, '', u); segs();
+  };
+  let t; $('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(load, 300); });
+  $('#fSt').addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { st = b.dataset.s; load(); } });
+  $('#csv').addEventListener('click', () => PL.csv(`furrfinder-smarriti-${new Date().toISOString().slice(0, 10)}.csv`, T.rows, [
+    ['Codice', (r) => r.codice], ['Animale', (r) => r.nome], ['Specie', (r) => r.specie], ['Città', (r) => r.citta], ['Stato', (r) => r.stato],
+    ['Perso il', (r) => PL.dt(r.perso_il)], ['Pubblicato', (r) => PL.dt(r.creato_il)], ['Chiuso', (r) => PL.dt(r.chiuso_il)],
+    ['Visite', (r) => r.visite], ['Condivisioni', (r) => r.condivisioni], ['Avvistamenti', (r) => r.avvistamenti], ['Proprietario', (r) => r.owner_email]]));
+
+  // ---------- dettaglio ----------
+  let cur = null;
+  const apri = async (id) => {
+    cur = id;
+    $('#det').hidden = false; $('#detBody').innerHTML = '<p class="loader">Caricamento</p>';
+    let d;
+    try { d = await PL.rpc('smarrito_admin_dettaglio', { p_id: id }); } catch (e) { $('#detBody').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; return; }
+    const s = d.smarrimento, av = d.avvistamenti || [], sg = d.segnalazioni || [], ev = d.eventi || {};
+    $('#detTitle').textContent = `${s.nome} · ${s.citta}`;
+    $('#detAct').innerHTML = (s.stato === 'aperto' ? '<button class="btn sm danger" data-x="sospendi">Sospendi</button><button class="btn sm ghost" data-x="chiudi">Chiudi</button>' : '')
+      + (['sospeso', 'scaduto', 'chiuso'].includes(s.stato) ? '<button class="btn sm" data-x="riapri">Riapri</button>' : '')
+      + (sg.some((g) => !g.gestita) ? '<button class="btn sm" data-x="gestite">Segnalazioni viste</button>' : '')
+      + `<a class="btn sm ghost" href="${esc(s.url)}" target="_blank" rel="noopener">Pagina pubblica ↗</a>`;
+    const foto = s.foto_path ? `${window.VETROOM_CONFIG.SUPABASE_URL}/storage/v1/object/public/smarriti/${s.foto_path}` : '';
+    $('#detBody').innerHTML = `
+      <div style="display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
+        <div>${foto ? `<img src="${esc(foto)}" alt="" style="width:100%;max-width:320px;border:1px solid var(--edge)">` : ''}
+          <p class="small">${PILL[s.stato] || ''} · <span class="mono">${esc(s.codice)}</span></p>
+          <p class="small dim">Perso il ${PL.dt(s.perso_il)}<br>${esc([s.luogo, s.citta, s.provincia].filter(Boolean).join(', '))}<br>Contatto: ${s.contatto === 'telefono' ? 'telefono pubblico ' + esc(s.telefono || '') : 'solo app'}${s.ricompensa ? ' · ricompensa' : ''}</p>
+          ${s.descrizione ? `<p class="small">${esc(s.descrizione)}</p>` : ''}
+          <p class="small dim">Eventi: ${Object.entries(ev).map(([k, v]) => `${esc(k)} <b>${n(v)}</b>`).join(' · ') || 'nessuno'}</p>
+        </div>
+        <div>
+          <h3 style="margin-top:0">Segnalazioni dal pubblico (${sg.length})</h3>
+          ${sg.length ? sg.map((g) => `<p class="small ${g.gestita ? 'dim' : ''}">${PL.ago(g.creato_il)} — ${esc(g.motivo)}${g.gestita ? ' <span class="pill">vista</span>' : ' <span class="pill bad">da vedere</span>'}</p>`).join('') : '<p class="small dim">Nessuna.</p>'}
+          <h3>Avvistamenti (${av.length})</h3>
+          ${av.length ? av.map((a) => `<p class="small ${a.nascosto ? 'dim' : ''}"><b>${a.tipo === 'trovato' ? 'Trovato' : 'Visto'}</b> ${PL.dt(a.visto_il)}${a.nascosto ? ' (nascosto dal proprietario)' : ''}<br>${esc(a.messaggio || '')}${a.nome || a.contatto ? `<br><span class="dim">${esc([a.nome, a.contatto].filter(Boolean).join(' · '))}</span>` : ''}</p>`).join('') : '<p class="small dim">Nessuno.</p>'}
+        </div>
+      </div>`;
+    $('#det').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  $('#detAct').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-x]'); if (!b || !cur) return;
+    const a = b.dataset.x;
+    let nota = null;
+    if (a === 'sospendi' || a === 'chiudi') {
+      const v = await PL.ask({ title: a === 'sospendi' ? 'Sospendere l\'avviso?' : 'Chiudere l\'avviso?', danger: a === 'sospendi', ok: a === 'sospendi' ? 'Sospendi' : 'Chiudi',
+        html: a === 'sospendi' ? 'La pagina pubblica smette di mostrare i dettagli e non si possono più inviare avvistamenti. Il proprietario vede che è stato sospeso.' : 'Come se lo avesse chiuso il proprietario, senza ritrovamento.',
+        fields: [{ name: 'nota', label: 'Nota interna (perché)', type: 'textarea', rows: 3 }] });
+      if (!v) return; nota = v.nota || null;
+    }
+    const r = await PL.run(b, () => PL.rpc('smarrito_admin_azione', { p_id: cur, p_azione: a, p_nota: nota }), 'Fatto.');
+    if (r !== undefined) { await Promise.all([load(), stat()]); apri(cur); PL.refreshSignals && PL.refreshSignals(); }
+  });
+
+  segs(); stat(); await load();
+  if (qs.get('id')) apri(qs.get('id'));
+})();
+</script>
+</body>
+</html>

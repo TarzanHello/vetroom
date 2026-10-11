@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2545">
+  <meta name="robots" content="noindex">
+  <title>Smarrito – FurrFinder</title>
+  <link rel="manifest" href="/app/manifest-furrfinder.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/furrfinder-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FurrFinder">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../vendor/leaflet-1.9.4/leaflet.css">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-11d">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../vendor/leaflet-1.9.4/leaflet.js"></script>
+  <script src="../vendor/qrcode-generator.js"></script>
+  <script src="../vendor/jspdf-2.5.2.min.js"></script>
+  <script src="../js/config.js?v=2026-10-11d"></script>
+  <script src="../js/app.js?v=2026-10-11d"></script>
+  <script src="../js/i18n.js?v=2026-10-11d"></script>
+  <script src="../js/layout.js?v=2026-10-11d"></script>
+  <script src="../js/clinica.js?v=2026-10-11d"></script>
+  <script src="../js/proprietario.js?v=2026-10-11d"></script>
+  <script src="../js/notifiche.js?v=2026-10-11d"></script>
+  <script src="../js/smarrito.js?v=2026-10-11d"></script>
+</head>
+<body data-shell="owner" data-nav="animali">
+
+  <main class="wrap">
+    <a class="back" id="back" href="./">← Home</a>
+    <p class="loader" id="loading">Caricamento…</p>
+    <div id="msg" hidden></div>
+
+    <!-- ===== Elenco delle mie segnalazioni ===== -->
+    <div id="list" hidden>
+      <div class="page-head"><h1>Smarrito</h1></div>
+      <section class="panel lost-intro">
+        <h2>Si è perso il tuo animale?</h2>
+        <p>Pubblica l'avviso in un minuto: FurrFinder prepara la pagina pubblica e la locandina da condividere su WhatsApp e Facebook. Chi lo vede ti avvisa subito, anche senza scaricare nulla.</p>
+        <div id="petPick" class="lost-petpick"></div>
+      </section>
+      <section class="panel" id="mineBox" hidden>
+        <h2>Le tue segnalazioni</h2>
+        <ul class="rows" id="mine"></ul>
+      </section>
+    </div>
+
+    <!-- ===== Nuova segnalazione, in 3 passi ===== -->
+    <div id="wizard" hidden>
+      <div class="page-head"><h1 id="wTitle">Si è perso?</h1></div>
+      <ol class="lost-steps" id="steps">
+        <li data-s="1" class="on"><b>1</b> Dove e quando</li>
+        <li data-s="2"><b>2</b> Foto e segni</li>
+        <li data-s="3"><b>3</b> Contatto</li>
+      </ol>
+
+      <section class="panel" data-pane="1">
+        <h2>Dove l'hai visto l'ultima volta?</h2>
+        <p class="hint-small" style="margin-top:0">Tocca la mappa nel punto preciso, oppure cerca la via. Puoi trascinare il segnaposto.</p>
+        <form class="row-inline lost-search" id="addrForm" novalidate>
+          <input type="search" id="addr" placeholder="Via, piazza o luogo (es. Villa Borghese, Roma)" autocomplete="off">
+          <button class="btn btn-ghost btn-small" type="submit">Cerca</button>
+          <button class="btn btn-ghost btn-small" type="button" id="geo">📍 Sono lì adesso</button>
+        </form>
+        <div id="addrHits" class="picker-results"></div>
+        <div id="wMap" class="lost-map" role="application" aria-label="Mappa: tocca per indicare il punto"></div>
+        <p class="hint-small">🔒 Il punto esatto resta privato: sulla pagina pubblica compare solo una zona di circa 400 metri.</p>
+        <div class="grid">
+          <div class="s8"><label for="luogo">Zona (compare sulla pagina pubblica)</label><input type="text" id="luogo" maxlength="160" placeholder="Es. Pigneto, vicino a via del Pigneto" autocomplete="off"></div>
+          <div class="s4"><label for="citta">Comune</label><input type="text" id="citta" maxlength="80" autocomplete="off"><input type="hidden" id="prov"></div>
+          <div><label for="giorno">Giorno</label><input type="date" id="giorno"></div>
+          <div><label for="ora">Ora (anche approssimativa)</label><input type="time" id="ora"></div>
+        </div>
+        <div id="m1" hidden></div>
+        <div class="actions-bar" style="margin-top:12px"><span class="spacer"></span><button class="btn btn-primary" type="button" data-next="2">Avanti</button></div>
+      </section>
+
+      <section class="panel" data-pane="2" hidden>
+        <h2>Foto e segni particolari</h2>
+        <div class="lost-photo-pick">
+          <div id="wPhoto" class="lost-photo"></div>
+          <div>
+            <label class="btn btn-ghost btn-small file-btn"><input type="file" id="wFile" accept="image/*"><span>Scegli un'altra foto</span></label>
+            <p class="hint-small">Meglio una foto recente, intera e ben illuminata: è quella che la gente ricorderà.</p>
+          </div>
+        </div>
+        <label for="descr" style="margin-top:12px">Come riconoscerlo</label>
+        <textarea id="descr" maxlength="1000" placeholder="Colore, taglia, collare, segni particolari. Come reagisce: si avvicina o scappa? Va chiamato per nome?"></textarea>
+        <label class="check" style="margin-top:8px"><input type="checkbox" id="ricomp"> <span>Offro una ricompensa <small class="muted">(non scrivere la cifra: attira i truffatori)</small></span></label>
+        <div id="m2" hidden></div>
+        <div class="actions-bar" style="margin-top:12px"><button class="btn btn-ghost" type="button" data-next="1">Indietro</button><span class="spacer"></span><button class="btn btn-primary" type="button" data-next="3">Avanti</button></div>
+      </section>
+
+      <section class="panel" data-pane="3" hidden>
+        <h2>Come vuoi essere contattato?</h2>
+        <label class="lost-radio"><input type="radio" name="contatto" value="app" checked>
+          <span><b>Solo tramite FurrFinder</b> <small>Chi lo vede ti lascia un messaggio con dove e quando: ti arriva una notifica e lo trovi qui. Il tuo numero resta privato.</small></span></label>
+        <label class="lost-radio"><input type="radio" name="contatto" value="telefono">
+          <span><b>Mostra anche il mio telefono</b> <small>Utile se l'hanno appena visto: ti chiamano subito. Il numero compare sulla pagina e sulla locandina.</small></span></label>
+        <div id="telBox" hidden><label for="tel">Numero da mostrare</label><input type="tel" id="tel" maxlength="30" autocomplete="tel"></div>
+        <div class="notice notice-info lost-safe-mini"><b>Prima di pubblicare:</b> chiama anche il canile comunale e la polizia locale, e controlla che i dati del microchip siano aggiornati in anagrafe.</div>
+        <div id="m3" hidden></div>
+        <div class="actions-bar" style="margin-top:12px"><button class="btn btn-ghost" type="button" data-next="2">Indietro</button><span class="spacer"></span><button class="btn btn-primary lost-go" type="button" id="publish">Pubblica l'avviso</button></div>
+      </section>
+    </div>
+
+    <!-- ===== Avviso in corso ===== -->
+    <div id="dash" hidden>
+      <section class="panel lost-head" id="dHead"></section>
+      <div id="dMsg" hidden></div>
+      <div id="pushAsk" hidden></div>
+
+      <section class="panel" id="sharePanel">
+        <h2 id="shareTitle">Fai girare l'avviso</h2>
+        <p class="hint-small" id="shareHint" style="margin-top:0">Le prime ore contano di più: mandalo ai gruppi WhatsApp del quartiere, pubblicalo nei gruppi Facebook di animali smarriti della tua città e chiedi ad amici e parenti di condividerlo.</p>
+        <div id="shareBtns"></div>
+        <h3 style="margin-top:16px">Locandina</h3>
+        <div class="lost-poster">
+          <button type="button" class="lost-poster-prev" id="posterPrev" data-poster="post" aria-label="Condividi la locandina"><span class="muted">Preparo la locandina…</span></button>
+          <div class="lost-poster-btns">
+            <button class="btn btn-primary btn-small" type="button" data-poster="post">Immagine per i post</button>
+            <button class="btn btn-ghost btn-small" type="button" data-poster="storia">Formato storia / stato</button>
+            <button class="btn btn-ghost btn-small" type="button" data-poster="a4" id="a4Btn">Stampa A4 (PDF)</button>
+            <p class="hint-small" id="posterHint">Stampa la versione A4 e lasciala a negozi, bar e studi veterinari della zona: il codice QR porta alla pagina dell'avviso.</p>
+          </div>
+        </div>
+        <p style="margin:12px 0 0"><a id="pubLink" target="_blank" rel="noopener">Apri la pagina pubblica ↗</a></p>
+      </section>
+
+      <section class="panel" id="avvPanel">
+        <h2>Avvistamenti <span class="pill" id="avvN">0</span></h2>
+        <div id="dMap" class="lost-map lost-map-small" aria-label="Mappa degli avvistamenti"></div>
+        <p class="hint-small"><span class="lost-dot red"></span> dove l'hai perso <span class="lost-dot amber"></span> avvistamenti <span class="lost-dot green"></span> "l'ho trovato"</p>
+        <div id="avv"></div>
+      </section>
+
+      <section class="panel lost-safe" id="safePanel">
+        <h2>Attenzione alle truffe</h2>
+        <ul>
+          <li><b>Non pagare mai prima</b> di aver visto il tuo animale, nemmeno "per le spese".</li>
+          <li>Chiedi una <b>foto con un dettaglio</b> che solo tu conosci (una macchia, il collare).</li>
+          <li>Fai l'incontro in un <b>luogo pubblico</b>, meglio in uno studio veterinario: può leggere il microchip e confermare che è lui.</li>
+        </ul>
+      </section>
+
+      <section class="panel" id="actPanel">
+        <div class="actions-bar" id="acts"></div>
+      </section>
+    </div>
+  </main>
+
+  <dialog class="dlg" id="foundDlg">
+    <h2>Che bella notizia! 🎉</h2>
+    <p>Segniamo <b class="f-name"></b> come ritrovato: la ricerca si ferma e la pagina pubblica mostra che è tornato a casa.</p>
+    <label class="check"><input type="checkbox" id="storia" checked> <span>Lascia la pagina online come storia a lieto fine <small class="muted">(dà speranza a chi sta cercando il suo animale)</small></span></label>
+    <div class="actions-bar" style="margin-top:14px"><button class="btn btn-primary" type="button" id="foundOk">È tornato a casa!</button><button class="btn btn-ghost" type="button" data-close>Annulla</button></div>
+  </dialog>
+
+  <dialog class="dlg" id="editDlg">
+    <h2>Modifica l'avviso</h2>
+    <form id="editForm" novalidate>
+      <div class="lost-photo-pick">
+        <div id="ePhoto" class="lost-photo"></div>
+        <label class="btn btn-ghost btn-small file-btn"><input type="file" id="eFile" accept="image/*"><span>Cambia foto</span></label>
+      </div>
+      <label for="eLuogo" style="margin-top:10px">Zona</label><input type="text" id="eLuogo" maxlength="160">
+      <label for="eDescr" style="margin-top:10px">Come riconoscerlo</label><textarea id="eDescr" maxlength="1000"></textarea>
+      <label class="check"><input type="checkbox" id="eRic"> <span>Offro una ricompensa</span></label>
+      <label class="check"><input type="checkbox" id="eTelOn"> <span>Mostra il mio telefono sulla pagina</span></label>
+      <input type="tel" id="eTel" maxlength="30" hidden>
+      <div id="eMsg" hidden></div>
+      <div class="actions-bar" style="margin-top:14px"><button class="btn btn-primary" type="submit">Salva</button><button class="btn btn-ghost" type="button" data-close>Annulla</button></div>
+    </form>
+  </dialog>
+
+  <script>
+  (async () => {
+    const $ = VR.$, msg = $('#msg'), loading = $('#loading');
+    const L$ = VR.lost;
+    let ctx;
+    try { ctx = await VR.loadOwnerContext(); } catch (e) {
+      if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
+      return;
+    }
+    const fail = (e) => { VR.hide(loading); VR.say(msg, /smarrito_|smarriti_/.test(e?.message || '') ? 'La funzione Smarrito non è ancora attiva: manca l\'aggiornamento del database.' : VR.errorText(e), 'error'); };
+    const rpc = async (name, args) => { const { data, error } = await VR.sb.rpc(name, args || {}); if (error) throw error; return data; };
+    const closeDlg = (d) => d.close();
+    document.querySelectorAll('dialog [data-close]').forEach((b) => b.addEventListener('click', () => closeDlg(b.closest('dialog'))));
+
+    const petId = VR.param('animale'), smId = VR.param('id');
+    let mine;
+    try { mine = await rpc('smarrito_miei'); } catch (e) { fail(e); return; }
+
+    // ======================= ELENCO =======================
+    const showList = async () => {
+      const { data: pets } = await VR.sb.from('pets').select('id, name, species, photo_path').eq('owner_user_id', ctx.uid).is('deleted_at', null).order('name');
+      const openBy = Object.fromEntries(mine.filter((s) => ['aperto', 'sospeso'].includes(s.stato)).map((s) => [s.pet_id, s]));
+      const urls = await Promise.all((pets || []).map((p) => VR.fileUrl(p.photo_path)));
+      $('#petPick').innerHTML = (pets || []).length
+        ? (pets || []).map((p, i) => openBy[p.id]
+          ? `<a class="lost-petbtn is-open" href="smarrito.html?id=${openBy[p.id].id}">${VR.avatarHtml(p, urls[i])}<span><b>${VR.esc(p.name)}</b><small>Avviso in corso · apri</small></span></a>`
+          : `<a class="lost-petbtn" href="smarrito.html?animale=${p.id}">${VR.avatarHtml(p, urls[i])}<span><b>${VR.esc(p.name)}</b><small>Si è perso? Pubblica l'avviso</small></span></a>`).join('')
+        : '<p class="muted" style="margin:0">Prima crea la scheda del tuo animale con una foto: servirà anche per l\'avviso. <a href="animale.html?nuovo=1">Crea la scheda</a></p>';
+      if (mine.length) {
+        $('#mine').innerHTML = mine.map((s) => `<li><a href="smarrito.html?id=${s.id}"><div class="main"><strong>${VR.esc(s.nome)}</strong>
+          <span>${VR.esc(s.citta)} · dal ${L$.giorno(s.perso_il)}${s.nuovi ? ` · <b class="lost-new">${s.nuovi} ${s.nuovi === 1 ? 'nuovo avvistamento' : 'nuovi avvistamenti'}</b>` : ''}</span></div>${L$.statoPill(s.stato)}</a></li>`).join('');
+        VR.show($('#mineBox'));
+      }
+      VR.hide(loading); VR.show($('#list'));
+    };
+
+    // ======================= PROCEDURA =======================
+    const showWizard = async (pet) => {
+      $('#back').href = 'animale.html?id=' + pet.id; $('#back').textContent = '← ' + pet.name;
+      $('#wTitle').textContent = `Si è perso ${pet.name}?`;
+      document.title = `${pet.name} smarrito – FurrFinder`;
+      VR.hide(loading); VR.show($('#wizard'));
+      VR.intro && VR.intro({ key: 'smarrito', slides: [
+        { icon: 'img/icons/pets.png', kicker: 'Smarrito', title: 'L\'avviso parte in un minuto', text: 'Tre passi: dove e quando, foto, contatto. FurrFinder prepara la pagina pubblica e la locandina da condividere.', tint: '#fee2e2' },
+        { icon: 'img/icons/owner_options.png', kicker: 'Privacy', title: 'Il punto esatto resta tuo', text: 'Sulla pagina pubblica compare solo una zona di circa 400 metri. Il telefono lo mostri solo se vuoi.', tint: '#e0f2fe' },
+        { icon: 'img/icons/owner_profile.png', kicker: 'Avvistamenti', title: 'Chi lo vede ti avvisa', text: 'Basta inquadrare il QR della locandina o aprire il link: dove, quando e una foto, senza scaricare nulla. Ti arriva una notifica.', tint: '#dcfce7', cta: 'Inizia' }
+      ] });
+
+      // --- passo 1: mappa
+      const now = new Date();
+      $('#giorno').value = now.toLocaleDateString('sv-SE'); $('#ora').value = now.toTimeString().slice(0, 5);
+      const map = L$.map($('#wMap'), { lat: 41.9, lon: 12.5, zoom: 6 });
+      let marker = null, point = null;
+      const setPoint = async (lat, lon, zoom) => {
+        point = { lat, lon }; VR.hide($('#m1'));
+        if (!marker) {
+          marker = window.L.marker([lat, lon], { draggable: true, icon: L$.pin() }).addTo(map);
+          marker.on('dragend', () => { const p = marker.getLatLng(); setPoint(p.lat, p.lng); });
+        } else marker.setLatLng([lat, lon]);
+        if (zoom) map.setView([lat, lon], zoom);
+        try {
+          const r = await L$.reverse(lat, lon);
+          if (r.citta) $('#citta').value = r.citta;
+          $('#prov').value = r.provincia || '';
+          if (r.luogo && !$('#luogo').dataset.touched) $('#luogo').value = r.luogo;
+        } catch { /* l'utente scrive a mano */ }
+      };
+      $('#luogo').addEventListener('input', () => { $('#luogo').dataset.touched = '1'; });
+      map.on('click', (e) => setPoint(e.latlng.lat, e.latlng.lng));
+      setTimeout(() => map.invalidateSize(), 200);
+      $('#geo').addEventListener('click', () => {
+        if (!navigator.geolocation) { VR.say($('#m1'), 'Questo telefono non condivide la posizione: tocca la mappa.', 'info'); return; }
+        $('#geo').disabled = true;
+        navigator.geolocation.getCurrentPosition((p) => { $('#geo').disabled = false; setPoint(p.coords.latitude, p.coords.longitude, 17); },
+          () => { $('#geo').disabled = false; VR.say($('#m1'), 'Posizione non disponibile: cerca la via o tocca la mappa.', 'info'); }, { enableHighAccuracy: true, timeout: 12000 });
+      });
+      $('#addrForm').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const q = $('#addr').value.trim(); if (q.length < 3) return;
+        const hits = await L$.search(q).catch(() => []);
+        $('#addrHits').innerHTML = hits.length ? hits.map((h, i) => `<button type="button" data-hit="${i}">${VR.esc(h.nome)}</button>`).join('') : '<p class="hint-small">Nessun risultato: prova con via e città, oppure tocca la mappa.</p>';
+        $('#addrHits').onclick = (e) => { const b = e.target.closest('[data-hit]'); if (!b) return; const h = hits[Number(b.dataset.hit)]; $('#addrHits').innerHTML = ''; setPoint(h.lat, h.lon, 17); };
+      });
+
+      // --- passo 2: foto
+      let newFile = null;
+      const petUrl = await VR.fileUrl(pet.photo_path);
+      const drawPhoto = (url) => { $('#wPhoto').innerHTML = url ? `<img src="${VR.esc(url)}" alt="">` : '<span class="lost-nophoto">Nessuna foto</span>'; };
+      drawPhoto(petUrl);
+      $('#wFile').addEventListener('change', async (ev) => {
+        const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+        try { newFile = await VR.resizeImage(f); drawPhoto(URL.createObjectURL(newFile)); } catch (e) { VR.say($('#m2'), VR.errorText(e), 'error'); }
+      });
+
+      // --- passo 3: contatto
+      $('#tel').value = ctx.profile.phone || '';
+      document.querySelectorAll('[name=contatto]').forEach((r) => r.addEventListener('change', () => { $('#telBox').hidden = r.value !== 'telefono' || !r.checked; }));
+
+      const go = (n) => {
+        if (n >= 2 && !point) { VR.say($('#m1'), 'Tocca la mappa nel punto in cui l\'hai visto l\'ultima volta.', 'error'); n = 1; }
+        else if (n >= 2 && !$('#citta').value.trim()) { VR.say($('#m1'), 'Scrivi il comune.', 'error'); n = 1; }
+        else if (n >= 3 && !newFile && !pet.photo_path) { VR.say($('#m2'), 'Aggiungi una foto: senza foto è molto più difficile riconoscerlo.', 'error'); n = 2; }
+        else { VR.hide($('#m1')); VR.hide($('#m2')); }
+        document.querySelectorAll('[data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== String(n); });
+        document.querySelectorAll('#steps li').forEach((li) => li.classList.toggle('on', Number(li.dataset.s) <= n));
+        if (n === 1) setTimeout(() => map.invalidateSize(), 50);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+      document.querySelectorAll('[data-next]').forEach((b) => b.addEventListener('click', () => go(Number(b.dataset.next))));
+
+      $('#publish').addEventListener('click', async () => {
+        const b = $('#publish'); VR.hide($('#m3'));
+        const contatto = document.querySelector('[name=contatto]:checked').value;
+        if (contatto === 'telefono' && !$('#tel').value.trim()) { VR.say($('#m3'), 'Scrivi il numero da mostrare.', 'error'); return; }
+        const when = new Date(`${$('#giorno').value || now.toLocaleDateString('sv-SE')}T${$('#ora').value || '12:00'}`);
+        b.disabled = true; b.textContent = 'Pubblico…';
+        try {
+          const sm = await rpc('smarrito_apri', { p_pet: pet.id, p_perso_il: when.toISOString(), p_lat: point.lat, p_lon: point.lon,
+            p_luogo: $('#luogo').value.trim() || null, p_citta: $('#citta').value.trim(), p_provincia: $('#prov').value || null,
+            p_descrizione: $('#descr').value.trim() || null, p_contatto: contatto, p_telefono: $('#tel').value.trim() || null, p_ricompensa: $('#ricomp').checked });
+          // foto: la nuova scelta, oppure una copia di quella della scheda (la scheda resta privata)
+          try {
+            let blob = newFile;
+            if (!blob && pet.photo_path) { const d = await VR.sb.storage.from('pet-files').download(pet.photo_path); if (d.error) throw d.error; blob = d.data; }
+            if (blob) {
+              const path = `${sm.id}/foto-${Date.now()}.jpg`;
+              const up = await VR.sb.storage.from('smarriti').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+              if (up.error) throw up.error;
+              await rpc('smarrito_aggiorna', { p_id: sm.id, p_dati: { foto_path: path } });
+            }
+          } catch (e) { VR.reportError(e, 'foto smarrito'); }
+          location.replace('smarrito.html?id=' + sm.id + '&nuovo=1');
+        } catch (e) { b.disabled = false; b.textContent = 'Pubblica l\'avviso'; VR.say($('#m3'), VR.errorText(e), 'error'); }
+      });
+    };
+
+    // ======================= AVVISO IN CORSO =======================
+    const showDash = async (sm) => {
+      document.title = `${sm.nome} – Smarrito – FurrFinder`;
+      $('#back').href = 'smarrito.html'; $('#back').textContent = '← Smarrito';
+      const dMsg = $('#dMsg');
+      let dmap = null, layer = null, avv = [];
+
+      const head = () => {
+        const photo = L$.photoUrl(sm.foto_path);
+        const titolo = sm.stato === 'ritrovato' ? `${sm.nome} è ${L$.tornato(sm)} a casa!` : sm.stato === 'aperto' ? `${sm.nome} è ${L$.perso(sm)}` : `Segnalazione ${L$.STATO[sm.stato].toLowerCase()}`;
+        $('#dHead').className = 'panel lost-head lost-head-' + sm.stato;
+        $('#dHead').innerHTML = `
+          <div class="lost-head-top">${photo ? `<img src="${VR.esc(photo)}" alt="">` : '<span class="lost-nophoto">?</span>'}
+            <div><div>${L$.statoPill(sm.stato)}</div><h1>${VR.esc(titolo)}</h1>
+              <p class="muted">${L$.perso(sm).charAt(0).toUpperCase() + L$.perso(sm).slice(1)} ${L$.quando(sm.perso_il)}<br>${VR.esc([sm.luogo, sm.citta].filter(Boolean).join(', '))}</p></div></div>
+          <div class="lost-stats">
+            <div><b>${sm.visite}</b><span>visite alla pagina</span></div>
+            <div><b>${sm.condivisioni}</b><span>condivisioni</span></div>
+            <div><b>${sm.avvistamenti}</b><span>avvistamenti</span></div>
+          </div>`;
+      };
+
+      const acts = () => {
+        const giorni = Math.ceil((new Date(sm.scade_il) - Date.now()) / 864e5);
+        let h = '';
+        if (sm.stato === 'aperto') {
+          h += '<button class="btn btn-primary lost-found" type="button" data-a="found">È tornato a casa!</button>';
+          h += '<button class="btn btn-ghost" type="button" data-a="edit">Modifica l\'avviso</button>';
+          if (giorni <= 5) h += `<button class="btn btn-ghost" type="button" data-a="renew">È ancora ${L$.perso(sm)}: rinnova</button>`;
+          h += '<span class="spacer"></span><button class="btn btn-danger" type="button" data-a="close">Chiudi senza ritrovamento</button>';
+        } else if (sm.stato === 'scaduto') {
+          h += `<p style="margin:0 0 8px;flex-basis:100%">L'avviso è scaduto dopo 30 giorni senza conferma. Se ${VR.esc(sm.nome)} è ancora ${L$.perso(sm)}, riattivalo.</p>`;
+          h += `<button class="btn btn-primary" type="button" data-a="renew">È ancora ${L$.perso(sm)}: riattiva</button><button class="btn btn-ghost" type="button" data-a="found">È tornato a casa</button>`;
+        } else if (sm.stato === 'ritrovato') {
+          h += `<label class="check" style="flex-basis:100%"><input type="checkbox" id="storiaOn" ${sm.storia ? 'checked' : ''}> <span>La pagina resta online come storia a lieto fine</span></label>`;
+        } else if (sm.stato === 'sospeso') {
+          h += '<p style="margin:0">L\'avviso è stato sospeso dall\'amministratore di FurrFinder. Per chiarimenti scrivi a <a href="mailto:info@vetroom.it">info@vetroom.it</a>.</p>';
+        } else {
+          h += '<p style="margin:0">Segnalazione chiusa.</p>';
+        }
+        $('#acts').innerHTML = h;
+        if (sm.stato === 'aperto' && giorni <= 5) VR.say(dMsg, `L'avviso scade tra ${Math.max(giorni, 0)} ${giorni === 1 ? 'giorno' : 'giorni'}: se ${sm.nome} è ancora ${L$.perso(sm)}, premi "Rinnova" in fondo alla pagina.`, 'info');
+      };
+
+      const share = () => {
+        const live = ['aperto', 'ritrovato'].includes(sm.stato);
+        $('#sharePanel').hidden = !live;
+        if (!live) return;
+        if (sm.stato === 'ritrovato') {
+          $('#shareTitle').textContent = 'Condividi la buona notizia';
+          $('#shareHint').textContent = 'Chi ha condiviso l\'avviso vuole sapere com\'è finita: manda la locandina "Ritrovato!" negli stessi gruppi. Ricordati di togliere i vecchi avvisi.';
+          $('#a4Btn').hidden = true; $('#posterHint').hidden = true;
+        }
+        $('#shareBtns').innerHTML = L$.shareButtons(sm);
+        $('#pubLink').href = L$.pageUrl(sm);
+        L$.poster(sm, 'post').then((c) => { $('#posterPrev').innerHTML = `<img src="${c.toDataURL('image/jpeg', 0.8)}" alt="Anteprima della locandina">`; }).catch(() => { $('#posterPrev').innerHTML = ''; });
+      };
+      L$.bindShare($('#shareBtns'), () => sm, (t) => VR.say(dMsg, t, 'ok'));
+      $('#sharePanel').addEventListener('click', async (ev) => {
+        const b = ev.target.closest('[data-poster]'); if (!b) return;
+        b.disabled = true;
+        try { const r = await L$.sharePoster(sm, b.dataset.poster); if (r === 'scaricata') VR.say(dMsg, b.dataset.poster === 'a4' ? 'PDF scaricato: aprilo e stampalo.' : 'Immagine salvata: la trovi nei download (o nella galleria) e puoi pubblicarla dove vuoi.', 'ok'); }
+        catch (e) { VR.say(dMsg, VR.errorText(e), 'error'); }
+        b.disabled = false;
+      });
+
+      // --- avvistamenti
+      const drawAvv = async () => {
+        $('#avvN').textContent = avv.filter((a) => !a.nascosto).length;
+        const urls = await Promise.all(avv.map((a) => (a.foto_path ? VR.fileUrl(a.foto_path, 'smarriti-avvistamenti') : null)));
+        const vis = avv.map((a, i) => [a, urls[i]]).filter(([a]) => !a.nascosto);
+        $('#avv').innerHTML = vis.length ? vis.map(([a, u]) => {
+          const tel = /^[+\d][\d\s./-]{5,}$/.test(a.contatto || ''), mail = /@/.test(a.contatto || '');
+          const c = a.contatto ? (tel ? `<a href="tel:${VR.esc(a.contatto.replace(/[^\d+]/g, ''))}">${VR.esc(a.contatto)}</a>` : mail ? `<a href="mailto:${VR.esc(a.contatto)}">${VR.esc(a.contatto)}</a>` : VR.esc(a.contatto)) : '';
+          return `<article class="lost-avv ${a.letto ? '' : 'is-new'}" id="a-${a.id}">
+            <div class="lost-avv-h"><span class="pill ${a.tipo === 'trovato' ? 'pill-ok' : 'pill-wait'}">${a.tipo === 'trovato' ? 'L\'ha trovato' : 'L\'ha visto'}</span>
+              <b>${VR.esc(L$.quando(a.visto_il))}</b>${a.letto ? '' : '<span class="lost-new">nuovo</span>'}</div>
+            ${a.messaggio ? `<p>${VR.esc(a.messaggio)}</p>` : ''}
+            ${a.nome || c ? `<p class="lost-avv-who">${VR.esc(a.nome || 'Anonimo')}${c ? ' · ' + c : ''}</p>` : '<p class="lost-avv-who muted">Nessun contatto lasciato</p>'}
+            ${u ? `<a href="${VR.esc(u)}" target="_blank" rel="noopener"><img class="lost-avv-img" src="${VR.esc(u)}" alt="Foto dell'avvistamento"></a>` : ''}
+            <div class="lost-avv-act">${a.lat != null ? `<button class="btn btn-ghost btn-small" type="button" data-show="${a.id}">Vedi sulla mappa</button>` : ''}
+              ${a.lat != null ? `<a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${a.lat},${a.lon}">Portami lì</a>` : ''}
+              <button class="btn btn-ghost btn-small" type="button" data-hide="${a.id}">Nascondi</button></div>
+          </article>`;
+        }).join('') : `<p class="muted" style="margin:0">Ancora nessun avvistamento. Quando qualcuno lo segnala, ti arriva una notifica e lo trovi qui.</p>`;
+        // mappa
+        if (!dmap) {
+          dmap = L$.map($('#dMap'), { lat: sm.lat, lon: sm.lon, zoom: 15 });
+          window.L.marker([sm.lat, sm.lon], { icon: L$.pin('#dc2626') }).addTo(dmap).bindPopup('Qui l\'hai perso');
+          window.L.circle([sm.lat_pub, sm.lon_pub], { radius: 400, color: '#dc2626', weight: 1, fillOpacity: 0.06 }).addTo(dmap);
+          layer = window.L.layerGroup().addTo(dmap);
+        }
+        layer.clearLayers();
+        const pts = [[sm.lat, sm.lon]];
+        vis.forEach(([a]) => {
+          if (a.lat == null) return;
+          window.L.marker([a.lat, a.lon], { icon: L$.pin(a.tipo === 'trovato' ? '#16a34a' : '#f59e0b') }).addTo(layer)
+            .bindPopup(`<b>${a.tipo === 'trovato' ? 'Trovato' : 'Visto'}</b><br>${VR.esc(L$.quando(a.visto_il))}${a.messaggio ? '<br>' + VR.esc(a.messaggio.slice(0, 120)) : ''}`);
+          pts.push([a.lat, a.lon]);
+        });
+        if (pts.length > 1) dmap.fitBounds(pts, { padding: [30, 30], maxZoom: 16 });
+        setTimeout(() => dmap.invalidateSize(), 100);
+      };
+      const loadAvv = async () => {
+        try {
+          const prima = avv.length;
+          avv = await rpc('smarrito_avvistamenti', { p_id: sm.id }) || [];
+          await drawAvv();
+          if (avv.some((a) => !a.letto)) setTimeout(() => rpc('smarrito_avvistamenti_letti', { p_id: sm.id }).catch(() => {}), 4000);
+          return avv.length > prima;
+        } catch (e) { VR.reportError(e, 'avvistamenti'); return false; }
+      };
+      $('#avv').addEventListener('click', async (ev) => {
+        const s = ev.target.closest('[data-show]'), h = ev.target.closest('[data-hide]');
+        if (s) { const a = avv.find((x) => x.id === s.dataset.show); dmap.setView([a.lat, a.lon], 17); $('#dMap').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        if (h) {
+          if (!confirm('Nascondere questa segnalazione? Usalo per messaggi inutili o sospetti.')) return;
+          try { await rpc('smarrito_avvistamento_segna', { p_id: h.dataset.hide, p_nascosto: true }); avv.find((x) => x.id === h.dataset.hide).nascosto = true; drawAvv(); }
+          catch (e) { VR.say(dMsg, VR.errorText(e), 'error'); }
+        }
+      });
+
+      // --- azioni
+      const reload = async () => { const all = await rpc('smarrito_miei'); sm = all.find((x) => x.id === sm.id) || sm; head(); acts(); share(); };
+      $('#acts').addEventListener('click', async (ev) => {
+        const b = ev.target.closest('[data-a]'); if (!b) return;
+        VR.hide(dMsg);
+        try {
+          if (b.dataset.a === 'found') { $('#foundDlg .f-name').textContent = sm.nome; $('#foundDlg').showModal(); }
+          if (b.dataset.a === 'renew') { await rpc('smarrito_conferma', { p_id: sm.id }); await reload(); VR.say(dMsg, 'Avviso rinnovato per altri 30 giorni.', 'ok'); }
+          if (b.dataset.a === 'close') {
+            if (!confirm('Chiudere l\'avviso? La pagina pubblica non mostrerà più i dettagli. Se l\'hai ritrovato, usa invece "È tornato a casa!".')) return;
+            await rpc('smarrito_chiudi', { p_id: sm.id, p_esito: 'chiuso' }); await reload();
+            $('#avvPanel').hidden = true; $('#safePanel').hidden = true;
+          }
+          if (b.dataset.a === 'edit') openEdit();
+        } catch (e) { VR.say(dMsg, VR.errorText(e), 'error'); }
+      });
+      $('#acts').addEventListener('change', async (ev) => {
+        if (ev.target.id !== 'storiaOn') return;
+        try { await rpc('smarrito_chiudi', { p_id: sm.id, p_esito: 'ritrovato', p_storia: ev.target.checked }); sm.storia = ev.target.checked; }
+        catch (e) { VR.say(dMsg, VR.errorText(e), 'error'); }
+      });
+      $('#foundOk').addEventListener('click', async () => {
+        $('#foundOk').disabled = true;
+        try {
+          await rpc('smarrito_chiudi', { p_id: sm.id, p_esito: 'ritrovato', p_storia: $('#storia').checked });
+          $('#foundDlg').close(); await reload();
+          $('#safePanel').hidden = true;
+          VR.say(dMsg, `Bentornato a casa, ${sm.nome}! Condividi la locandina "Ritrovato!" con chi ti ha aiutato.`, 'ok');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (e) { VR.say(dMsg, VR.errorText(e), 'error'); }
+        $('#foundOk').disabled = false;
+      });
+
+      // --- modifica
+      let eFile = null;
+      const openEdit = () => {
+        eFile = null; VR.hide($('#eMsg'));
+        const u = L$.photoUrl(sm.foto_path);
+        $('#ePhoto').innerHTML = u ? `<img src="${VR.esc(u)}" alt="">` : '<span class="lost-nophoto">Nessuna foto</span>';
+        $('#eLuogo').value = sm.luogo || ''; $('#eDescr').value = sm.descrizione || ''; $('#eRic').checked = !!sm.ricompensa;
+        $('#eTelOn').checked = sm.contatto === 'telefono'; $('#eTel').value = sm.telefono || ctx.profile.phone || ''; $('#eTel').hidden = !$('#eTelOn').checked;
+        $('#editDlg').showModal();
+      };
+      $('#eTelOn').addEventListener('change', () => { $('#eTel').hidden = !$('#eTelOn').checked; });
+      $('#eFile').addEventListener('change', async (ev) => {
+        const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+        try { eFile = await VR.resizeImage(f); $('#ePhoto').innerHTML = `<img src="${URL.createObjectURL(eFile)}" alt="">`; } catch (e) { VR.say($('#eMsg'), VR.errorText(e), 'error'); }
+      });
+      $('#editForm').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const dati = { luogo: $('#eLuogo').value, descrizione: $('#eDescr').value, ricompensa: $('#eRic').checked,
+          contatto: $('#eTelOn').checked ? 'telefono' : 'app', telefono: $('#eTel').value };
+        try {
+          if (eFile) {
+            const path = `${sm.id}/foto-${Date.now()}.jpg`;
+            const up = await VR.sb.storage.from('smarriti').upload(path, eFile, { contentType: 'image/jpeg' });
+            if (up.error) throw up.error;
+            if (sm.foto_path) VR.sb.storage.from('smarriti').remove([sm.foto_path]).then(() => {}, () => {});
+            dati.foto_path = path;
+          }
+          await rpc('smarrito_aggiorna', { p_id: sm.id, p_dati: dati });
+          $('#editDlg').close(); await reload(); VR.say(dMsg, 'Avviso aggiornato: la pagina pubblica è già aggiornata.', 'ok');
+        } catch (e) { VR.say($('#eMsg'), VR.errorText(e), 'error'); }
+      });
+
+      head(); acts(); share();
+      VR.hide(loading); VR.show($('#dash'));
+      if (!['aperto', 'ritrovato'].includes(sm.stato)) { $('#safePanel').hidden = true; }
+      if (sm.stato === 'ritrovato') $('#safePanel').hidden = true;
+      if (sm.stato === 'chiuso' || sm.stato === 'sospeso') $('#avvPanel').hidden = true;
+      else await loadAvv();
+      if (VR.param('nuovo')) VR.say(dMsg, `Avviso pubblicato! Ora condividilo subito: ogni persona in più che lo vede aumenta le probabilità di ritrovare ${sm.nome}.`, 'ok');
+      // Notifiche: per uno smarrimento sono la cosa più utile, quindi lo chiediamo qui in modo diretto
+      if (sm.stato === 'aperto' && VR.push) {
+        const P = VR.push, el = $('#pushAsk');
+        const iosHome = P.isIOS() && !P.isStandalone();
+        if (iosHome) {
+          el.innerHTML = `<div class="notice notice-info"><b>Vuoi sapere subito se qualcuno vede ${VR.esc(sm.nome)}?</b> Su iPhone le notifiche arrivano dall'app sulla schermata Home: in Safari tocca <b>Condividi</b> → <b>Aggiungi alla schermata Home</b>, apri FurrFinder dall'icona e torna su questa pagina.</div>`;
+          VR.show(el);
+        } else if (P.supported() && Notification.permission !== 'granted') {
+          el.innerHTML = `<div class="push-banner"><div><strong>🔔 Attiva le notifiche</strong><span>Ti avvisiamo appena qualcuno segnala di aver visto ${VR.esc(sm.nome)}.</span></div>
+            <div class="actions-bar"><button class="btn btn-primary btn-small" type="button" data-push>Attiva</button></div></div>`;
+          VR.show(el);
+          el.addEventListener('click', async (ev) => {
+            const b = ev.target.closest('[data-push]'); if (!b) return;
+            b.disabled = true;
+            try { await P.enable(); el.innerHTML = '<div class="notice notice-ok">Notifiche attive: ti avvisiamo appena arriva un avvistamento.</div>'; }
+            catch (e) { el.innerHTML = `<div class="notice notice-error">${VR.esc(String(e.message || e))}</div>`; }
+          });
+        } else P.sync && P.sync();
+      }
+      // aggiornamento automatico degli avvistamenti mentre la pagina è aperta
+      if (sm.stato === 'aperto') setInterval(async () => {
+        if (document.hidden) return;
+        if (await loadAvv()) { VR.say(dMsg, 'Nuovo avvistamento! Lo trovi qui sotto.', 'info'); try { await reload(); } catch { /* ok */ } }
+      }, 60000);
+    };
+
+    // ======================= SMISTAMENTO =======================
+    try {
+      if (smId) {
+        const sm = mine.find((s) => s.id === smId);
+        if (!sm) { VR.hide(loading); VR.say(msg, 'Segnalazione non trovata.', 'error'); return; }
+        await showDash(sm);
+      } else if (petId) {
+        const open = mine.find((s) => s.pet_id === petId && ['aperto', 'sospeso'].includes(s.stato));
+        if (open) { location.replace('smarrito.html?id=' + open.id); return; }
+        const { data: pet, error } = await VR.sb.from('pets').select('id, name, species, sex, photo_path').eq('id', petId).eq('owner_user_id', ctx.uid).is('deleted_at', null).maybeSingle();
+        if (error || !pet) { VR.hide(loading); VR.say(msg, error ? VR.errorText(error) : 'Animale non trovato.', 'error'); return; }
+        await showWizard(pet);
+      } else await showList();
+    } catch (e) { fail(e); }
+  })();
+  </script>
+</body>
+</html>

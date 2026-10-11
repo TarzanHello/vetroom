@@ -24,6 +24,7 @@
     diario: '<svg viewBox="0 0 24 24"><path d="M6 3.5h11l2 2v15H6z"/><path d="M9 8h7M9 11.5h7M9 15h4"/></svg>',
     sala: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
     collaudo: '<svg viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
+    smarriti: '<svg viewBox="0 0 24 24"><circle cx="7" cy="9" r="1.8"/><circle cx="11" cy="6" r="1.8"/><circle cx="15.5" cy="6.5" r="1.8"/><path d="M9.5 12.5c-2.5 1.5-3.5 4-2 5.5s3.5-.2 5-.2 3 1.7 4.5.4.4-4.2-2-5.7-3-1.5-5.5 0z"/><path d="M17.5 13l3 3M20.5 13l-3 3"/></svg>',
     cestino: '<svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
     cerca: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg>',
     menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>'
@@ -37,7 +38,8 @@
       { k: 'censimento', l: 'Censimento OSM', h: 'censimento.html' },
       { k: 'rivendicazioni', l: 'Rivendicazioni', h: 'rivendicazioni.html', badge: 'claims' },
       { k: 'utenti', l: 'Utenti', h: 'utenti.html' },
-      { k: 'prenotazioni', l: 'Prenotazioni', h: 'prenotazioni.html' }
+      { k: 'prenotazioni', l: 'Prenotazioni', h: 'prenotazioni.html' },
+      { k: 'smarriti', l: 'Smarriti', h: 'smarriti.html', badge: 'lost' }
     ] },
     { g: 'Contatti', items: [
       { k: 'messaggi', l: 'Messaggi', h: 'messaggi.html', badge: 'support' },
@@ -450,12 +452,17 @@
     const claims = Number(await PL.try('osm_rivendicazioni_conta', {}, 0)) || 0;
     set('claims', claims, claims > 0);
 
+    // Avvisi di animali smarriti segnalati dal pubblico (patch 38)
+    const lost = Number(await PL.try('smarriti_admin_conta', {}, 0)) || 0;
+    set('lost', lost, lost > 0);
+
     const m = $('#plMaint'); if (m) { m.hidden = !by.maintenance; m.className = 'pl-light hide-m bad'; }
     // Spia del Collaudo: problemi dell'ultimo controllo (rossa se ce ne sono di gravi)
     const hc = await PL.try('platform_health_history', { p_limit: 1 }, null);
     const last = hc && hc[0] && hc[0].summary;
     if (last) set('health', Number(last.bad) + Number(last.err) + Number(last.warn), Number(last.bad) + Number(last.err) > 0);
     PL.alerts = (alerts || []).slice();
+    if (lost) PL.alerts.push({ kind: 'lost', level: 'warn', n: lost, text: `${lost === 1 ? '1 avviso Smarrito segnalato' : lost + ' avvisi Smarrito segnalati'} dal pubblico`, href: 'smarriti.html?stato=segnalati' });
     if (claims) PL.alerts.push({ kind: 'claims', level: 'warn', n: claims, text: `${claims === 1 ? '1 richiesta' : claims + ' richieste'} di rivendicazione da decidere`, href: 'rivendicazioni.html' });
     if (hc) {
       const gravi = last ? Number(last.bad) + Number(last.err) : 0, guardare = last ? Number(last.warn) : 0;

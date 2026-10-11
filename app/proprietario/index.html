@@ -12,15 +12,16 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="FurrFinder">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-11b">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-11d">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-11b"></script>
-  <script src="../js/app.js?v=2026-10-11b"></script>
-  <script src="../js/i18n.js?v=2026-10-11b"></script>
-  <script src="../js/layout.js?v=2026-10-11b"></script>
-  <script src="../js/clinica.js?v=2026-10-11b"></script>
-  <script src="../js/proprietario.js?v=2026-10-11b"></script>
-  <script src="../js/notifiche.js?v=2026-10-11b"></script>
+  <script src="../js/config.js?v=2026-10-11d"></script>
+  <script src="../js/app.js?v=2026-10-11d"></script>
+  <script src="../js/i18n.js?v=2026-10-11d"></script>
+  <script src="../js/layout.js?v=2026-10-11d"></script>
+  <script src="../js/clinica.js?v=2026-10-11d"></script>
+  <script src="../js/proprietario.js?v=2026-10-11d"></script>
+  <script src="../js/notifiche.js?v=2026-10-11d"></script>
+  <script src="../js/smarrito.js?v=2026-10-11d"></script>
 </head>
 <body data-shell="owner" data-nav="home">
   <main>
@@ -34,6 +35,7 @@
         <a class="btn" id="heroBtn" href="animale.html?nuovo=1">Crea la scheda del tuo pet</a>
       </section>
 
+      <div id="lostBanner"></div>
       <div id="pushBanner" hidden></div>
 
       <section class="panel" id="apptPanel" hidden>
@@ -54,6 +56,8 @@
       if (e.message !== 'redirect') { VR.hide(loading); VR.say(msg, VR.errorText(e), 'error'); }
       return;
     }
+    // Arrivato da una pagina "Smarrito" (patch 38): apri subito la pagina per pubblicare l'avviso
+    if (localStorage.getItem('ff_dopo') === 'smarrito') { localStorage.removeItem('ff_dopo'); location.replace('smarrito.html'); return; }
     // Un codice clinica arrivato da un QR? Si completa nella pagina Cliniche
     if (localStorage.getItem('vetroom_codice')) { location.replace('cliniche.html'); return; }
     await VR.sb.rpc('claim_my_pets');
@@ -70,6 +74,20 @@
     VR.show(VR.$('#page'));
     if (pets.length && VR.push) VR.push.banner(VR.$('#pushBanner'));
     if (!pets.length) return;
+
+    // Smarrimenti in corso (patch 38): in cima alla Home, con i nuovi avvistamenti
+    VR.sb.rpc('smarrito_miei').then(({ data, error }) => {
+      if (error || !data) return;
+      const day = 864e5;
+      const show = data.filter((s) => ['aperto', 'sospeso'].includes(s.stato) || (s.stato === 'ritrovato' && Date.now() - new Date(s.chiuso_il) < 3 * day));
+      VR.$('#lostBanner').innerHTML = show.map((s) => {
+        const ph = VR.lost ? VR.lost.photoUrl(s.foto_path) : null;
+        const img = ph ? `<img src="${VR.esc(ph)}" alt="">` : `<span class="avatar">${VR.esc(VR.initials(s.nome))}</span>`;
+        return s.stato === 'ritrovato'
+          ? `<a class="lost-banner found" href="smarrito.html?id=${s.id}">${img}<div><b>${VR.esc(s.nome)} è a casa!</b><span>Condividi la buona notizia con chi ti ha aiutato →</span></div></a>`
+          : `<a class="lost-banner" href="smarrito.html?id=${s.id}">${img}<div><b>${VR.esc(s.nome)} è ${s.sesso === 'F' ? 'smarrita' : 'smarrito'}</b><span>${s.nuovi ? `${s.nuovi} ${s.nuovi === 1 ? 'nuovo avvistamento' : 'nuovi avvistamenti'} · ` : ''}${s.visite} visite all'avviso · apri →</span></div></a>`;
+      }).join('');
+    }, () => {});
 
     const ids = pets.map((p) => p.id);
     const [docsRes, visitsRes, apptRes, urls, remRes] = await Promise.all([

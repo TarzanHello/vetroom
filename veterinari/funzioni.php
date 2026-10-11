@@ -322,6 +322,7 @@ function vr_pagina($o) {
           <a href="/veterinari/">Veterinari per città</a>
           <a href="/trova-struttura.html">Rivendica la tua struttura</a>
           <a href="/veterinario-a-domicilio.html">Veterinario a domicilio</a>
+          <a href="/smarriti/">Animali smarriti</a>
           <a href="/guida/">Guida</a>
         </nav>
         <div class="footer-col">
@@ -388,7 +389,7 @@ function vr_box_proprietari($s = null) {
   if ($s && !empty($s['su_vetroom'])) {
     return '<aside class="vt-box vt-owner"><h2>Sei cliente di questa struttura?</h2><p>' . h(vr_nome($s)) . ' usa Vetroom: con <b>FurrFinder</b> hai il libretto sanitario del tuo animale sempre in tasca, i promemoria di vaccini e richiami e puoi chiedere un appuntamento senza telefonare.</p><a class="btn primary" href="/app/?per=proprietario">Apri FurrFinder, è gratis</a></aside>';
   }
-  return '<aside class="vt-box vt-owner"><h2>Hai un cane o un gatto?</h2><p>Con <b>FurrFinder</b> tieni il libretto sanitario sempre in tasca e ricevi i promemoria di vaccini e richiami. Se il tuo veterinario usa Vetroom, prenoti anche senza telefonare.</p><a class="btn primary" href="/app/?per=proprietario">Prova FurrFinder, è gratis</a></aside>';
+  return '<aside class="vt-box vt-owner"><h2>Hai un cane o un gatto?</h2><p>Con <b>FurrFinder</b> tieni il libretto sanitario sempre in tasca e ricevi i promemoria di vaccini e richiami. Se il tuo veterinario usa Vetroom, prenoti anche senza telefonare.</p><a class="btn primary" href="/app/?per=proprietario">Prova FurrFinder, è gratis</a><p style="margin:12px 0 0"><a href="/smarriti/">Si è perso il tuo animale? Pubblica l\'avviso gratis →</a></p></aside>';
 }
 function vr_box_veterinari($s = null) {
   if ($s && !empty($s['su_vetroom'])) {
