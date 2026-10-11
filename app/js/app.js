@@ -48,7 +48,11 @@
   // ---------- Monitoraggio errori ----------
   // Ogni errore mostrato all'utente (e ogni errore imprevisto del codice) viene registrato
   // per l'amministratore della piattaforma. Nessun servizio esterno: finisce nel database Vetroom.
+<<<<<<< HEAD
   VR.VERSION = '2026-10-11d';
+=======
+  VR.VERSION = '2026-10-11c';
+>>>>>>> 65c857c132f4e9a27ab05ecfa70d5542389af72f
   const IGNORE = /Failed to fetch|NetworkError|Load failed|network error|JWT|not authenticated|Accesso richiesto|AbortError|ResizeObserver loop|Area riservata|earlier share has not yet completed|Share canceled|^(redirect|noclinic|suspended)$/i;
   const sent = new Set();
   VR.reportError = (e, where) => {

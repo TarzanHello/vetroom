@@ -1376,6 +1376,7 @@ html[lang="en"] .tw-day.is-today .tw-day-h > span::after { content: " · today";
   .tw-chip { break-inside: avoid; }
   .tw-row { break-inside: avoid; }
 }
+<<<<<<< HEAD
 
 /* =============================================================
    SMARRITO (patch 38) — avviso, avvistamenti, locandina
@@ -1459,3 +1460,5 @@ html[lang="en"] .tw-day.is-today .tw-day-h > span::after { content: " · today";
 .lost-banner.found b { color: #166534; } .lost-banner.found span { color: #14532d; }
 .lost-cta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .lost-cta p { margin: 0; flex: 1 1 260px; font-size: 14px; color: var(--muted); }
+=======
+>>>>>>> 65c857c132f4e9a27ab05ecfa70d5542389af72f
