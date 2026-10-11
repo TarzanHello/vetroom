@@ -1,4 +1,5 @@
 # FurrFinder · sezione pubblica /smarriti/ (pagine generate da index.php)
+# La stessa cartella va bene su vetroom.it e su furrfinder.com (vedi config.php).
 DirectoryIndex index.php
 Options -Indexes
 
@@ -14,6 +15,6 @@ RewriteRule ^(.*)$ index.php?p=$1 [L,QSA]
 </IfModule>
 
 # I file di servizio non si aprono dal browser
-<FilesMatch "^(funzioni|guide)\.php$">
+<FilesMatch "^(config|funzioni|guide)\.php$">
     Require all denied
 </FilesMatch>

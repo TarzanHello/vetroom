@@ -15,6 +15,21 @@ $rel = preg_replace('#^/smarriti/?#', '', $path);
 $parti = array_values(array_filter(explode('/', $rel), 'strlen'));
 $PUBBLICA = '/app/?per=proprietario&amp;dopo=smarrito';
 
+// Su furrfinder.com l'indirizzo è sempre con www (come in VR_SITO): la regola del sito principale
+// non vale dentro questa cartella, che ha un suo .htaccess. (Solo il nome del sito: niente rischio di giri infiniti.)
+$sm_vuole = parse_url(VR_SITO);
+if (in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true) && !empty($sm_vuole['host']) && SM_MARCA === 'furrfinder'
+    && strcasecmp($_SERVER['HTTP_HOST'] ?? '', $sm_vuole['host'] . (isset($sm_vuole['port']) ? ':' . $sm_vuole['port'] : '')) !== 0) {
+  $q = preg_replace('/(^|&)p=[^&]*/', '', $_SERVER['QUERY_STRING'] ?? ''); $q = ltrim($q, '&');
+  header('Location: ' . VR_SITO . $path . ($q !== '' ? '?' . $q : ''), true, 301); exit;
+}
+
+// Pagine trasferite su furrfinder.com? (config.php, SM_RIMANDA) → ogni indirizzo vecchio porta a quello nuovo
+if (SM_RIMANDA && SM_MARCA !== 'furrfinder') {
+  $q = $_SERVER['QUERY_STRING'] ?? ''; $q = preg_replace('/(^|&)p=[^&]*/', '', $q); $q = ltrim($q, '&');
+  header('Location: ' . rtrim(SM_RIMANDA, '/') . $path . ($q !== '' ? '?' . $q : ''), true, 301); exit;
+}
+
 function sm_redirect($url) { header('Location: ' . VR_SITO . $url, true, 301); exit; }
 function sm_errore($codice, $titolo, $testo) {
   http_response_code($codice);
@@ -54,19 +69,23 @@ if (count($parti) === 1 && in_array($parti[0], ['hai-perso-il-tuo-animale', 'hai
 // ---------- pagina principale ----------
 if (!$parti) {
   if ($path !== '/smarriti/') sm_redirect('/smarriti/');
-  $elenco = sm_rpc('smarriti_elenco', ['p_citta_slug' => null, 'p_limite' => 48]);
+  $elenco = sm_rpc('smarriti_elenco', ['p_citta_slug' => null, 'p_limite' => 300]);
   $citta = sm_rpc('smarriti_citta', [], 300) ?: [];
   $aperti = array_values(array_filter($elenco ?: [], function ($s) { return $s['stato'] === 'aperto'; }));
   $trovati = array_values(array_filter($elenco ?: [], function ($s) { return $s['stato'] === 'ritrovato'; }));
-  $b = '<section class="sm-hero"><div class="sm-hero-txt"><span class="sm-kicker">Animali smarriti</span><h1>Se si perde, tutto il quartiere lo cerca con te</h1>'
+  $b = '<section class="sm-hero"><div class="sm-hero-txt"><span class="sm-kicker">Lost &amp; Found · Animali smarriti e ritrovati</span><h1>Se si perde, tutto il quartiere lo cerca con te</h1>'
     . '<p class="sm-lead">Pubblica l\'avviso gratis in un minuto. FurrFinder prepara la pagina e la locandina con il codice QR: chi lo vede ti avvisa subito, anche senza scaricare nulla.</p>'
     . '<p class="sm-cta"><a class="sm-btn sm-btn-red sm-btn-big" href="' . $PUBBLICA . '">Pubblica un avviso gratis</a> <a class="sm-btn sm-btn-ghost sm-btn-big" href="/smarriti/hai-trovato-un-animale">Ho trovato un animale</a></p></div>'
     . '<ol class="sm-how"><li><b>1</b><span><strong>Segna dove l\'hai perso</strong>La posizione esatta resta privata: sulla pagina compare solo la zona.</span></li>'
     . '<li><b>2</b><span><strong>Condividi la locandina</strong>Pronta per WhatsApp, Facebook e da stampare, con il codice QR.</span></li>'
     . '<li><b>3</b><span><strong>Ricevi gli avvistamenti</strong>Chi lo vede segna dove e quando: ti arriva una notifica sul telefono.</span></li></ol></section>';
   if ($elenco === false) $b .= '<p class="sm-note">Gli avvisi non sono raggiungibili in questo momento: riprova tra qualche minuto.</p>';
-  $b .= '<h2 class="sm-h2">Avvisi in corso</h2>';
-  $b .= $aperti ? '<ul class="sm-grid">' . implode('', array_map('sm_card', $aperti)) . '</ul>' : '<p class="sm-empty">Nessun avviso aperto in questo momento. Speriamo che resti così!</p>';
+  $b .= '<h2 class="sm-h2" id="avvisi">Avvisi in corso' . ($aperti ? ' <span class="sm-count">' . count($aperti) . '</span>' : '') . '</h2>';
+  if ($aperti) {
+    $b .= '<div class="sm-filtro"><input type="search" id="cerca" placeholder="Cerca per città, zona, nome o razza" aria-label="Cerca fra gli avvisi" autocomplete="off">'
+      . '<button class="sm-btn sm-btn-ghost" type="button" id="vicino">📍 Più vicini a me</button></div><p class="sm-muted" id="filtroInfo" hidden></p>';
+    $b .= '<ul class="sm-grid" id="lista">' . implode('', array_map('sm_card', $aperti)) . '</ul><p class="sm-empty" id="nessuno" hidden>Nessun avviso corrisponde alla ricerca.</p>';
+  } else $b .= '<p class="sm-empty">Nessun avviso aperto in questo momento. Speriamo che resti così!</p>';
   if ($citta) {
     $b .= '<h2 class="sm-h2">Per città</h2><ul class="sm-chips">';
     foreach ($citta as $c) $b .= '<li><a href="/smarriti/' . h($c['citta_slug']) . '/">' . h($c['citta']) . ($c['aperti'] ? ' <span>' . (int)$c['aperti'] . '</span>' : '') . '</a></li>';
@@ -85,6 +104,7 @@ if (!$parti) {
     'og' => 'Hai perso il tuo animale? Pubblica l\'avviso gratis con FurrFinder',
     'description' => 'Cani e gatti smarriti vicino a te: avvisi con foto, zona e data. Pubblica gratis l\'avviso per il tuo animale e ricevi le segnalazioni di chi lo vede.',
     'jsonld' => $items ? [['@context' => 'https://schema.org', '@type' => 'ItemList', 'name' => 'Animali smarriti', 'itemListElement' => $items]] : [],
+    'js' => $aperti ? ['hub' => true] : null,
     'body' => $b]);
   exit;
 }
@@ -102,11 +122,11 @@ if (count($parti) === 1) {
   $b = '<section class="sm-hero sm-hero-small"><span class="sm-kicker">Animali smarriti</span><h1>Animali smarriti a ' . h($nome) . '</h1>'
     . '<p class="sm-lead">' . ($aperti ? '<b>' . count($aperti) . ' ' . (count($aperti) === 1 ? 'avviso aperto' : 'avvisi aperti') . '</b> a ' . h($nome) . '. Se riconosci uno di loro, apri l\'avviso e premi "L\'ho visto": il proprietario riceve subito il tuo messaggio.' : 'In questo momento non ci sono avvisi aperti a ' . h($nome) . '.') . '</p>'
     . '<p class="sm-cta"><a class="sm-btn sm-btn-red" href="' . $PUBBLICA . '">Hai perso il tuo animale? Pubblica l\'avviso</a></p></section>';
-  if ($aperti) $b .= '<ul class="sm-grid">' . implode('', array_map('sm_card', $aperti)) . '</ul>';
+  if ($aperti) $b .= '<div class="sm-filtro"><button class="sm-btn sm-btn-ghost" type="button" id="vicino">📍 Più vicini a me</button></div><ul class="sm-grid" id="lista">' . implode('', array_map('sm_card', $aperti)) . '</ul>';
   if ($trovati) $b .= '<h2 class="sm-h2">Tornati a casa a ' . h($nome) . '</h2><ul class="sm-grid">' . implode('', array_map('sm_card', $trovati)) . '</ul>';
   $b .= '<div class="sm-boxes">' . sm_box_pubblica() . sm_box_trovato() . '</div>';
   if (!$elenco) http_response_code(404);
-  sm_pagina(['url' => "/smarriti/$cs/", 'indicizza' => (bool)$elenco,
+  sm_pagina(['url' => "/smarriti/$cs/", 'indicizza' => (bool)$elenco, 'js' => $aperti ? ['hub' => true] : null,
     'title' => "Animali smarriti a $nome: cani e gatti persi | FurrFinder",
     'description' => "Cani e gatti smarriti a $nome: avvisi con foto, zona e data della scomparsa. Se l'hai visto, segnalalo al proprietario in un minuto.",
     'crumbs' => [['Animali smarriti', '/smarriti/'], [$nome, "/smarriti/$cs/"]],
@@ -157,7 +177,7 @@ $b .= '<h1>' . h($nome) . '</h1><p class="sm-lost-kind">' . h(implode(' · ', $d
 if ($trovato) {
   $b .= '<p class="sm-found-msg">È ' . sm_tornato($s) . ' a casa ' . h(sm_fa($s['chiuso_il'])) . '. Grazie a tutti quelli che hanno condiviso l\'avviso e lo hanno cercato!</p>';
 } else {
-  $b .= '<dl class="sm-facts"><dt>Visto l\'ultima volta</dt><dd>' . h($dove) . '</dd><dt>Quando</dt><dd>' . h(ucfirst($quando)) . '</dd>';
+  $b .= '<dl class="sm-facts"><dt>' . (sm_f($s) ? 'Vista' : 'Visto') . ' l\'ultima volta</dt><dd>' . h($dove) . '</dd><dt>Quando</dt><dd>' . h(ucfirst($quando)) . '</dd>';
   if (!empty($s['descrizione'])) $b .= '<dt>Come riconoscerlo</dt><dd>' . nl2br(h($s['descrizione'])) . '</dd>';
   $b .= '</dl>';
   $b .= '<div class="sm-act"><button class="sm-btn sm-btn-red sm-btn-big" type="button" data-avv="visto">L\'ho visto</button><button class="sm-btn sm-btn-green sm-btn-big" type="button" data-avv="trovato">L\'ho trovato</button></div>';

@@ -8,8 +8,9 @@
   const L$ = (VR.lost = {});
   const cfg = window.VETROOM_CONFIG || {};
 
-  // Le pagine pubbliche stanno sullo stesso sito dell'app (vetroom.it/smarriti/…)
-  L$.SITO = location.origin;
+  // Sito delle pagine pubbliche degli avvisi: per ora lo stesso dell'app (vetroom.it/smarriti/).
+  // Quando le pagine saranno online su furrfinder.com basta aggiungere in config.js:  SMARRITI_SITO: 'https://www.furrfinder.com'
+  L$.SITO = cfg.SMARRITI_SITO || location.origin;
   L$.pageUrl = (sm, canale) => L$.SITO + sm.url + (canale ? '?da=' + encodeURIComponent(canale) : '');
   L$.shortUrl = (sm) => (L$.SITO.replace(/^https?:\/\/(www\.)?/, '') + sm.url);
   L$.photoUrl = (path) => (path ? `${cfg.SUPABASE_URL}/storage/v1/object/public/smarriti/${path.split('/').map(encodeURIComponent).join('/')}` : null);
