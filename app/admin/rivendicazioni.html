@@ -14,20 +14,28 @@
   <script src="plancia.js?v=2026-10-11a"></script>
   <style>
     .rv-card { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .rv-card h3 { margin: 0 0 4px; font: 600 17px var(--display); letter-spacing: .02em; }
     .rv-card .lbl { font: 500 11px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin: 0 0 6px; }
     .rv-card dl.kv { font-size: 14px; }
     .rv-alert { border-left: 3px solid var(--amber); background: var(--amber-soft); padding: 8px 12px; margin: 10px 0 0; font-size: 14px; }
     .rv-alert.bad { border-left-color: var(--red); background: var(--red-soft); }
     .rv-tel { font: 600 18px var(--mono); color: var(--signal); }
+    .rv-sig { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; }
+    .rv-call { margin-top: 16px; border: 1px solid var(--edge); background: var(--hull-2); padding: 12px 14px; }
+    .rv-call summary { cursor: pointer; font-weight: 600; }
+    .rv-script { margin: 10px 0; padding: 10px 12px; border-left: 3px solid var(--signal); background: var(--signal-soft); font-size: 14px; line-height: 1.55; }
+    .rv-log { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; color: var(--dim); }
+    .rv-log li { padding: 3px 0; }
+    .rv-holder { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--violet); background: var(--violet-soft); font-size: 14px; }
+    .rv-mail { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 14px; font-size: 14px; }
     @media (max-width: 860px) { .rv-card { grid-template-columns: 1fr; gap: 12px; } }
   </style>
 </head>
 <body class="pl" data-station="rivendicazioni">
 <main>
-  <div class="pl-head"><div class="grow"><h1>Rivendicazioni</h1><p>Veterinari che chiedono di gestire una struttura del Censimento. Prima di approvare chiama il <b>numero pubblico della struttura</b> (non quello del richiedente) e chiedi conferma: è l'unico modo per essere sicuri che sia davvero lui.</p></div>
+  <div class="pl-head"><div class="grow"><h1>Rivendicazioni</h1><p>Veterinari che chiedono di gestire una struttura del Censimento. Prima di approvare chiama il <b>numero pubblico della struttura</b> (non quello del richiedente): la telefonata guidata ti dice cosa chiedere.</p></div>
     <div class="actions"><a class="btn" href="censimento.html">Censimento</a><a class="btn ghost" href="/trova-struttura.html" target="_blank" rel="noopener">Pagina pubblica ↗</a></div></div>
   <section class="pn">
+    <div class="rv-mail" id="mail"></div>
     <div class="pn-h" style="margin-bottom:10px"><div class="seg" role="group" aria-label="Stato" id="fil"></div></div>
     <div id="list"><p class="loader">Caricamento</p></div>
   </section>
@@ -36,21 +44,56 @@
 (async () => {
   await PL.boot();
   const { $, esc, n } = PL;
-  const FILTRI = [['in_attesa', 'Da decidere'], ['approvata', 'Approvate, da attivare'], ['completata', 'Attivate'], ['rifiutata', 'Rifiutate']];
-  const STATO = { in_attesa: ['da decidere', 'warn'], approvata: ['approvata · il veterinario deve attivarla', 'info'], completata: ['attivata su Vetroom', 'ok'], rifiutata: ['rifiutata', 'bad'] };
+  const FILTRI = [['in_attesa', 'Da decidere'], ['contestata', 'Contestazioni'], ['approvata', 'Approvate, da attivare'], ['completata', 'Attivate'], ['rifiutata', 'Rifiutate'], ['revocata', 'Revocate']];
+  const STATO = { in_attesa: ['da decidere', 'warn'], contestata: ['contestazione', 'bad'], approvata: ['approvata · il veterinario deve attivarla', 'info'], completata: ['attivata su Vetroom', 'ok'], rifiutata: ['rifiutata', ''], revocata: ['revocata', 'bad'] };
+  const ESITO = { non_risponde: 'non risponde', richiamare: 'da richiamare', confermato: 'ha confermato', non_confermato: 'non ha confermato', nota: 'nota' };
+  const WEBMAIL = new Set(['gmail.com', 'googlemail.com', 'libero.it', 'virgilio.it', 'yahoo.it', 'yahoo.com', 'tiscali.it', 'hotmail.it', 'hotmail.com', 'outlook.it', 'outlook.com', 'live.it', 'alice.it', 'tin.it', 'icloud.com', 'me.com', 'email.it', 'fastwebnet.it', 'inwind.it', 'pec.it', 'legalmail.it']);
   let filtro = new URLSearchParams(location.search).get('stato') || 'in_attesa', rows = [];
+  const fold = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const indirizzo = (r) => [[r.via, r.civico].filter(Boolean).join(' '), [r.cap, r.comune].filter(Boolean).join(' '), r.provincia ? `(${r.provincia})` : ''].filter(Boolean).join(', ').replace(', (', ' (');
   const telLink = (t) => (t ? `<a class="rv-tel" href="tel:${esc(t.replace(/[^\d+]/g, ''))}">${esc(t)}</a>` : '<span class="faint">nessuno su OpenStreetMap</span>');
+  const dominio = (e) => (String(e || '').split('@')[1] || '').toLowerCase();
+  const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
+
+  // Segnali automatici per decidere più in fretta
+  const segnali = (r) => {
+    const out = [], dRich = dominio(r.email_richiedente);
+    if (r.email && r.email_richiedente && r.email.toLowerCase() === r.email_richiedente.toLowerCase()) out.push(['ok', 'Usa la stessa email pubblica della struttura']);
+    else if (dRich && !WEBMAIL.has(dRich) && (dRich === host(r.sito) || dRich === dominio(r.email))) out.push(['ok', `Email con il dominio della struttura (@${dRich})`]);
+    const parole = fold(r.richiedente).replace(/\b(dott(ssa)?|dr(ssa)?|dottor(essa)?|medico|veterinari[oa])\b\.?/g, ' ').split(/[^a-z]+/).filter((w) => w.length >= 4);
+    const hit = parole.find((w) => fold(r.nome).includes(w));
+    if (hit) out.push(['ok', `Il nome "${hit}" compare nel nome della struttura`]);
+    if (r.albo_verificato) out.push(['ok', 'Iscrizione all\'Ordine verificata']);
+    else if (r.albo || r.albo_profilo) out.push(['', 'Iscrizione all\'Ordine dichiarata, da controllare']);
+    const recenti = r.contatti_dal && (new Date(r.creata_il) - new Date(r.contatti_dal)) < 30 * 864e5 && r.cambi > 0;
+    if (recenti) out.push(['bad', 'Contatti cambiati su OpenStreetMap poco prima della richiesta']);
+    if (!r.telefono) out.push(['warn', 'Nessun telefono pubblico']);
+    const tent = (r.tentativi || []).filter((t) => t.esito === 'non_risponde' || t.esito === 'richiamare').length;
+    if (tent) out.push(['warn', `${tent} ${tent === 1 ? 'chiamata senza risposta' : 'chiamate senza risposta'}`]);
+    return out;
+  };
+  const io = PL.session?.user?.user_metadata?.given_name || '';
+  const copione = (r) => `«Buongiorno, ${io ? 'sono ' + esc(io) + ' di' : 'la chiamo da'} Vetroom, il gestionale veterinario. Chiamo perché <b>${esc(r.richiedente || 'una persona')}</b>${r.ruolo ? `, che si presenta come <b>${esc(r.ruolo.toLowerCase())}</b>,` : ''} ha chiesto di gestire la scheda di <b>${esc(r.nome || 'questa struttura')}</b> sul nostro sito. Può confermarmi che lavora da voi e che è autorizzato a farlo?»
+    <br><br>Se confermano, chiedi anche: «Il numero ${esc(r.telefono_richiedente || 'che ci ha lasciato')} è il suo?» In caso di dubbi, controlla l'iscrizione su <a href="https://fnovi.it/popular/ricerca-iscritti" target="_blank" rel="noopener">albo FNOVI ↗</a> cercando <b>${esc(r.richiedente || '')}</b>.`;
 
   const card = (r) => {
-    const recenti = r.contatti_dal && (new Date(r.creata_il) - new Date(r.contatti_dal)) < 30 * 864e5 && r.cambi > 0;
     const prec = (r.contatti_precedenti || []).slice(-1)[0];
     const [sl, st] = STATO[r.stato] || [r.stato, ''];
-    const azioni = r.stato === 'in_attesa'
-      ? `<button class="btn prim" data-dec="approvata" data-id="${r.id}">Approva</button><button class="btn danger" data-dec="rifiutata" data-id="${r.id}">Rifiuta</button>`
-      : r.stato === 'completata' ? '' : `<button class="btn ghost sm" data-dec="in_attesa" data-id="${r.id}">Riporta da decidere</button>`;
+    const aperta = r.stato === 'in_attesa' || r.stato === 'contestata';
+    const recenti = r.contatti_dal && (new Date(r.creata_il) - new Date(r.contatti_dal)) < 30 * 864e5 && r.cambi > 0;
+    const sig = aperta ? segnali(r) : [];
+    let azioni = '';
+    if (r.stato === 'in_attesa') azioni = `<button class="btn prim" data-act="approva" data-id="${r.id}">Approva</button><button class="btn danger" data-act="rifiuta" data-id="${r.id}">Rifiuta</button>`;
+    else if (r.stato === 'contestata') azioni = r.titolare
+      ? `<button class="btn prim" data-act="sostituisci" data-id="${r.id}">Revoca l'attuale e approva questa</button><button class="btn danger" data-act="rifiuta" data-id="${r.id}">Respingi la contestazione</button>`
+      : `<button class="btn prim" data-act="approva" data-id="${r.id}">Approva</button><button class="btn danger" data-act="rifiuta" data-id="${r.id}">Respingi</button>`;
+    else if (r.stato === 'approvata' || r.stato === 'completata') azioni = `<button class="btn danger sm" data-act="revoca" data-id="${r.id}">Revoca</button>${r.stato === 'approvata' ? `<button class="btn ghost sm" data-act="riapri" data-id="${r.id}">Riporta da decidere</button>` : ''}`;
+    else if (r.stato === 'rifiutata') azioni = `<button class="btn ghost sm" data-act="riapri" data-id="${r.id}">Riporta da decidere</button>`;
+    const log = (r.tentativi || []).map((t) => `<li>${PL.dt(t.il)} · <b>${esc(ESITO[t.esito] || t.esito)}</b>${t.nota ? ' · ' + esc(t.nota) : ''}</li>`).join('');
     return `<article class="pn" style="margin-bottom:14px">
       <div class="pn-h"><h2 style="margin:0">${esc(r.nome || 'Struttura senza nome')}</h2><div class="tools"><span class="pill ${st}">${esc(sl)}</span></div></div>
+      ${sig.length ? `<div class="rv-sig">${sig.map(([k, t]) => `<span class="pill ${k}">${k === 'ok' ? '✓ ' : k === 'bad' ? '⚠ ' : ''}${esc(t)}</span>`).join('')}</div>` : ''}
+      ${r.stato === 'contestata' && r.titolare ? `<p class="rv-holder"><b>Oggi è assegnata a</b> <a href="${PL.userHref(r.titolare.user_id)}">${esc(r.titolare.nome || r.titolare.email || 'un utente')}</a> (${esc(r.titolare.email || '')}), ${r.titolare.stato === 'completata' ? 'attiva' : 'approvata'} dal ${PL.d(r.titolare.dal)}. Chi la contesta è descritto qui sotto: chiama la struttura e chiedi chi è il vero titolare.</p>` : ''}
       <div class="rv-card">
         <div>
           <p class="lbl">Struttura · dati pubblici</p>
@@ -63,12 +106,11 @@
             <dt>Scheda</dt><dd><a href="https://www.openstreetmap.org/${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener">OpenStreetMap ↗</a> · <a href="../rivendica.html?s=${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener">pagina di rivendicazione ↗</a></dd>
           </dl>
           ${!r.struttura_esiste ? '<p class="rv-alert bad">La scheda non è più nell\'archivio (eliminata o sparita da OpenStreetMap).</p>' : ''}
-          ${recenti ? `<p class="rv-alert bad"><b>Attenzione:</b> i contatti di questa scheda sono cambiati su OpenStreetMap il ${PL.d(r.contatti_dal)}, poco prima della richiesta.${prec ? ` Prima il telefono era <b>${esc(prec.telefono || 'assente')}</b>.` : ''} Potrebbe essere qualcuno che ha modificato la scheda per prenderla: verifica con un numero trovato altrove (sito, Google, Ordine).</p>`
-            : r.cambi > 0 ? `<p class="rv-alert">I contatti sono cambiati su OpenStreetMap il ${PL.d(r.contatti_dal)}.</p>` : ''}
-          ${!r.telefono ? '<p class="rv-alert">Nessun telefono pubblico: verifica con l\'email della struttura, il sito o l\'Ordine dei veterinari.</p>' : ''}
+          ${recenti ? `<p class="rv-alert bad"><b>Attenzione:</b> i contatti di questa scheda sono cambiati su OpenStreetMap il ${PL.d(r.contatti_dal)}, poco prima della richiesta.${prec ? ` Prima il telefono era <b>${esc(prec.telefono || 'assente')}</b>.` : ''} Potrebbe essere qualcuno che ha modificato la scheda per prenderla: verifica con un numero trovato altrove (sito, Google, Ordine).</p>` : ''}
+          ${!r.telefono && aperta ? '<p class="rv-alert">Nessun telefono pubblico: verifica con l\'email della struttura, il sito o l\'Ordine dei veterinari.</p>' : ''}
         </div>
         <div>
-          <p class="lbl">Richiedente</p>
+          <p class="lbl">${r.stato === 'contestata' ? 'Chi contesta' : 'Richiedente'}</p>
           <p style="margin:0 0 8px"><a href="${PL.userHref(r.user_id)}"><strong>${esc(r.richiedente || r.email_richiedente || 'Utente')}</strong></a>${r.ruolo ? ` · ${esc(r.ruolo)}` : ''}</p>
           <dl class="kv">
             <dt>Email</dt><dd>${esc(r.email_richiedente || '—')}</dd>
@@ -78,12 +120,18 @@
             <dt>Richiesta del</dt><dd>${PL.dt(r.creata_il)}</dd>
             ${r.decisa_il ? `<dt>Decisa il</dt><dd>${PL.dt(r.decisa_il)}</dd>` : ''}
             ${r.completata_il ? `<dt>Attivata il</dt><dd>${PL.dt(r.completata_il)}</dd>` : ''}
+            ${r.promemoria_il ? `<dt>Promemoria</dt><dd>inviato il ${PL.d(r.promemoria_il)}</dd>` : ''}
           </dl>
           ${r.messaggio ? `<p class="note" style="margin:10px 0 0;white-space:pre-wrap">${esc(r.messaggio)}</p>` : ''}
           ${r.nota_admin ? `<p class="small dim" style="margin:8px 0 0">Nota: ${esc(r.nota_admin)}</p>` : ''}
-          ${Number(r.altre) ? `<p class="rv-alert">Ci sono altre ${n(r.altre)} richieste in attesa per questa struttura: approvandone una, le altre vengono rifiutate.</p>` : ''}
+          ${Number(r.altre) ? `<p class="rv-alert">Ci sono altre ${n(r.altre)} richieste aperte per questa struttura: approvandone una, le altre vengono rifiutate.</p>` : ''}
         </div>
       </div>
+      ${aperta ? `<details class="rv-call" ${log ? '' : 'open'}><summary>Telefonata di verifica${log ? ` · ${(r.tentativi || []).length} annotazioni` : ''}</summary>
+        <p class="small dim" style="margin:8px 0 0">Chiama ${r.telefono ? `il <b>${esc(r.telefono)}</b>` : 'la struttura (cerca il numero sul sito o su Google)'}. Puoi leggere così:</p>
+        <div class="rv-script">${copione(r)}</div>
+        <div class="actions"><button class="btn sm prim" data-act="confermato" data-id="${r.id}">Ha confermato</button><button class="btn sm danger" data-act="non_confermato" data-id="${r.id}">Non conferma</button><button class="btn sm" data-act="non_risponde" data-id="${r.id}">Non risponde</button><button class="btn sm ghost" data-act="nota" data-id="${r.id}">Aggiungi nota</button></div>
+        ${log ? `<ul class="rv-log">${log}</ul>` : ''}</details>` : (log ? `<ul class="rv-log">${log}</ul>` : '')}
       ${azioni ? `<div class="actions" style="margin-top:14px">${azioni}</div>` : ''}
     </article>`;
   };
@@ -91,55 +139,102 @@
   const disegna = () => {
     $('#fil').innerHTML = FILTRI.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${filtro === k}">${l}<span class="n">${n(rows.filter((r) => r.stato === k).length)}</span></button>`).join('');
     const vis = rows.filter((r) => r.stato === filtro);
+    // prima chi non è ancora stato chiamato
+    if (filtro === 'in_attesa') vis.sort((a, b) => (a.tentativi || []).length - (b.tentativi || []).length || new Date(a.creata_il) - new Date(b.creata_il));
     $('#list').innerHTML = vis.map(card).join('') || `<p class="empty" style="padding:24px 0;text-align:center">${filtro === 'in_attesa' ? 'Nessuna richiesta da decidere. 👍' : 'Niente qui.'}</p>`;
   };
   const carica = async () => {
     try { rows = await PL.rpc('osm_rivendicazioni_elenco') || []; disegna(); }
     catch (e) { $('#list').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
   };
+  const caricaMail = async () => {
+    const m = await PL.try('osm_mail_stato', {}, null);
+    if (!m) { $('#mail').innerHTML = '<span class="small dim">Avvisi email: esegui la patch SQL v7 per attivarli.</span>'; return; }
+    $('#mail').innerHTML = m.pronta && m.destinatario
+      ? `<span class="pill ok">Avvisi email attivi</span><span class="small">Ogni nuova richiesta arriva a <b>${esc(m.destinatario)}</b>; il richiedente riceve l'esito e, dopo 3 giorni, un promemoria se non ha attivato.</span><button class="btn sm ghost" type="button" id="mailCambia">Cambia indirizzo</button>`
+      : '<span class="pill warn">Email non configurate</span><span class="small">La casella di invio non è ancora configurata (Comunicazioni → email): per ora controlla questa pagina.</span>';
+  };
+  $('#mail').addEventListener('click', async (e) => {
+    if (e.target.id !== 'mailCambia') return;
+    const v = await PL.ask({ title: 'Dove vuoi ricevere gli avvisi?', ok: 'Salva', fields: [{ name: 'email', label: 'Email per gli avvisi delle rivendicazioni', type: 'email', required: true }] });
+    if (v && await PL.run(null, () => PL.rpc('osm_impostazione_set', { p_chiave: 'avvisi', p_valore: { email: v.email.trim() } }), 'Indirizzo salvato.') !== undefined) caricaMail();
+  });
   $('#fil').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; disegna(); } });
 
-  const avvisa = async (r, testo) => {
-    const x = await PL.try('platform_message_many', { p_targets: [{ kind: 'user', id: r.user_id }], p_body: testo }, null);
-    return !!(x && x.sent);
+  const avvisa = async (r, testo) => !!(await PL.try('platform_message_many', { p_targets: [{ kind: 'user', id: r.user_id }], p_body: testo }, null))?.sent;
+  const linkAttiva = new URL('../rivendica.html', location.href).href;
+  const MOTIVI_NO = [
+    ['La struttura non ha confermato la richiesta.', 'La struttura non ha confermato'],
+    ['Non siamo riusciti a contattare la struttura: scrivici a info@vetroom.it.', 'Struttura non raggiungibile'],
+    ['La richiesta non è completa: scrivici a info@vetroom.it.', 'Richiesta incompleta'],
+    ['Altro: scrivici a info@vetroom.it per i dettagli.', 'Altro']];
+  const approva = async (r, b, confermata) => {
+    const v = await PL.ask({ title: `Approvare la richiesta per ${r.nome || 'la struttura'}?`, ok: 'Approva',
+      html: `Il richiedente riceve un'email e potrà attivare la struttura su Vetroom.${Number(r.altre) ? ` Le altre ${n(r.altre)} richieste aperte per questa struttura verranno rifiutate.` : ''}`,
+      fields: [{ name: 'ok', type: 'checkbox', value: !!confermata, label: `Ho chiamato il numero pubblico${r.telefono ? ' ' + r.telefono : ''} e la struttura ha confermato` }, { name: 'nota', label: 'Nota interna (facoltativa)' }] });
+    if (!v) return false;
+    if (!v.ok) { PL.toast('Prima verifica con una telefonata al numero pubblico della struttura, poi spunta la casella.', 'bad'); return false; }
+    if (await PL.run(b, () => PL.rpc('osm_rivendicazione_decidi', { p_id: Number(r.id), p_esito: 'approvata', p_nota: v.nota.trim() || null }), 'Richiesta approvata.') === undefined) return false;
+    avvisa(r, `Buone notizie: la tua richiesta per ${r.nome || 'la struttura'} è stata approvata. Apri ${linkAttiva} e premi "Attiva la struttura".`);
+    return true;
   };
+  const rifiuta = async (r, b) => {
+    const v = await PL.ask({ title: r.stato === 'contestata' ? 'Respingere la contestazione?' : `Rifiutare la richiesta per ${r.nome || 'la struttura'}?`, ok: r.stato === 'contestata' ? 'Respingi' : 'Rifiuta', danger: true,
+      html: 'Il richiedente riceve un\'email con il motivo che scegli qui.', fields: [{ name: 'nota', label: 'Motivo (lo legge il richiedente)', type: 'select', value: MOTIVI_NO[0][0], options: MOTIVI_NO }] });
+    if (!v) return false;
+    if (await PL.run(b, () => PL.rpc('osm_rivendicazione_decidi', { p_id: Number(r.id), p_esito: 'rifiutata', p_nota: v.nota }), 'Fatto.') === undefined) return false;
+    avvisa(r, `La tua richiesta per ${r.nome || 'la struttura'} non è stata approvata. ${v.nota}`);
+    return true;
+  };
+  const revoca = async (r, b, motivo) => {
+    const v = motivo ? { nota: motivo } : await PL.ask({ title: `Revocare la gestione di ${r.nome || 'la struttura'}?`, ok: 'Revoca', danger: true,
+      html: `${esc(r.richiedente || r.email_richiedente || 'Il richiedente')} perde il collegamento con la scheda pubblica e riceve un'email. La sua struttura in Vetroom (pazienti, visite, fatture) resta sua: si stacca solo la scheda, che torna rivendicabile.`,
+      fields: [{ name: 'nota', label: 'Motivo (lo legge il richiedente)', placeholder: 'Es. il titolare della struttura è un altro veterinario' }] });
+    if (!v) return false;
+    if (await PL.run(b, () => PL.rpc('osm_rivendicazione_revoca', { p_id: Number(r.id), p_nota: v.nota.trim() || null }), 'Gestione revocata.') === undefined) return false;
+    avvisa(r, `La gestione della scheda di ${r.nome || 'la struttura'} è stata revocata.${v.nota ? ' Motivo: ' + v.nota.trim() : ''}`);
+    return true;
+  };
+  const annota = async (r, esito, b, nota) => PL.run(b, () => PL.rpc('osm_rivendicazione_tentativo', { p_id: Number(r.id), p_esito: esito, p_nota: nota || null }), null);
+
   $('#list').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-dec]'); if (!b) return;
+    const b = e.target.closest('[data-act]'); if (!b) return;
     const r = rows.find((x) => String(x.id) === b.dataset.id); if (!r) return;
-    const esito = b.dataset.dec, nome = r.nome || 'la struttura';
-    let nota = null;
-    if (esito === 'approvata') {
-      const v = await PL.ask({ title: `Approvare la richiesta per ${nome}?`, ok: 'Approva',
-        html: `Il richiedente potrà attivare la struttura su Vetroom e diventarne titolare.${Number(r.altre) ? ` Le altre ${n(r.altre)} richieste per questa struttura verranno rifiutate.` : ''}`,
-        fields: [{ name: 'ok', type: 'checkbox', label: `Ho chiamato il numero pubblico${r.telefono ? ' ' + r.telefono : ''} e la struttura ha confermato` }, { name: 'nota', label: 'Nota interna (facoltativa)' }] });
-      if (!v) return;
-      if (!v.ok) { PL.toast('Prima verifica con una telefonata al numero pubblico della struttura, poi spunta la casella.', 'bad'); return; }
-      nota = v.nota.trim() || null;
-    } else if (esito === 'rifiutata') {
-      const v = await PL.ask({ title: `Rifiutare la richiesta per ${nome}?`, ok: 'Rifiuta', danger: true,
-        html: 'Il richiedente vede il motivo che scrivi qui.',
-        fields: [{ name: 'nota', label: 'Motivo (lo legge il richiedente)', type: 'select', value: 'La struttura non ha confermato la richiesta.', options: [
-          ['La struttura non ha confermato la richiesta.', 'La struttura non ha confermato'],
-          ['Non siamo riusciti a contattare la struttura: scrivici a info@vetroom.it.', 'Struttura non raggiungibile'],
-          ['La richiesta non è completa: scrivici a info@vetroom.it.', 'Richiesta incompleta'],
-          ['Altro: scrivici a info@vetroom.it per i dettagli.', 'Altro']] }] });
-      if (!v) return;
-      nota = v.nota;
-    } else if (!(await PL.ask({ title: 'Riportare la richiesta da decidere?', ok: 'Conferma' }))) return;
-    const fatto = await PL.run(b, () => PL.rpc('osm_rivendicazione_decidi', { p_id: Number(r.id), p_esito: esito, p_nota: nota }),
-      esito === 'approvata' ? 'Richiesta approvata.' : esito === 'rifiutata' ? 'Richiesta rifiutata.' : 'Riportata da decidere.');
-    if (fatto === undefined) return;
-    if (esito !== 'in_attesa') {
-      const link = new URL('../rivendica.html', location.href).href;
-      const testo = esito === 'approvata'
-        ? `Buone notizie: la tua richiesta per ${nome} è stata approvata. Apri ${link} e premi "Attiva la struttura" per iniziare a usarla su Vetroom.`
-        : `La tua richiesta per ${nome} non è stata approvata. ${nota || ''}`;
-      if (await avvisa(r, testo)) PL.toast('Il richiedente è stato avvisato nei messaggi di Vetroom.', 'info');
+    const act = b.dataset.act;
+    let fatto = false;
+    if (act === 'approva') fatto = await approva(r, b, false);
+    else if (act === 'rifiuta') fatto = await rifiuta(r, b);
+    else if (act === 'revoca') fatto = await revoca(r, b);
+    else if (act === 'riapri') {
+      if (await PL.ask({ title: 'Riportare la richiesta da decidere?', ok: 'Conferma' })) fatto = await PL.run(b, () => PL.rpc('osm_rivendicazione_decidi', { p_id: Number(r.id), p_esito: 'in_attesa', p_nota: null }), 'Riportata da decidere.') !== undefined;
+    } else if (act === 'sostituisci') {
+      const t = rows.find((x) => x.id === r.titolare.id);
+      if (!(await PL.ask({ title: 'Dare la struttura a chi la contesta?', ok: 'Revoca e approva', danger: true,
+        html: `Revoco la gestione di <b>${esc(r.titolare.nome || r.titolare.email || 'chi la gestisce ora')}</b> e approvo <b>${esc(r.richiedente || r.email_richiedente || 'questa richiesta')}</b>. Fallo solo dopo aver verificato al telefono con la struttura chi è il vero titolare. Entrambi ricevono un'email.` }))) return;
+      if (t && !(await revoca(t, b, 'Dopo una verifica con la struttura, la scheda è stata assegnata al titolare effettivo.'))) return;
+      if (!t && await PL.run(b, () => PL.rpc('osm_rivendicazione_revoca', { p_id: Number(r.titolare.id), p_nota: 'Dopo una verifica con la struttura, la scheda è stata assegnata al titolare effettivo.' }), null) === undefined) return;
+      fatto = await approva(r, b, false);
+    } else if (act === 'confermato') {
+      if (await annota(r, 'confermato', b) === undefined) return;
+      fatto = true;
+      await carica();
+      const r2 = rows.find((x) => x.id === r.id);
+      if (r2 && r2.stato === 'contestata' && r2.titolare) { PL.toast('Annotato. Ora usa "Revoca l\'attuale e approva questa".', 'info'); return; }
+      if (r2) await approva(r2, null, true);
+    } else if (act === 'non_confermato') {
+      if (await annota(r, 'non_confermato', b) === undefined) return;
+      fatto = true; await rifiuta(r, null);
+    } else if (act === 'non_risponde') {
+      fatto = await annota(r, 'non_risponde', b) !== undefined;
+      if (fatto) PL.toast('Annotato: la richiesta resta da decidere, riprova più tardi.', 'info');
+    } else if (act === 'nota') {
+      const v = await PL.ask({ title: 'Aggiungi una nota', ok: 'Salva', fields: [{ name: 'nota', label: 'Nota (la vedi solo tu)', type: 'textarea', rows: 3, required: true }] });
+      if (v) fatto = await annota(r, 'nota', b, v.nota.trim()) !== undefined;
     }
-    await carica(); PL.refreshSignals();
+    if (fatto) { await carica(); PL.refreshSignals(); }
   });
 
-  carica();
+  carica(); caricaMail();
 })();
 </script>
 </body>

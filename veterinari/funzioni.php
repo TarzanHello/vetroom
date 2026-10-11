@@ -310,7 +310,9 @@ function vr_box_proprietari($s = null) {
   return '<aside class="vt-box vt-owner"><h2>Hai un cane o un gatto?</h2><p>Con <b>FurrFinder</b> tieni il libretto sanitario sempre in tasca e ricevi i promemoria di vaccini e richiami. Se il tuo veterinario usa Vetroom, prenoti anche senza telefonare.</p><a class="btn primary" href="/app/?per=proprietario">Prova FurrFinder, è gratis</a></aside>';
 }
 function vr_box_veterinari($s = null) {
-  if ($s && !empty($s['su_vetroom'])) return '';
+  if ($s && !empty($s['su_vetroom'])) {
+    return '<aside class="vt-box vt-vet"><h2>Gestita su Vetroom</h2><p>Questa scheda è curata dalla struttura con Vetroom, il gestionale veterinario gratuito. Sei il titolare e non sei tu a gestirla?</p><a class="btn" href="/app/rivendica.html?s=' . h($s['t'] . '/' . $s['i']) . '">Segnalacelo</a></aside>';
+  }
   if ($s) {
     return '<aside class="vt-box vt-vet"><h2>Sei il titolare di ' . h(vr_nome($s)) . '?</h2><p>Rivendica gratis questa scheda: correggi i dati, ricevi le richieste di appuntamento dei proprietari e gestisci lo studio con Vetroom, il gestionale veterinario gratuito.</p><a class="btn" href="/app/rivendica.html?s=' . h($s['t'] . '/' . $s['i']) . '">Rivendica la scheda</a></aside>';
   }

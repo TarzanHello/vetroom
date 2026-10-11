@@ -61,7 +61,7 @@
               <select id="rRuolo"><option>Titolare</option><option>Direttore sanitario</option><option>Socio</option><option>Veterinario responsabile</option><option>Altro</option></select></div>
             <div class="s6"><label for="rTel">Telefono per ricontattarti</label><input type="tel" id="rTel" maxlength="30" autocomplete="tel" placeholder="Es. 333 1234567"></div>
             <div class="s12"><label for="rAlbo">Iscrizione all'Ordine <span class="muted">(facoltativa, accelera la verifica)</span></label><input type="text" id="rAlbo" maxlength="40" placeholder="Es. RM 1234"></div>
-            <div class="s12"><label for="rMsg">Qualcosa da aggiungere <span class="muted">(facoltativo)</span></label><textarea id="rMsg" rows="3" maxlength="1000" placeholder="Es. La scheda ha un indirizzo vecchio, ci siamo spostati in via…"></textarea></div>
+            <div class="s12"><label for="rMsg" id="rMsgLbl">Qualcosa da aggiungere <span class="muted">(facoltativo)</span></label><textarea id="rMsg" rows="3" maxlength="1000" placeholder="Es. La scheda ha un indirizzo vecchio, ci siamo spostati in via…"></textarea></div>
           </div>
           <p class="hint-small" style="margin:.6rem 0 0"><b>Come verifichiamo:</b> ti richiamiamo al numero pubblico della struttura (non a quello che scrivi qui) per confermare che sei tu. Così nessuno può prendere la scheda di un altro.</p>
           <div class="actions-bar" style="margin-top:14px"><button class="btn btn-primary" type="submit" id="btnRiv">Invia la richiesta</button></div>
@@ -89,7 +89,7 @@
 (async () => {
   const $ = VR.$, esc = VR.esc, msg = $('#msg');
   const KIND = { ambulatorio: 'Ambulatorio', clinica: 'Clinica veterinaria', studio_associato: 'Studio associato', ospedale: 'Ospedale veterinario', altro: 'Altro' };
-  const STATO = { in_attesa: ['In verifica', 'pill-wait'], approvata: ['Approvata', 'pill-ok'], rifiutata: ['Non approvata', 'pill-bad'], completata: ['Attiva su Vetroom', 'pill-ok'] };
+  const STATO = { in_attesa: ['In verifica', 'pill-wait'], contestata: ['Segnalazione in verifica', 'pill-wait'], approvata: ['Approvata', 'pill-ok'], rifiutata: ['Non approvata', 'pill-bad'], completata: ['Attiva su Vetroom', 'pill-ok'], revocata: ['Revocata', 'pill-bad'] };
   const indirizzo = (s) => [[s.via, s.civico].filter(Boolean).join(' '), [s.cap, s.comune].filter(Boolean).join(' '), s.provincia ? `(${s.provincia})` : ''].filter(Boolean).join(', ').replace(', (', ' (');
   const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '');
   const scelta = (new URLSearchParams(location.search).get('s') || '').match(/^(node|way|relation)\/(\d+)$/);
@@ -113,7 +113,8 @@
     for (const r of mie) {
       const [lbl, cls] = STATO[r.stato] || [r.stato, ''];
       let extra = '';
-      if (r.stato === 'in_attesa') extra = `<ol class="rv-steps"><li>Ti richiamiamo al numero pubblico della struttura per confermare.</li><li>Ricevi l'esito qui e nei messaggi di Vetroom.</li></ol>
+      if (r.stato === 'revocata') extra = `<p class="muted" style="margin:6px 0 0">${r.nota_admin ? esc(r.nota_admin) + ' ' : ''}La tua struttura in Vetroom resta tua: si è staccata solo la scheda pubblica. Per chiarimenti scrivi a info@vetroom.it.</p>`;
+      if (r.stato === 'in_attesa' || r.stato === 'contestata') extra = `<ol class="rv-steps"><li>Ti richiamiamo al numero pubblico della struttura per confermare.</li><li>Ricevi l'esito qui e nei messaggi di Vetroom.</li></ol>
         <div class="actions-bar" style="margin-top:10px"><button class="btn btn-ghost btn-small" type="button" data-annulla="${r.id}">Annulla la richiesta</button></div>`;
       if (r.stato === 'rifiutata') extra = r.nota_admin ? `<p class="muted" style="margin:6px 0 0">${esc(r.nota_admin)}</p>` : '<p class="muted" style="margin:6px 0 0">Per chiarimenti scrivi a info@vetroom.it.</p>';
       if (r.stato === 'completata') extra = `<div class="actions-bar" style="margin-top:10px"><a class="btn btn-primary btn-small" href="clinica/">Apri il gestionale</a></div>`;
@@ -178,13 +179,19 @@
     const { data: s, error } = await VR.sb.rpc('osm_struttura_pubblica', { p_type: scelta[1], p_id: Number(scelta[2]) });
     $('#schedaBox').hidden = false;
     if (error || !s) { $('#scheda').innerHTML = '<p style="margin:0">Questa scheda non è disponibile. Cerca la tua struttura qui sotto.</p>'; $('#formBox').hidden = $('#loginBox').hidden = true; return; }
-    const mia = s.mia && ['in_attesa', 'approvata', 'completata'].includes(s.mia.stato) ? s.mia : null;
+    const mia = s.mia && ['in_attesa', 'contestata', 'approvata', 'completata'].includes(s.mia.stato) ? s.mia : null;
     $('#scheda').innerHTML = `<div class="muted" style="font-size:13px">Struttura scelta</div><h2 style="margin:2px 0 0;color:var(--ink)">${esc(s.nome || 'Struttura veterinaria')}</h2><p class="addr">${esc(indirizzo(s) || s.regione || '')}</p>
       ${mia ? `<p style="margin:8px 0 0"><span class="pill ${STATO[mia.stato][1]}">${STATO[mia.stato][0]}</span> La tua richiesta è qui sopra, in "Le tue richieste".</p>`
-        : s.assegnata ? '<p style="margin:8px 0 0"><span class="pill">Già rivendicata</span> Questa struttura è già gestita su Vetroom. Se pensi sia un errore scrivi a <a href="mailto:info@vetroom.it">info@vetroom.it</a>.</p>' : ''}`;
-    const libera = !mia && !s.assegnata;
-    $('#formBox').hidden = !(libera && session);
-    $('#loginBox').hidden = !(libera && !session);
+        : s.assegnata ? '<p style="margin:8px 0 0"><span class="pill">Già rivendicata</span> Questa struttura è già gestita su Vetroom da un veterinario verificato.</p>' : ''}`;
+    const libera = !mia && !s.assegnata, contesta = !mia && s.assegnata;
+    $('#formBox').hidden = !((libera || contesta) && session);
+    $('#loginBox').hidden = !((libera || contesta) && !session);
+    $('#formBox').dataset.modo = contesta ? 'contesta' : 'rivendica';
+    $('#formBox h2').textContent = contesta ? 'Sei tu il vero titolare? Segnalacelo' : 'Chiedi di gestirla';
+    $('#loginBox h2').textContent = contesta ? 'Accedi per segnalarcelo' : 'Accedi per rivendicarla';
+    $('#rMsgLbl').innerHTML = contesta ? 'Perché la struttura è tua <span class="muted">(obbligatorio)</span>' : 'Qualcosa da aggiungere <span class="muted">(facoltativo)</span>';
+    $('#rMsg').placeholder = contesta ? 'Es. Sono il titolare dal 2015, la partita IVA è intestata a me…' : 'Es. La scheda ha un indirizzo vecchio, ci siamo spostati in via…';
+    $('#btnRiv').textContent = contesta ? 'Invia la segnalazione' : 'Invia la richiesta';
   };
   $('#btnLogin').addEventListener('click', async () => {
     try { localStorage.setItem('vetroom_rivendica', scelta ? scelta[0] : ''); } catch { /* ok */ }
@@ -194,11 +201,13 @@
     e.preventDefault(); VR.hide(msg);
     const tel = $('#rTel').value.trim();
     if (tel.replace(/\D/g, '').length < 6) { VR.say(msg, 'Scrivi un numero di telefono valido per ricontattarti.', 'error'); $('#rTel').focus(); return; }
+    const contesta = $('#formBox').dataset.modo === 'contesta';
+    if (contesta && $('#rMsg').value.trim().length < 10) { VR.say(msg, 'Spiega in breve perché la struttura è tua: ci aiuta a verificare.', 'error'); $('#rMsg').focus(); return; }
     const b = $('#btnRiv'); b.disabled = true;
-    const { error } = await VR.sb.rpc('osm_rivendica', { p_type: scelta[1], p_id: Number(scelta[2]), p_ruolo: $('#rRuolo').value, p_telefono: tel, p_albo: $('#rAlbo').value.trim() || null, p_messaggio: $('#rMsg').value.trim() || null });
+    const { error } = await VR.sb.rpc(contesta ? 'osm_contesta' : 'osm_rivendica', { p_type: scelta[1], p_id: Number(scelta[2]), p_ruolo: $('#rRuolo').value, p_telefono: tel, p_albo: $('#rAlbo').value.trim() || null, p_messaggio: $('#rMsg').value.trim() || null });
     b.disabled = false;
     if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
-    VR.say(msg, 'Richiesta inviata. Ti richiameremo al numero pubblico della struttura per la verifica: di solito entro due giorni lavorativi.', 'ok');
+    VR.say(msg, contesta ? 'Segnalazione inviata. Verifichiamo con una telefonata alla struttura e ti scriviamo l\'esito.' : 'Richiesta inviata. Ti richiameremo al numero pubblico della struttura per la verifica: di solito entro due giorni lavorativi. Riceverai l\'esito anche per email.', 'ok');
     await disegnaMie(); await disegnaScheda();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
