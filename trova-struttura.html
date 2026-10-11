@@ -42,6 +42,8 @@
     .step h3{ margin: 4px 0 6px; font-size: 18px; }
     .step p{ margin:0; color: var(--muted); }
     .credit{ font-size: 13px; color: var(--muted2); }
+    .crumbs{ font-size:14px; color:var(--muted2); margin:0 0 10px; }
+    .crumbs a{ color:inherit; }
     @media (max-width: 760px){ .steps{ grid-template-columns: 1fr; } .finder input{ font-size: 16px; } }
   </style>
   <script type="application/ld+json">
@@ -60,7 +62,7 @@
         <nav class="nav" id="nav" aria-label="Navigazione principale">
           <a href="/">Home</a>
           <a href="#come-funziona">Come funziona</a>
-          <a href="/guida/">Guida</a>
+          <a href="/veterinari/">Veterinari per città</a>
           <a class="btn small primary" href="/app/">Accedi</a>
         </nav>
         <button class="nav-toggle" type="button" aria-controls="nav" aria-expanded="false" aria-label="Apri menu">☰</button>
@@ -80,6 +82,7 @@
           <input type="search" id="q" placeholder="Es. Clinica veterinaria San Francesco, Roma" autocomplete="off" />
           <ul class="hits" id="hits" aria-live="polite"></ul>
           <p class="hint" id="hint">Scrivi almeno 3 lettere.</p>
+          <p class="hint">Oppure sfoglia l'elenco <a href="/veterinari/">per regione e città</a>.</p>
         </div>
       </div>
     </section>
@@ -110,6 +113,7 @@
           <a href="/">Gestionale veterinario gratuito</a>
           <a href="/veterinario-a-domicilio.html">Veterinario a domicilio</a>
           <a href="/trova-struttura.html">Trova la tua struttura</a>
+          <a href="/veterinari/">Veterinari per città</a>
           <a href="/guida/">Guida</a>
           <a href="/guida/invio-spese-veterinarie-sistema-ts.html">Invio al Sistema TS</a>
         </nav>
