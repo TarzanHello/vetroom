@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Rivendicazioni · Plancia Vetroom</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="plancia.css?v=2026-10-10c">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-11b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-10c"></script>
-  <script src="../js/app.js?v=2026-10-10c"></script>
-  <script src="plancia.js?v=2026-10-11a"></script>
+  <script src="../js/config.js?v=2026-10-11b"></script>
+  <script src="../js/app.js?v=2026-10-11b"></script>
+  <script src="plancia.js?v=2026-10-11b"></script>
   <style>
     .rv-card { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
     .rv-card .lbl { font: 500 11px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin: 0 0 6px; }
@@ -26,6 +26,11 @@
     .rv-log { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; color: var(--dim); }
     .rv-log li { padding: 3px 0; }
     .rv-holder { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--violet); background: var(--violet-soft); font-size: 14px; }
+    .rv-fun-h { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 0 0 10px; }
+    .rv-fun-h h2 { margin: 0; }
+    .rv-fun .gauges { margin-top: 0; }
+    .rv-fun .gauge em { display: block; margin: 2px 0 0; }
+    .rv-fun-more { margin: 10px 0 0; font-size: 14px; color: var(--dim); }
     .rv-mail { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 14px; font-size: 14px; }
     @media (max-width: 860px) { .rv-card { grid-template-columns: 1fr; gap: 12px; } }
   </style>
@@ -34,6 +39,11 @@
 <main>
   <div class="pl-head"><div class="grow"><h1>Rivendicazioni</h1><p>Veterinari che chiedono di gestire una struttura del Censimento. Prima di approvare chiama il <b>numero pubblico della struttura</b> (non quello del richiedente): la telefonata guidata ti dice cosa chiedere.</p></div>
     <div class="actions"><a class="btn" href="censimento.html">Censimento</a><a class="btn ghost" href="/trova-struttura.html" target="_blank" rel="noopener">Pagina pubblica ↗</a></div></div>
+  <section class="pn rv-fun" id="funnel" hidden>
+    <div class="rv-fun-h"><h2>Il percorso</h2><div class="seg" role="group" aria-label="Periodo" id="per"></div></div>
+    <div class="gauges" id="fun"></div>
+    <p class="rv-fun-more" id="funMore"></p>
+  </section>
   <section class="pn">
     <div class="rv-mail" id="mail"></div>
     <div class="pn-h" style="margin-bottom:10px"><div class="seg" role="group" aria-label="Stato" id="fil"></div></div>
@@ -48,7 +58,12 @@
   const STATO = { in_attesa: ['da decidere', 'warn'], contestata: ['contestazione', 'bad'], approvata: ['approvata · il veterinario deve attivarla', 'info'], completata: ['attivata su Vetroom', 'ok'], rifiutata: ['rifiutata', ''], revocata: ['revocata', 'bad'] };
   const ESITO = { non_risponde: 'non risponde', richiamare: 'da richiamare', confermato: 'ha confermato', non_confermato: 'non ha confermato', nota: 'nota' };
   const WEBMAIL = new Set(['gmail.com', 'googlemail.com', 'libero.it', 'virgilio.it', 'yahoo.it', 'yahoo.com', 'tiscali.it', 'hotmail.it', 'hotmail.com', 'outlook.it', 'outlook.com', 'live.it', 'alice.it', 'tin.it', 'icloud.com', 'me.com', 'email.it', 'fastwebnet.it', 'inwind.it', 'pec.it', 'legalmail.it']);
-  let filtro = new URLSearchParams(location.search).get('stato') || 'in_attesa', rows = [];
+  let filtro = new URLSearchParams(location.search).get('stato') || 'in_attesa', rows = [], stat = null, giorni = 30;
+  const visite = (r) => {
+    const e = stat?.per_struttura?.[String(r.t || '').charAt(0) + r.i] || {};
+    const v = Number(e.vista) || 0, rv = Number(e.rivendica) || 0;
+    return v ? `${n(v)} ${v === 1 ? 'visita' : 'visite'}${rv ? `, ${n(rv)} ${rv === 1 ? 'tocco' : 'tocchi'} su Rivendica` : ''} <span class="faint">negli ultimi ${stat.giorni} giorni</span>` : `<span class="faint">nessuna visita negli ultimi ${stat.giorni} giorni</span>`;
+  };
   const fold = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const indirizzo = (r) => [[r.via, r.civico].filter(Boolean).join(' '), [r.cap, r.comune].filter(Boolean).join(' '), r.provincia ? `(${r.provincia})` : ''].filter(Boolean).join(', ').replace(', (', ' (');
   const telLink = (t) => (t ? `<a class="rv-tel" href="tel:${esc(t.replace(/[^\d+]/g, ''))}">${esc(t)}</a>` : '<span class="faint">nessuno su OpenStreetMap</span>');
@@ -102,6 +117,7 @@
             <dt>Telefono pubblico</dt><dd>${telLink(r.telefono)}</dd>
             <dt>Email</dt><dd>${r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : '<span class="faint">—</span>'}</dd>
             <dt>Sito</dt><dd>${r.sito && /^https?:\/\//.test(r.sito) ? `<a href="${esc(r.sito)}" target="_blank" rel="noopener nofollow">${esc(r.sito.replace(/^https?:\/\/(www\.)?/, ''))}</a>` : '<span class="faint">—</span>'}</dd>
+            ${stat ? `<dt>Scheda pubblica</dt><dd>${visite(r)}</dd>` : ''}
             <dt>Contatti attuali dal</dt><dd>${PL.d(r.contatti_dal)}</dd>
             <dt>Scheda</dt><dd><a href="https://www.openstreetmap.org/${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener">OpenStreetMap ↗</a> · <a href="../rivendica.html?s=${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener">pagina di rivendicazione ↗</a></dd>
           </dl>
@@ -147,6 +163,25 @@
     try { rows = await PL.rpc('osm_rivendicazioni_elenco') || []; disegna(); }
     catch (e) { $('#list').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
   };
+  // Percorso: lettere → visite → tocchi su Rivendica → richieste → approvate → attivate
+  const caricaStat = async () => {
+    stat = await PL.try('osm_statistiche', { p_giorni: giorni }, null);
+    if (!stat) { $('#funnel').hidden = true; return; }
+    $('#funnel').hidden = false;
+    const ev = stat.eventi || {};
+    const passi = [[stat.lettere, 'Lettere preparate'], [ev.vista, 'Visite alle schede'], [ev.rivendica, 'Tocchi su "Rivendica"'],
+      [stat.richieste, 'Richieste di rivendicazione'], [stat.approvate, 'Approvate'], [stat.attivate, 'Attivate su Vetroom']];
+    $('#per').innerHTML = [[7, '7 giorni'], [30, '30 giorni'], [90, '90 giorni']].map(([g, l]) => `<button type="button" data-g="${g}" aria-pressed="${giorni === g}">${l}</button>`).join('');
+    $('#fun').innerHTML = passi.map(([v, l], k) => {
+      v = Number(v) || 0;
+      const prima = k > 1 ? Number(passi[k - 1][0]) || 0 : 0;   // le lettere non sono il primo passo di tutti: niente % sulle visite
+      const pct = prima ? Math.round((v / prima) * 1000) / 10 : null;
+      return `<div class="gauge"><b>${n(v)}</b><span>${l}</span>${pct !== null ? `<em class="${v ? '' : 'zero'}">${String(pct).replace('.', ',')}% del passo prima</em>` : ''}</div>`;
+    }).join('');
+    $('#funMore').innerHTML = `Dai visitatori delle schede: <b>${n(ev.chiama || 0)}</b> chiamate, <b>${n(ev.indicazioni || 0)}</b> indicazioni stradali, <b>${n(ev.sito || 0)}</b> visite al sito, <b>${n(ev.prenota || 0)}</b> tocchi su "Prenota con FurrFinder".`
+      + ` Oggi: <b>${n(stat.abilitate)}</b> schede pubbliche, <b>${n(stat.su_vetroom)}</b> collegate a Vetroom${stat.contestazioni ? `, ${n(stat.contestazioni)} contestazioni nel periodo` : ''}.`;
+  };
+  $('#per').addEventListener('click', async (e) => { const b = e.target.closest('[data-g]'); if (b) { giorni = Number(b.dataset.g); await caricaStat(); disegna(); } });
   const caricaMail = async () => {
     const m = await PL.try('osm_mail_stato', {}, null);
     if (!m) { $('#mail').innerHTML = '<span class="small dim">Avvisi email: esegui la patch SQL v7 per attivarli.</span>'; return; }
@@ -234,7 +269,7 @@
     if (fatto) { await carica(); PL.refreshSignals(); }
   });
 
-  carica(); caricaMail();
+  caricaStat().then(() => { if (rows.length) disegna(); }); carica(); caricaMail();
 })();
 </script>
 </body>

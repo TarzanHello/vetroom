@@ -44,11 +44,20 @@ function vr_province() {
 
 function vr_nome($s) { return $s['nome'] ?: 'Struttura veterinaria'; }
 function vr_indirizzo($s, $conComune = true) {
+  if (!empty($s['indirizzo_vr'])) return $s['indirizzo_vr'];   // scritto dalla struttura nella sua intestazione su Vetroom
   $via = trim(($s['via'] ?? '') . ' ' . ($s['civico'] ?? ''));
   $luogo = trim(($s['cap'] ?? '') . ' ' . ($conComune ? $s['comune'] : ''));
   $out = implode(', ', array_filter([$via, $luogo]));
   if ($conComune && !empty($s['provincia'])) $out .= ' (' . $s['provincia'] . ')';
   return trim($out);
+}
+// Numero per i link "tel:" e per Google: solo cifre, con +39 davanti se manca
+function vr_tel_link($t) {
+  $n = preg_replace('/[^\d+]/', '', (string)$t);
+  if ($n === '') return '';
+  if (strpos($n, '00') === 0) $n = '+' . substr($n, 2);
+  if ($n[0] !== '+' && preg_match('/^[03]\d{5,10}$/', $n)) $n = '+39' . $n;
+  return $n;
 }
 function vr_telefono($t) {
   if (!$t) return '';
@@ -83,6 +92,41 @@ function vr_orari_schema($s) {
   foreach (explode(';', (string)$s) as $p) {
     $p = trim($p);
     if (preg_match('/^(Mo|Tu|We|Th|Fr|Sa|Su)(-(Mo|Tu|We|Th|Fr|Sa|Su))?(,(Mo|Tu|We|Th|Fr|Sa|Su)(-(Mo|Tu|We|Th|Fr|Sa|Su))?)* \d{2}:\d{2}-\d{2}:\d{2}(,\d{2}:\d{2}-\d{2}:\d{2})*$/', $p)) $out[] = $p;
+  }
+  return $out;
+}
+// Orari impostati dalla struttura su Vetroom: [[giorno 0=dom…6=sab, inizio, fine, inizio2, fine2], …]
+function vr_orari_fasce($r) {
+  $hm = function ($t) { return $t ? substr((string)$t, 0, 5) : ''; };
+  $f = [];
+  if ($hm($r[1] ?? '') && $hm($r[2] ?? '')) $f[] = [$hm($r[1]), $hm($r[2])];
+  if ($hm($r[3] ?? '') && $hm($r[4] ?? '')) $f[] = [$hm($r[3]), $hm($r[4])];
+  return $f;
+}
+function vr_orari_vetroom($righe) {
+  $nomi = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  $per = [];
+  foreach ((array)$righe as $r) {
+    $g = (int)($r[0] ?? -1); if ($g < 0 || $g > 6) continue;
+    $f = vr_orari_fasce($r); if (!$f) continue;
+    $per[$g] = implode(', ', array_map(function ($x) { return $x[0] . '–' . $x[1]; }, $f));
+  }
+  $gruppi = [];   // giorni consecutivi (da lunedì a domenica) con gli stessi orari
+  foreach ([1, 2, 3, 4, 5, 6, 0] as $pos => $g) {
+    if (!isset($per[$g])) continue;
+    $n = count($gruppi);
+    if ($n && $gruppi[$n - 1]['orari'] === $per[$g] && $gruppi[$n - 1]['fine'] === $pos - 1) { $gruppi[$n - 1]['a'] = $g; $gruppi[$n - 1]['fine'] = $pos; }
+    else $gruppi[] = ['da' => $g, 'a' => $g, 'fine' => $pos, 'orari' => $per[$g]];
+  }
+  return array_map(function ($x) use ($nomi) {
+    return ($x['da'] === $x['a'] ? $nomi[$x['da']] : $nomi[$x['da']] . '–' . $nomi[$x['a']]) . ' ' . $x['orari'];
+  }, $gruppi);
+}
+function vr_orari_vetroom_schema($righe) {
+  $sigle = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']; $out = [];
+  foreach ((array)$righe as $r) {
+    $g = (int)($r[0] ?? -1); if ($g < 0 || $g > 6) continue;
+    foreach (vr_orari_fasce($r) as $x) $out[] = $sigle[$g] . ' ' . $x[0] . '-' . $x[1];
   }
   return $out;
 }
@@ -141,6 +185,21 @@ function vr_indice() {
     $rn = vr_nome_regione($s['regione']); $rs = vr_slug($rn);
     $ps = vr_slug($P[$sig]); $cs = vr_slug($s['comune']);
     $s['id'] = substr($s['t'], 0, 1) . $s['i'];
+    // Struttura attiva su Vetroom: i dati curati dal titolare hanno la precedenza su quelli di OpenStreetMap
+    $v = $s['vetroom'] ?? null;
+    if (array_key_exists('vetroom', $s) && !is_array($v)) $s['su_vetroom'] = false;   // struttura sospesa
+    $s['righe_orari'] = vr_orari($s['orari'] ?? ''); $s['schema_orari'] = vr_orari_schema($s['orari'] ?? '');
+    $s['codice'] = ''; $s['domicilio'] = false; $s['zona'] = ''; $s['indirizzo_vr'] = '';
+    if (is_array($v)) {
+      if (!empty($v['nome'])) $s['nome'] = $v['nome'];
+      if (!empty($v['telefono'])) $s['telefono'] = $v['telefono'];
+      if (!empty($v['indirizzo'])) $s['indirizzo_vr'] = $v['indirizzo'];
+      $ro = vr_orari_vetroom($v['orari'] ?? []);
+      if ($ro) { $s['righe_orari'] = $ro; $s['schema_orari'] = vr_orari_vetroom_schema($v['orari']); }
+      $s['codice'] = preg_match('/^[A-Za-z0-9_-]{3,40}$/', (string)($v['codice'] ?? '')) ? $v['codice'] : '';
+      $s['domicilio'] = !empty($v['domicilio']); $s['zona'] = (string)($v['zona'] ?? '');
+    }
+    unset($s['vetroom']);
     $s['rs'] = $rs; $s['ps'] = $ps; $s['cs'] = $cs; $s['provincia'] = $sig;
     $s['url'] = "/veterinari/$rs/$ps/$cs/" . vr_slug(vr_nome($s)) . '-' . $s['id'];
     $s['indicizza'] = !empty($s['su_vetroom']) || (!empty($s['nome']) && (!empty($s['orari']) || !empty($s['telefono']) || !empty($s['sito'])));
@@ -280,6 +339,25 @@ function vr_pagina($o) {
     </div>
   </footer>
   <script src="/assets/cookie-notice.js" defer></script>
+<?php if (!empty($o['evento']) && VR_CONTA_VISITE) { ?>
+  <script>
+    // Contatore anonimo: solo un totale per scheda e per giorno, niente cookie e niente dati di chi visita
+    (function () {
+      if (navigator.webdriver || /bot|crawl|spider|slurp|preview|lighthouse/i.test(navigator.userAgent)) return;
+      var url = <?= json_encode(VR_SUPABASE_URL . '/rest/v1/rpc/osm_evento', JSON_UNESCAPED_SLASHES) ?>, key = <?= json_encode(VR_SUPABASE_KEY) ?>;
+      var dove = <?= json_encode(['p_type' => $o['evento'][0], 'p_id' => $o['evento'][1]]) ?>;
+      function conta(ev) {
+        try {
+          var h = { 'apikey': key, 'Content-Type': 'application/json' };
+          if (key.indexOf('eyJ') === 0) h.Authorization = 'Bearer ' + key;
+          fetch(url, { method: 'POST', keepalive: true, headers: h, body: JSON.stringify({ p_type: dove.p_type, p_id: dove.p_id, p_evento: ev }) }).catch(function () {});
+        } catch (e) {}
+      }
+      conta('vista');
+      document.addEventListener('click', function (e) { var a = e.target.closest && e.target.closest('[data-ev]'); if (a) conta(a.getAttribute('data-ev')); });
+    })();
+  </script>
+<?php } ?>
   <script>
     (function () {
       var t = document.querySelector('.nav-toggle'), n = document.getElementById('nav');
@@ -293,7 +371,7 @@ function vr_pagina($o) {
 
 // Scheda breve di una struttura negli elenchi
 function vr_card($s, $conComune = false) {
-  $orari = vr_orari($s['orari'] ?? '');
+  $orari = $s['righe_orari'] ?? vr_orari($s['orari'] ?? '');
   $tag = !empty($s['su_vetroom']) ? '<span class="vt-on">Usa Vetroom</span>' : '';
   return '<li class="vt-card"><a href="' . h($s['url']) . '"><strong>' . h(vr_nome($s)) . '</strong>' . $tag
     . '<span class="vt-addr">' . h(vr_indirizzo($s, $conComune) ?: $s['comune']) . '</span>'
@@ -304,6 +382,9 @@ function vr_conta($n, $uno, $molti) { return $n . ' ' . ($n === 1 ? $uno : $molt
 
 // Riquadri per proprietari e veterinari
 function vr_box_proprietari($s = null) {
+  if ($s && !empty($s['su_vetroom']) && !empty($s['codice'])) {
+    return '<aside class="vt-box vt-owner"><h2>Prenota con FurrFinder</h2><p>' . h(vr_nome($s)) . ' usa Vetroom: con <b>FurrFinder</b> chiedi un appuntamento senza telefonare, hai il libretto sanitario del tuo animale sempre in tasca e ricevi i promemoria di vaccini e richiami. È gratis.</p><a class="btn primary" data-ev="prenota" href="/app/?codice=' . rawurlencode($s['codice']) . '">Prenota con FurrFinder</a></aside>';
+  }
   if ($s && !empty($s['su_vetroom'])) {
     return '<aside class="vt-box vt-owner"><h2>Sei cliente di questa struttura?</h2><p>' . h(vr_nome($s)) . ' usa Vetroom: con <b>FurrFinder</b> hai il libretto sanitario del tuo animale sempre in tasca, i promemoria di vaccini e richiami e puoi chiedere un appuntamento senza telefonare.</p><a class="btn primary" href="/app/?per=proprietario">Apri FurrFinder, è gratis</a></aside>';
   }
@@ -311,10 +392,10 @@ function vr_box_proprietari($s = null) {
 }
 function vr_box_veterinari($s = null) {
   if ($s && !empty($s['su_vetroom'])) {
-    return '<aside class="vt-box vt-vet"><h2>Gestita su Vetroom</h2><p>Questa scheda è curata dalla struttura con Vetroom, il gestionale veterinario gratuito. Sei il titolare e non sei tu a gestirla?</p><a class="btn" href="/app/rivendica.html?s=' . h($s['t'] . '/' . $s['i']) . '">Segnalacelo</a></aside>';
+    return '<aside class="vt-box vt-vet"><h2>Gestita su Vetroom</h2><p>Questa scheda è curata dalla struttura con Vetroom, il gestionale veterinario gratuito. Sei il titolare e non sei tu a gestirla?</p><a class="btn" data-ev="rivendica" href="/app/rivendica.html?s=' . h($s['t'] . '/' . $s['i']) . '">Segnalacelo</a></aside>';
   }
   if ($s) {
-    return '<aside class="vt-box vt-vet"><h2>Sei il titolare di ' . h(vr_nome($s)) . '?</h2><p>Rivendica gratis questa scheda: correggi i dati, ricevi le richieste di appuntamento dei proprietari e gestisci lo studio con Vetroom, il gestionale veterinario gratuito.</p><a class="btn" href="/app/rivendica.html?s=' . h($s['t'] . '/' . $s['i']) . '">Rivendica la scheda</a></aside>';
+    return '<aside class="vt-box vt-vet"><h2>Sei il titolare di ' . h(vr_nome($s)) . '?</h2><p>Rivendica gratis questa scheda: correggi i dati, ricevi le richieste di appuntamento dei proprietari e gestisci lo studio con Vetroom, il gestionale veterinario gratuito.</p><a class="btn" data-ev="rivendica" href="/app/rivendica.html?s=' . h($s['t'] . '/' . $s['i']) . '">Rivendica la scheda</a></aside>';
   }
   return '<aside class="vt-box vt-vet"><h2>Sei un veterinario?</h2><p>La tua struttura potrebbe essere già in questo elenco. Rivendicala gratis e gestisci agenda, cartelle cliniche, fatture e prenotazioni con Vetroom.</p><a class="btn" href="/trova-struttura.html">Trova e rivendica la tua struttura</a></aside>';
 }

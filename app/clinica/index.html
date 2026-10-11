@@ -12,17 +12,17 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-10c">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-11b">
   <script src="../vendor/supabase-2.117.2.js"></script>
   <script src="../vendor/qrcode-generator.js"></script>
   <script src="../vendor/jspdf-2.5.2.min.js"></script>
-  <script src="../js/config.js?v=2026-10-10c"></script>
-  <script src="../js/app.js?v=2026-10-10c"></script>
-  <script src="../js/i18n.js?v=2026-10-10c"></script>
-  <script src="../js/layout.js?v=2026-10-10c"></script>
-  <script src="../js/clinica.js?v=2026-10-10c"></script>
-  <script src="../js/demo.js?v=2026-10-10c"></script>
-  <script src="../js/pdf.js?v=2026-10-10c"></script>
+  <script src="../js/config.js?v=2026-10-11b"></script>
+  <script src="../js/app.js?v=2026-10-11b"></script>
+  <script src="../js/i18n.js?v=2026-10-11b"></script>
+  <script src="../js/layout.js?v=2026-10-11b"></script>
+  <script src="../js/clinica.js?v=2026-10-11b"></script>
+  <script src="../js/demo.js?v=2026-10-11b"></script>
+  <script src="../js/pdf.js?v=2026-10-11b"></script>
 </head>
 <body data-shell="clinic" data-nav="home">
   <main class="wrap">
@@ -171,7 +171,7 @@
     const tel = (p) => `tel:${String(p).replace(/[^\d+]/g, '')}`;
 
     // ---------- Caricamento (tutto in parallelo) ----------
-    const [todayRes, reqRes, tomRes, remRes, openVisRes, ownersRes, petsRes, clinicRes, hoursRes, teamRes, demoRes, appRes] = await Promise.all([
+    const [todayRes, reqRes, tomRes, remRes, openVisRes, ownersRes, petsRes, clinicRes, hoursRes, teamRes, demoRes, appRes, pastRes] = await Promise.all([
       VR.sb.from('appointments').select('*, pets(id, name, species, notes), clients(first_name, last_name, phone, address_street, address_number, address_zip, address_city, address_province)')
         .eq('clinic_id', cid).gte('starts_at', dayStart.toISOString()).lt('starts_at', dayEnd.toISOString()).order('starts_at'),
       VR.sb.from('appointments').select('*, pets(id, name), clients(first_name, last_name, phone, address_street, address_number, address_zip, address_city, address_province)')
@@ -191,7 +191,10 @@
       VR.sb.from('availabilities').select('id', { count: 'exact', head: true }).eq('clinic_id', cid),
       VR.sb.from('clinic_members').select('user_id', { count: 'exact', head: true }).eq('clinic_id', cid),
       VR.sb.from('clients').select('id', { count: 'exact', head: true }).eq('clinic_id', cid).eq('is_demo', true),
-      VR.sb.from('clients').select('id', { count: 'exact', head: true }).eq('clinic_id', cid).not('owner_user_id', 'is', null)
+      VR.sb.from('clients').select('id', { count: 'exact', head: true }).eq('clinic_id', cid).not('owner_user_id', 'is', null),
+      // appuntamenti già passati rimasti "confermati": non si sa se la visita c'è stata
+      VR.sb.from('appointments').select('id, starts_at, type, notes_internal, pets(name), clients(first_name, last_name)', { count: 'exact' })
+        .eq('clinic_id', cid).eq('status', 'confirmed').lt('starts_at', dayStart.toISOString()).order('starts_at', { ascending: false }).limit(5)
     ]);
     VR.hide(loading);
     if (todayRes.error) { VR.say(msg, VR.errorText(todayRes.error), 'error'); return; }
@@ -332,6 +335,8 @@
     let rems = remRes.data || [];
     let tom = (tomRes.data || []).filter((a) => a.clients?.phone && VR.waPhone(a.clients.phone));
     let openVis = openVisRes.data || [];
+    let past = pastRes.data || [];
+    let pastCount = pastRes.count || past.length;
 
     const renderTodo = () => {
       const items = [];
@@ -370,14 +375,22 @@
           <div class="todo-main"><strong>${VR.esc(v.pets?.name || '')} · ${VR.esc(v.title || v.visit_kind || 'Visita')}</strong><span>visita del ${dmy(v.visit_date)} senza referto definitivo</span></div>
           <div class="todo-acts"><a class="btn btn-ghost btn-small" href="visita.html?id=${v.id}">Apri e chiudi</a></div>
         </div>`));
+      past.forEach((a) => items.push(`
+        <div class="todo-row" data-kind="past" data-id="${a.id}">
+          <span class="todo-tag tag-late">Da chiudere</span>
+          <div class="todo-main"><strong>${VR.esc(new Date(a.starts_at).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))} · ${VR.esc(whoOf(a))}</strong>
+            <span>${VR.esc([ownerOf(a), a.type].filter(Boolean).join(' · '))}${ownerOf(a) || a.type ? ' · ' : ''}com'è andata?</span></div>
+          <div class="todo-acts"><button class="btn btn-primary btn-small" type="button" data-done>Svolto</button><button class="btn btn-ghost btn-small" type="button" data-noshow>Non presentato</button></div>
+        </div>`));
       VR.$('#todo').innerHTML = items.join('');
       const n = items.length;
       VR.$('#todoCount').textContent = n ? String(n) : '';
       const more = [];
+      if (pastCount > past.length) more.push(`altri ${pastCount - past.length} appuntamenti passati da chiudere (li trovi in <a href="agenda.html">agenda</a>)`);
       if (openVis.length > 3) more.push(`altre ${openVis.length - 3} visite senza referto definitivo (le trovi nelle schede degli animali)`);
       const already = tom.length - tomTodo.length;
       if (already > 0) more.push(`${already} ${already === 1 ? 'proprietario già avvisato' : 'proprietari già avvisati'} per domani`);
-      VR.$('#todoMore').textContent = more.length ? 'Inoltre: ' + more.join(' · ') + '.' : '';
+      VR.$('#todoMore').innerHTML = more.length ? 'Inoltre: ' + more.join(' · ') + '.' : '';
       (more.length ? VR.show : VR.hide)(VR.$('#todoMore'));
       (n ? VR.show : VR.hide)(VR.$('#todoPanel'));
     };
@@ -395,6 +408,15 @@
         const { error } = await VR.sb.from('reminders').update({ status: 'done' }).eq('id', id);
         if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
         rems = rems.filter((r) => r.id !== id); renderTodo(); return;
+      }
+      if (kind === 'past') {
+        const done = ev.target.closest('[data-done]'), noshow = ev.target.closest('[data-noshow]');
+        if (!done && !noshow) return;
+        row.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+        const { error } = await VR.sb.from('appointments').update({ status: done ? 'done' : 'no_show' }).eq('id', id).eq('status', 'confirmed');
+        if (error) { VR.say(msg, VR.errorText(error), 'error'); row.querySelectorAll('button').forEach((b) => { b.disabled = false; }); return; }
+        past = past.filter((x) => x.id !== id); pastCount = Math.max(0, pastCount - 1);
+        renderTodo(); return;
       }
       if (kind === 'req') {
         const ok = ev.target.closest('[data-ok]'), no = ev.target.closest('[data-no]');
@@ -449,6 +471,16 @@
       // Se c'è già lavoro in corso, i primi passi scendono in fondo: in cima resta la giornata
       if (today.length || !VR.$('#todoPanel').hidden) VR.$('#stats').before(VR.$('#onboarding'));
       VR.show(VR.$('#onboarding'));
+    }
+
+    // Clienti su FurrFinder ma nessun orario: non possono prenotare (il collaudo lo segnala)
+    if ((appRes.count || 0) > 0 && !(hoursRes.count || 0)) {
+      const n = appRes.count;
+      const box = document.createElement('div');
+      box.className = 'notice notice-error'; box.style.marginBottom = '12px';
+      box.innerHTML = `<b>${n === 1 ? '1 tuo cliente usa' : n + ' tuoi clienti usano'} FurrFinder, ma non può prenotare</b>: mancano gli orari ${ctx.homeOnly ? 'delle visite' : 'di apertura'}. ` +
+        (ctx.role === 'admin' ? '<a class="btn btn-primary btn-small" href="orari.html" style="margin-left:6px">Imposta gli orari</a>' : 'Chiedi all\'amministratore della struttura di impostarli.');
+      msg.parentNode.insertBefore(box, msg.nextSibling);
     }
 
     // Promemoria backup (una volta al mese, solo per l'amministratore)

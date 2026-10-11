@@ -70,8 +70,12 @@
       if (ev.target.closest('.doc-open')) {
         const w = window.open('', '_blank');
         const url = await VR.fileUrl(doc.storage_path);
-        if (url && w) w.location = url;
-        else { if (w) w.close(); VR.say(msg, 'Impossibile aprire il documento.', 'error'); }
+        if (url) { if (w) w.location = url; else location.href = url; }
+        else {
+          if (w) w.close();
+          const mine = doc.clinic_id === clinicId && canEdit;
+          VR.say(msg, 'Il file di questo documento non è più disponibile.' + (mine ? ' Puoi eliminare la voce e caricarlo di nuovo.' : ''), 'error');
+        }
       }
 
       if (ev.target.closest('.doc-rename')) {

@@ -144,6 +144,7 @@ input[type="number"], input[type="search"], select, textarea {
   border: 1px solid #d1d5db; border-radius: 10px; min-height: 44px;
 }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,.15); }
+input.is-invalid, select.is-invalid, textarea.is-invalid { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,.15); }
 textarea { min-height: 90px; resize: vertical; }
 input[disabled], select[disabled], textarea[disabled] { background: #f9fafb; color: #4b5563; }
 @media (min-width: 1025px) { input, select, textarea { font-size: 14px !important; } }

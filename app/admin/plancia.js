@@ -240,7 +240,7 @@
       if (tr && o.onRow) { const href = o.onRow(st.sorted[Number(tr.dataset.i)]); if (href) { if (e.ctrlKey || e.metaKey) window.open(href); else location.href = href; } }
     });
     draw();
-    return { set(rows) { st.rows = rows || []; st.page = 0; draw(); }, get rows() { return st.sorted || []; } };
+    return { set(rows) { st.rows = rows || []; st.page = 0; draw(); }, sort(k, dir) { st.key = k; st.dir = dir || -1; st.page = 0; draw(); }, get rows() { return st.sorted || []; } };
   };
 
   // ---------- Diario: frasi leggibili ----------
