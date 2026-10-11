@@ -46,6 +46,18 @@
       .cz-selbar .btn { padding-left: 10px; padding-right: 10px; }
       body.cz-selecting .pl-main { padding-bottom: 220px; }
       body.cz-selecting .toasts { bottom: 170px; }
+      /* su telefono ogni struttura è una scheda: casella a sinistra, dati uno sotto l'altro */
+      #tbl .tw { overflow: visible; border: 0; }
+      #tbl table, #tbl tbody { display: block; width: 100%; min-width: 0; }
+      #tbl thead { display: none; }
+      #tbl tbody tr { display: grid; grid-template-columns: 34px minmax(0, 1fr); column-gap: 10px; padding: 12px 6px; border-bottom: 1px solid var(--edge); }
+      #tbl tbody td { display: block; grid-column: 2; padding: 3px 0; border: 0; width: auto; }
+      #tbl tbody td:first-child { grid-column: 1; grid-row: 1 / span 4; padding-top: 2px; }
+      #tbl tbody td.empty { grid-column: 1 / -1; }
+      #tbl tr.is-bad td:first-child { box-shadow: none; }
+      #tbl tr.is-bad { box-shadow: inset 3px 0 var(--red); }
+      #tbl tr.cz-on td { background: none; }
+      #tbl tr.cz-on { background: rgba(79, 216, 232, .08); }
     }
   </style>
 </head>
@@ -86,7 +98,7 @@
     <details id="scartateBox" style="margin-top:14px" hidden><summary class="small dim">Strutture eliminate <span id="scartateN"></span></summary>
       <p class="small faint" style="margin:8px 0">I loro dati sono stati cancellati: resta solo il numero della scheda OpenStreetMap, così il censimento non le rimette dentro. Se ne ripristini una, torna al prossimo censimento.</p>
       <ul class="list" id="scartate"></ul></details>
-    <p class="small faint" style="margin:12px 0 0"><b>Selezione</b>: spunta le caselle (o tocca le righe) per lavorare più strutture insieme; tieni premuto Maiusc per selezionare un intervallo. La barra in basso offre Va bene, Escludi, Da decidere, Esporta ed Elimina.</p>
+    <p class="small faint" style="margin:12px 0 0"><b>Selezione</b>: spunta le caselle (o tocca le righe, anche da telefono) per lavorare più strutture insieme; da computer tieni premuto Maiusc per selezionare un intervallo. La barra in basso offre Va bene, Escludi, Da decidere, Esporta ed Elimina.</p>
     <p class="small faint" style="margin:6px 0 0"><b>Da controllare</b>: strutture che forse non sono veterinarie (farmacie, negozi, canili…) o possibili doppioni (a meno di 40 metri o con lo stesso telefono). Per ognuna scegli <b>Va bene</b> o <b>Escludi</b>: la decisione resta anche dopo i prossimi censimenti.</p>
     <p class="small faint" style="margin:6px 0 0"><b>Contatti cambiati</b>: telefono, email o sito sono stati modificati su OpenStreetMap dopo il primo censimento. Chiunque può modificare OpenStreetMap: per la rivendicazione valgono solo i contatti presenti da prima della richiesta, gli altri vanno controllati a mano.</p>
     <p class="small faint" style="margin:6px 0 0">Dati © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, licenza ODbL. Molte strutture portano il nome del medico: prima di pubblicarle servono informativa e tasto "Rimuovi la mia scheda".</p>
