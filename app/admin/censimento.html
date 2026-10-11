@@ -28,6 +28,25 @@
     .cz-log .warn { color: var(--amber); } .cz-log .bad { color: var(--red); } .cz-log .ok { color: var(--green); }
     .cz-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
     .cz-filters select { max-width: 220px; }
+    .cz-chk { width: 18px; height: 18px; accent-color: var(--signal); cursor: pointer; margin: 2px 0 0; }
+    #tbl td:first-child { width: 34px; }
+    #tbl td { overflow-wrap: anywhere; }
+    #tbl td .actions .btn { padding: 4px 9px; }
+    #tbl tr.cz-on td { background: rgba(79, 216, 232, .07); }
+    #tbl tbody tr { cursor: default; }
+    .cz-selbar { position: fixed; left: var(--rail); right: 0; bottom: 0; z-index: 28; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 10px clamp(14px, 3vw, 36px) calc(10px + env(safe-area-inset-bottom)); background: rgba(8, 14, 26, .97); border-top: 1px solid var(--signal); box-shadow: 0 -10px 30px rgba(0, 0, 0, .45); }
+    .cz-selbar[hidden] { display: none; }
+    .cz-selbar b { font: 600 15px var(--mono); color: var(--signal); }
+    .cz-selbar .grow { flex: 1 1 auto; min-width: 8px; }
+    body.cz-selecting .pl-main { padding-bottom: 130px; }
+    body.cz-selecting .toasts { bottom: 86px; }
+    @media (max-width: 860px) {
+      .cz-selbar { left: 0; bottom: calc(58px + env(safe-area-inset-bottom)); padding-bottom: 10px; }
+      .cz-selbar .btn { padding-left: 10px; padding-right: 10px; }
+      body.cz-selecting .pl-main { padding-bottom: 220px; }
+      body.cz-selecting .toasts { bottom: 170px; }
+    }
   </style>
 </head>
 <body class="pl" data-station="censimento">
@@ -62,16 +81,22 @@
       <select id="reg" aria-label="Regione"><option value="">Tutte le regioni</option></select>
       <input type="search" class="search" id="q" placeholder="Nome, comune, telefono…">
     </div>
+    <div class="bulk" id="selTop"></div>
     <div id="tbl"><p class="loader">Caricamento</p></div>
-    <p class="small faint" style="margin:12px 0 0"><b>Da controllare</b>: strutture che forse non sono veterinarie (farmacie, negozi, canili…) o possibili doppioni (a meno di 40 metri o con lo stesso telefono). Per ognuna scegli <b>Va bene</b> o <b>Escludi</b>: la decisione resta anche dopo i prossimi censimenti.</p>
+    <details id="scartateBox" style="margin-top:14px" hidden><summary class="small dim">Strutture eliminate <span id="scartateN"></span></summary>
+      <p class="small faint" style="margin:8px 0">I loro dati sono stati cancellati: resta solo il numero della scheda OpenStreetMap, così il censimento non le rimette dentro. Se ne ripristini una, torna al prossimo censimento.</p>
+      <ul class="list" id="scartate"></ul></details>
+    <p class="small faint" style="margin:12px 0 0"><b>Selezione</b>: spunta le caselle (o tocca le righe) per lavorare più strutture insieme; tieni premuto Maiusc per selezionare un intervallo. La barra in basso offre Va bene, Escludi, Da decidere, Esporta ed Elimina.</p>
+    <p class="small faint" style="margin:6px 0 0"><b>Da controllare</b>: strutture che forse non sono veterinarie (farmacie, negozi, canili…) o possibili doppioni (a meno di 40 metri o con lo stesso telefono). Per ognuna scegli <b>Va bene</b> o <b>Escludi</b>: la decisione resta anche dopo i prossimi censimenti.</p>
     <p class="small faint" style="margin:6px 0 0"><b>Contatti cambiati</b>: telefono, email o sito sono stati modificati su OpenStreetMap dopo il primo censimento. Chiunque può modificare OpenStreetMap: per la rivendicazione valgono solo i contatti presenti da prima della richiesta, gli altri vanno controllati a mano.</p>
     <p class="small faint" style="margin:6px 0 0">Dati © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, licenza ODbL. Molte strutture portano il nome del medico: prima di pubblicarle servono informativa e tasto "Rimuovi la mia scheda".</p>
   </section>
+  <div class="cz-selbar" id="selBar" hidden></div>
 </main>
 <script>
 (async () => {
   await PL.boot();
-  const { $, esc, n } = PL;
+  const { $, $$, esc, n } = PL;
 
   // ================================================================
   //  Dialogo con OpenStreetMap (API Overpass)
@@ -188,6 +213,7 @@ foreach->.v(
       // 0. cosa c'è già in archivio
       const stato = await PL.rpc('osm_stato');
       const note = new Map((stato.note || []).map(([t, i, lat, lon, loc]) => [t + '/' + i, { lat, lon, loc }]));
+      const scartate = new Set((stato.scartate || []).map(([t, i]) => t + '/' + i));
       const attivePrima = Number(stato.attive || 0);
 
       // 1. scarico
@@ -195,14 +221,16 @@ foreach->.v(
       log('Chiedo a OpenStreetMap tutte le strutture veterinarie d\'Italia…');
       const els = await overpass(Q_ITALIA, 'Scaricamento', 330);
       const seen = new Set(), rows = [];
+      let saltate = 0;
       for (const el of els) {
         const k = el.type + '/' + el.id; if (seen.has(k)) continue; seen.add(k);
+        if (scartate.has(k)) { saltate++; continue; }   // eliminate da te: non rientrano
         const r = CZ.riga(el); if (r) rows.push(r);
       }
-      esito.trovate = rows.length;
+      esito.trovate = rows.length + saltate; esito.eliminate_saltate = saltate;
       const avvisi = rows.filter((r) => r.avviso).length;
       if (!rows.length) throw new Error('OpenStreetMap ha restituito un elenco vuoto: probabilmente un suo problema momentaneo. Riprova più tardi.');
-      step('scarica', 'ok', n(rows.length) + ' trovate'); log(`Trovate ${n(rows.length)} strutture${avvisi ? `, di cui ${n(avvisi)} da controllare (forse non sono veterinarie)` : ''}.`, 'ok'); prog(10);
+      step('scarica', 'ok', n(rows.length + saltate) + ' trovate'); log(`Trovate ${n(rows.length + saltate)} strutture${saltate ? ` (${n(saltate)} eliminate da te, non le rimetto dentro)` : ''}${avvisi ? `, di cui ${n(avvisi)} da controllare (forse non sono veterinarie)` : ''}.`, 'ok'); prog(10);
 
       // 2. localizzo le nuove, quelle spostate e quelle senza comune, provincia o regione
       fase = 'luoghi';
@@ -307,6 +335,8 @@ foreach->.v(
   // ================================================================
   let all = [], filtro = 'attive', regione = '', dop = new Map();
   const key = (r) => r.t + '/' + r.i;
+  const sel = new Set();       // strutture selezionate (restano selezionate anche cambiando filtro)
+  let ultimaSel = null;        // per Maiusc+clic
   const valida = (r) => r.attivo && r.revisione !== 'escluso';
   const daControllare = (r) => valida(r) && r.revisione !== 'ok' && (r.avviso || dop.has(key(r)));
   const incompleta = (r) => valida(r) && (!r.comune || !r.provincia || !r.regione);
@@ -324,13 +354,14 @@ foreach->.v(
   const decisione = (r) => {
     if (r.revisione === 'escluso') return `<span class="pill bad" title="${esc(PL.dt(r.revisionato_il))}">esclusa</span>${r.revisione_nota ? `<span class="sub">${esc(r.revisione_nota)}</span>` : ''}<div class="actions" style="margin-top:6px"><button class="btn sm ghost" data-rev="" data-k="${esc(key(r))}">Ripristina</button></div>`;
     if (r.revisione === 'ok') return `<span class="pill ok" title="${esc(PL.dt(r.revisionato_il))}">verificata</span><div class="actions" style="margin-top:6px"><button class="btn sm ghost" data-rev="" data-k="${esc(key(r))}">Annulla</button></div>`;
-    return `<div class="actions"><button class="btn sm" data-rev="ok" data-k="${esc(key(r))}">Va bene</button><button class="btn sm danger" data-rev="escluso" data-k="${esc(key(r))}">Escludi</button></div>`;
+    return `<div class="actions" style="flex-wrap:nowrap"><button class="btn sm" data-rev="ok" data-k="${esc(key(r))}">Va bene</button><button class="btn sm danger" data-rev="escluso" data-k="${esc(key(r))}">Escludi</button></div>`;
   };
   const T = PL.table({
     el: $('#tbl'), pageSize: 50, sortKey: 'luogo', sortDir: 1,
     empty: 'Nessuna struttura con questi criteri.',
-    rowClass: (r) => (valida(r) ? '' : 'is-bad'),
+    rowClass: (r) => [valida(r) ? '' : 'is-bad', sel.has(key(r)) ? 'cz-on' : ''].join(' '),
     cols: [
+      { k: 'sel', l: '', render: (r) => `<input type="checkbox" class="cz-chk" data-sel="${esc(key(r))}" aria-label="Seleziona ${esc(nomeDi(r))}" ${sel.has(key(r)) ? 'checked' : ''}>` },
       { k: 'nome', l: 'Struttura', sort: (r) => (r.nome || '~').toLowerCase(), render: (r) => {
         const d = valida(r) && r.revisione !== 'ok' ? dop.get(key(r)) : null;
         const avvisi = [r.avviso && valida(r) && r.revisione !== 'ok' ? `<span class="pill warn">${esc(r.avviso)}</span>` : '',
@@ -339,10 +370,10 @@ foreach->.v(
       } },
       { k: 'luogo', l: 'Comune', sort: (r) => [r.regione || '~', r.provincia || '~', r.comune || '~', r.nome || ''].join('|').toLowerCase(), render: (r) => r.comune ? `${esc(r.comune)}${r.provincia ? ` <span class="faint">(${esc(r.provincia)})</span>` : ''}<span class="sub">${esc(r.regione || 'regione da trovare')}</span>` : '<span class="faint">da trovare</span>' },
       { k: 'contatti', l: 'Contatti', render: (r) => [r.telefono ? `<span class="mono small nowrap">${esc(r.telefono)}</span>` : '', r.email ? `<span class="sub">${esc(r.email)}</span>` : '', r.sito && /^https?:\/\//.test(r.sito) ? `<span class="sub"><a href="${esc(r.sito)}" target="_blank" rel="noopener nofollow">${esc(r.sito.replace(/^https?:\/\/(www\.)?/, ''))}</a></span>` : ''].join('') || '<span class="faint">nessuno</span>' },
-      { k: 'stato', l: 'Su OSM', hideM: true, sort: (r) => new Date(r.contatti_dal).getTime(), render: (r) => [`<a class="small nowrap" href="https://www.openstreetmap.org/${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener" title="Ultima modifica su OSM: ${PL.d(r.osm_modificato_il)}">apri la scheda ↗</a>`,
-        !r.attivo ? `<span class="pill bad" title="Vista l'ultima volta il ${PL.d(r.visto_il)}">non più su OSM</span>` : '',
-        r.cambi > 0 ? `<span class="pill warn" title="Contatti attuali presenti dal ${PL.dt(r.contatti_dal)}">contatti cambiati il ${PL.d(r.contatti_dal)}</span>` : `<span class="sub">dal ${PL.d(r.importato_il)}</span>`].filter(Boolean).join(' ') },
-      { k: 'rev', l: 'Decisione', sort: (r) => (r.revisione || ''), render: decisione }
+      { k: 'rev', l: 'Stato', sort: (r) => (r.revisione || '') + (r.cambi > 0 ? '1' : '0'), render: (r) => `<div style="display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-bottom:6px">
+        <a class="small nowrap" href="https://www.openstreetmap.org/${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener" title="Ultima modifica su OSM: ${PL.d(r.osm_modificato_il)}">scheda OSM ↗</a>
+        ${!r.attivo ? `<span class="pill bad" title="Vista l'ultima volta il ${PL.d(r.visto_il)}">non più su OSM</span>` : ''}
+        ${r.cambi > 0 ? `<span class="pill warn" title="Contatti attuali presenti dal ${PL.dt(r.contatti_dal)}">contatti cambiati il ${PL.d(r.contatti_dal)}</span>` : ''}</div>${decisione(r)}` }
     ]
   });
   $('#tbl').innerHTML = '<p class="loader">Caricamento</p>';
@@ -370,6 +401,7 @@ foreach->.v(
     const rows = visibili();
     $('#cnt').textContent = n(rows.length);
     T.set(rows);
+    barra();
     $('#csv').disabled = !rows.length;
   };
   const caricaTutto = async () => {
@@ -387,12 +419,119 @@ foreach->.v(
     const att = all.filter(valida);
     const regs = [...new Set(att.map((r) => r.regione).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
     $('#reg').innerHTML = '<option value="">Tutte le regioni</option>' + regs.map((x) => `<option value="${esc(x)}" ${x === regione ? 'selected' : ''}>${esc(x)} (${n(att.filter((r) => r.regione === x).length)})</option>`).join('');
+    scartateList = stato.scartate || [];
+    disegnaScartate();
     const ult = stato.ultimi || [];
     const riga = (u) => `${PL.dt(u.iniziato_il)}${u.da ? ' · ' + esc(u.da) : ''} — ${n(u.esito?.trovate)} su OSM, ${n(u.esito?.nuove)} nuove, ${n(u.esito?.contatti_cambiati)} contatti cambiati, ${n(u.esito?.sparite)} sparite${u.esito?.segna_sparite === false ? ' (non segnate per prudenza)' : ''}`;
     $('#last').innerHTML = ult.length ? `<span class="dim">Ultimo censimento:</span> ${riga(ult[0])}` : '<span class="dim">Nessun censimento ancora eseguito.</span>';
     $('#hist').innerHTML = ult.map((u) => `<li class="small">${riga(u)}</li>`).join('') || '<li class="small dim">Nessuna.</li>';
     disegna();
   };
+
+  // ---------- Selezione ----------
+  const chiaviDi = (keys) => keys.map((k) => { const [t, i] = k.split('/'); return [t, Number(i)]; });
+  const segnaDom = (k, on) => {
+    const c = $(`#tbl [data-sel="${CSS.escape(k)}"]`); if (!c) return;
+    c.checked = on; c.closest('tr')?.classList.toggle('cz-on', on);
+  };
+  const barra = () => {
+    const vis = visibili(), visSel = vis.filter((r) => sel.has(key(r))).length, nascoste = sel.size - visSel;
+    $('#selTop').innerHTML = vis.length ? `<label class="check"><input type="checkbox" id="selAll" ${visSel && visSel === vis.length ? 'checked' : ''}> ${visSel && visSel === vis.length ? `Tutte le ${n(vis.length)} mostrate sono selezionate` : `Seleziona tutte le ${n(vis.length)} mostrate`}</label>` : '';
+    const all$ = $('#selAll'); if (all$) all$.indeterminate = visSel > 0 && visSel < vis.length;
+    const bar = $('#selBar');
+    bar.hidden = !sel.size;
+    document.body.classList.toggle('cz-selecting', sel.size > 0);
+    if (!sel.size) { bar.innerHTML = ''; return; }
+    bar.innerHTML = `<b>${n(sel.size)}</b><span class="small dim">${sel.size === 1 ? 'selezionata' : 'selezionate'}${nascoste ? ` · ${n(nascoste)} non visibili con questo filtro` : ''}</span><span class="grow"></span>
+      <button class="btn sm" data-bulk="ok">Va bene</button>
+      <button class="btn sm" data-bulk="escluso">Escludi</button>
+      <button class="btn sm ghost" data-bulk="nulla">Da decidere</button>
+      <button class="btn sm ghost" data-bulk="csv">Esporta</button>
+      <button class="btn sm danger" data-bulk="elimina">Elimina</button>
+      <button class="btn sm ghost" data-bulk="via" title="Togli la selezione" aria-label="Togli la selezione">✕</button>`;
+  };
+  const toggle = (k, on, shift) => {
+    const ordine = T.rows.map(key);
+    let range = [k];
+    if (shift && ultimaSel && ordine.includes(ultimaSel) && ordine.includes(k)) {
+      const a = ordine.indexOf(ultimaSel), b = ordine.indexOf(k);
+      range = ordine.slice(Math.min(a, b), Math.max(a, b) + 1);
+    }
+    range.forEach((x) => { if (on) sel.add(x); else sel.delete(x); segnaDom(x, on); });
+    ultimaSel = k;
+    barra();
+  };
+  $('#tbl').addEventListener('click', (e) => {
+    const c = e.target.closest('.cz-chk');
+    if (c) { toggle(c.dataset.sel, c.checked, e.shiftKey); return; }
+    if (e.target.closest('a, button, input, select, label, th, .pager')) return;
+    const tr = e.target.closest('tbody tr'); const box = tr?.querySelector('.cz-chk');
+    if (box) toggle(box.dataset.sel, !box.checked, e.shiftKey);
+  });
+  $('#selTop').addEventListener('change', (e) => {
+    if (e.target.id !== 'selAll') return;
+    const on = e.target.checked;
+    visibili().forEach((r) => { if (on) sel.add(key(r)); else sel.delete(key(r)); });
+    $$('#tbl .cz-chk').forEach((c) => { c.checked = sel.has(c.dataset.sel); c.closest('tr')?.classList.toggle('cz-on', c.checked); });
+    barra();
+  });
+  const aGruppi = async (keys, fn) => { let tot = 0; for (let i = 0; i < keys.length; i += 500) tot += Number(await fn(chiaviDi(keys.slice(i, i + 500)))) || 0; return tot; };
+  $('#selBar').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-bulk]'); if (!b) return;
+    const azione = b.dataset.bulk, keys = [...sel], N = keys.length, quante = N === 1 ? '1 struttura' : `${n(N)} strutture`;
+    const righe = all.filter((r) => sel.has(key(r)));
+    if (azione === 'via') { sel.clear(); $$('#tbl .cz-chk').forEach((c) => { c.checked = false; c.closest('tr')?.classList.remove('cz-on'); }); barra(); return; }
+    if (azione === 'csv') { esporta(righe, 'selezione'); return; }
+    if (azione === 'ok' || azione === 'nulla') {
+      if (!(await PL.ask({ title: azione === 'ok' ? `Segnare ${quante} come verificate?` : `Riportare ${quante} da decidere?`, ok: azione === 'ok' ? 'Va bene' : 'Conferma',
+        html: azione === 'ok' ? 'Spariscono da "Da controllare" e restano attive.' : 'Tolgo la decisione (verificata o esclusa): tornano come appena censite.' }))) return;
+      const scelta = azione === 'ok' ? 'ok' : null;
+      const fatto = await PL.run(b, () => aGruppi(keys, (c) => PL.rpc('osm_revisiona_gruppo', { p_chiavi: c, p_revisione: scelta, p_nota: null })), (x) => `${n(x)} aggiornate.`);
+      if (fatto === undefined) return;
+      righe.forEach((r) => Object.assign(r, { revisione: scelta, revisione_nota: null, revisionato_il: scelta ? new Date().toISOString() : null }));
+    }
+    if (azione === 'escluso') {
+      const v = await PL.ask({ title: `Escludere ${quante}?`, ok: 'Escludi', danger: true,
+        html: 'Restano nell\'archivio ma non diventeranno pagine pubbliche. I prossimi censimenti non le rimettono dentro; puoi ripristinarle quando vuoi.',
+        fields: [{ name: 'motivo', label: 'Motivo', type: 'select', value: MOTIVI[0], options: MOTIVI.map((m) => [m, m]) }, { name: 'nota', label: 'Nota (facoltativa)' }] });
+      if (!v) return;
+      const nota = [v.motivo, v.nota.trim()].filter(Boolean).join(' — ');
+      const fatto = await PL.run(b, () => aGruppi(keys, (c) => PL.rpc('osm_revisiona_gruppo', { p_chiavi: c, p_revisione: 'escluso', p_nota: nota })), (x) => `${n(x)} escluse.`);
+      if (fatto === undefined) return;
+      righe.forEach((r) => Object.assign(r, { revisione: 'escluso', revisione_nota: nota, revisionato_il: new Date().toISOString() }));
+    }
+    if (azione === 'elimina') {
+      const v = await PL.ask({ title: `Eliminare ${quante}?`, ok: 'Elimina', danger: true, word: N >= 10 ? 'ELIMINA' : null,
+        html: `Cancello <b>tutti i dati</b> di ${N === 1 ? 'questa struttura' : 'queste strutture'} dall'archivio e tengo solo il numero della scheda OpenStreetMap, così il censimento non ${N === 1 ? 'la' : 'le'} rimette dentro. Usalo per chi non è veterinario o per chi ha chiesto di essere tolto. Se cambi idea puoi ripristinare, ma i dati tornano solo al censimento successivo.`,
+        fields: [{ name: 'motivo', label: 'Motivo', type: 'select', value: MOTIVI[0], options: MOTIVI.map((m) => [m, m]) }] });
+      if (!v) return;
+      const fatto = await PL.run(b, () => aGruppi(keys, (c) => PL.rpc('osm_elimina', { p_chiavi: c, p_motivo: v.motivo })), (x) => `${n(x)} eliminate.`);
+      if (fatto === undefined) return;
+      const via = new Set(keys);
+      all = all.filter((r) => !via.has(key(r)));
+      scartateList = [...keys.map((k) => { const [t, i] = k.split('/'); return [t, Number(i), v.motivo, new Date().toISOString()]; }), ...scartateList];
+      disegnaScartate();
+    }
+    sel.clear(); ultimaSel = null;
+    disegna();
+  });
+
+  // ---------- Strutture eliminate ----------
+  let scartateList = [];
+  const disegnaScartate = () => {
+    $('#scartateBox').hidden = !scartateList.length;
+    $('#scartateN').textContent = scartateList.length ? `(${n(scartateList.length)})` : '';
+    $('#scartate').innerHTML = scartateList.slice(0, 300).map(([t, i, motivo, il]) => `<li><div class="grow"><a class="mono small" href="https://www.openstreetmap.org/${esc(t)}/${Number(i)}" target="_blank" rel="noopener">${esc(t)}/${Number(i)} ↗</a>
+      <span class="small dim" style="display:block">${esc(motivo || 'senza motivo')} · ${PL.d(il)}</span></div><button class="btn sm ghost" data-ripr="${esc(t)}/${Number(i)}">Ripristina</button></li>`).join('')
+      + (scartateList.length > 300 ? `<li class="small dim">…e altre ${n(scartateList.length - 300)}</li>` : '');
+  };
+  $('#scartate').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-ripr]'); if (!b) return;
+    const k = b.dataset.ripr;
+    if (await PL.run(b, () => PL.rpc('osm_ripristina_scartate', { p_chiavi: chiaviDi([k]) }), 'Ripristinata: tornerà al prossimo censimento.') === undefined) return;
+    scartateList = scartateList.filter(([t, i]) => t + '/' + i !== k);
+    disegnaScartate();
+  });
 
   // ---------- Decisioni: va bene / escludi / ripristina ----------
   $('#tbl').addEventListener('click', async (e) => {
@@ -420,8 +559,8 @@ foreach->.v(
   $('#gauges').addEventListener('click', (e) => { const a = e.target.closest('[data-f]'); if (a) { filtro = a.dataset.f; disegna(); } });
   $('#reg').addEventListener('change', (e) => { regione = e.target.value; disegna(); });
   let tq; $('#q').addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(disegna, 180); });
-  $('#csv').addEventListener('click', () => {
-    PL.csv(`strutture-osm-${new Date().toISOString().slice(0, 10)}.csv`, visibili(), [
+  const esporta = (righe, nome) => {
+    PL.csv(`strutture-osm-${nome}-${new Date().toISOString().slice(0, 10)}.csv`, righe, [
       ['Nome', (r) => r.nome], ['Via', (r) => r.via], ['Civico', (r) => r.civico], ['CAP', (r) => r.cap], ['Comune', (r) => r.comune],
       ['Provincia', (r) => r.provincia], ['Regione', (r) => r.regione], ['Telefono', (r) => r.telefono], ['Email', (r) => r.email], ['Sito', (r) => r.sito],
       ['Orari', (r) => r.orari], ['Su OSM', (r) => (r.attivo ? 'sì' : 'non più')], ['Contatti attuali dal', (r) => PL.d(r.contatti_dal)],
@@ -429,7 +568,8 @@ foreach->.v(
       ['Decisione', (r) => ({ ok: 'verificata', escluso: 'esclusa' }[r.revisione] || '')], ['Nota', (r) => r.revisione_nota],
       ['Latitudine', (r) => r.lat], ['Longitudine', (r) => r.lon], ['Scheda OSM', (r) => `https://www.openstreetmap.org/${r.t}/${r.i}`]
     ]);
-  });
+  };
+  $('#csv').addEventListener('click', () => esporta(visibili(), filtro));
 
   caricaTutto();
 })();
