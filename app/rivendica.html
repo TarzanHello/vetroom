@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="it" data-root="./">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <title>Rivendica la tua struttura – Vetroom</title>
+  <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
+  <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="css/app.css?v=2026-10-10c">
+  <script src="vendor/supabase-2.117.2.js"></script>
+  <script src="js/config.js?v=2026-10-10c"></script>
+  <script src="js/app.js?v=2026-10-10c"></script>
+  <style>
+    .rv h1 { font-size: clamp(1.5rem, 4vw, 2rem); margin: 6px 0 6px; color: var(--ink); }
+    .rv .lead { color: var(--muted); margin: 0 0 16px; }
+    .rv h2 { font-size: 1.1rem; margin: 0 0 10px; color: var(--teal-dark); }
+    .rv-hits { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .rv-hits a { display: block; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--white); color: inherit; text-decoration: none; }
+    .rv-hits a:hover, .rv-hits a:focus-visible { border-color: var(--teal); background: var(--teal-soft); }
+    .rv-hits strong { display: block; }
+    .rv-hits span { font-size: 13px; color: var(--muted); }
+    .rv-box { border: 2px solid var(--teal-line); background: var(--teal-soft); border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 12px; }
+    .rv-box .addr { color: var(--muted); margin: 2px 0 0; }
+    .rv-req { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 10px; background: var(--white); }
+    .rv-req .top { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+    .rv-steps { margin: 6px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
+    .rv-steps li { margin: 3px 0; }
+    .rv-choice { display: grid; gap: 8px; margin-top: 10px; }
+    .rv-choice label { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; font-size: 15px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); cursor: pointer; background: var(--white); }
+    .rv-choice label:has(input:checked) { border-color: var(--teal); background: var(--teal-soft); }
+    .rv-choice input { margin-top: 3px; }
+    .osm-credit { font-size: 12px; color: var(--muted); margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <header class="welcome-top">
+    <a href="/"><img src="img/logo-bianco.png" alt="Vetroom"></a>
+    <div class="vr-header-right"><span class="vr-header-user" id="who" style="color:#ecfeff"></span><button class="vr-header-btn" data-action="logout" type="button" id="btnOut" hidden>Esci</button></div>
+  </header>
+
+  <main class="welcome-wrap rv">
+    <h1>Rivendica la tua struttura</h1>
+    <p class="lead">Molte strutture veterinarie sono già presenti in Vetroom, prese dall'elenco pubblico di OpenStreetMap. Se una è la tua, rivendicala: dopo una breve verifica diventa tua e la gestisci gratis, con agenda, cartelle cliniche, fatture e FurrFinder per i tuoi clienti.</p>
+    <div id="msg" hidden></div>
+
+    <section class="panel" id="mieBox" hidden>
+      <h2>Le tue richieste</h2>
+      <div id="mie"></div>
+    </section>
+
+    <section id="schedaBox" hidden>
+      <div class="rv-box" id="scheda"></div>
+      <div class="panel" id="formBox" hidden>
+        <h2>Chiedi di gestirla</h2>
+        <form id="fRiv" novalidate>
+          <div class="grid">
+            <div class="s6"><label for="rRuolo">Il tuo ruolo nella struttura</label>
+              <select id="rRuolo"><option>Titolare</option><option>Direttore sanitario</option><option>Socio</option><option>Veterinario responsabile</option><option>Altro</option></select></div>
+            <div class="s6"><label for="rTel">Telefono per ricontattarti</label><input type="tel" id="rTel" maxlength="30" autocomplete="tel" placeholder="Es. 333 1234567"></div>
+            <div class="s12"><label for="rAlbo">Iscrizione all'Ordine <span class="muted">(facoltativa, accelera la verifica)</span></label><input type="text" id="rAlbo" maxlength="40" placeholder="Es. RM 1234"></div>
+            <div class="s12"><label for="rMsg">Qualcosa da aggiungere <span class="muted">(facoltativo)</span></label><textarea id="rMsg" rows="3" maxlength="1000" placeholder="Es. La scheda ha un indirizzo vecchio, ci siamo spostati in via…"></textarea></div>
+          </div>
+          <p class="hint-small" style="margin:.6rem 0 0"><b>Come verifichiamo:</b> ti richiamiamo al numero pubblico della struttura (non a quello che scrivi qui) per confermare che sei tu. Così nessuno può prendere la scheda di un altro.</p>
+          <div class="actions-bar" style="margin-top:14px"><button class="btn btn-primary" type="submit" id="btnRiv">Invia la richiesta</button></div>
+        </form>
+      </div>
+      <div class="panel" id="loginBox" hidden>
+        <h2>Accedi per rivendicarla</h2>
+        <p class="muted" style="margin-top:0">Serve un account Vetroom: si crea in un attimo con Google ed è gratuito.</p>
+        <div class="actions-bar"><button class="btn btn-primary" type="button" id="btnLogin">Accedi con Google</button></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 id="cercaTitolo">Cerca la tua struttura</h2>
+      <label for="q" class="muted" style="font-weight:400">Scrivi il nome, il comune o la via</label>
+      <input type="search" id="q" placeholder="Es. Clinica San Francesco Roma" autocomplete="off">
+      <ul class="rv-hits" id="hits"></ul>
+      <p class="hint-small" id="nessuna" hidden style="margin-top:10px">Non la trovi? Puoi crearla da zero: <a href="benvenuto.html?strutture">crea la tua struttura</a>.</p>
+    </section>
+
+    <p class="osm-credit">Elenco delle strutture: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, licenza ODbL. Vuoi far togliere una scheda? Scrivi a <a href="mailto:info@vetroom.it">info@vetroom.it</a>.</p>
+  </main>
+
+<script>
+(async () => {
+  const $ = VR.$, esc = VR.esc, msg = $('#msg');
+  const KIND = { ambulatorio: 'Ambulatorio', clinica: 'Clinica veterinaria', studio_associato: 'Studio associato', ospedale: 'Ospedale veterinario', altro: 'Altro' };
+  const STATO = { in_attesa: ['In verifica', 'pill-wait'], approvata: ['Approvata', 'pill-ok'], rifiutata: ['Non approvata', 'pill-bad'], completata: ['Attiva su Vetroom', 'pill-ok'] };
+  const indirizzo = (s) => [[s.via, s.civico].filter(Boolean).join(' '), [s.cap, s.comune].filter(Boolean).join(' '), s.provincia ? `(${s.provincia})` : ''].filter(Boolean).join(', ').replace(', (', ' (');
+  const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '');
+  const scelta = (new URLSearchParams(location.search).get('s') || '').match(/^(node|way|relation)\/(\d+)$/);
+
+  const session = await VR.getSession();
+  const uid = session?.user?.id || null;
+  if (session) { $('#who').textContent = session.user.email; $('#btnOut').hidden = false; }
+  let profile = null;
+  if (session) { try { profile = await VR.loadProfile(uid); await VR.requireTerms({ profile }); } catch { /* il profilo arriva al primo accesso */ } }
+
+  // ---------- Le mie richieste ----------
+  let mie = [];
+  const disegnaMie = async () => {
+    if (!session) return;
+    const { data, error } = await VR.sb.rpc('osm_mie_rivendicazioni');
+    if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+    mie = data || [];
+    $('#mieBox').hidden = !mie.length;
+    let mieStrutture = null;
+    const parti = [];
+    for (const r of mie) {
+      const [lbl, cls] = STATO[r.stato] || [r.stato, ''];
+      let extra = '';
+      if (r.stato === 'in_attesa') extra = `<ol class="rv-steps"><li>Ti richiamiamo al numero pubblico della struttura per confermare.</li><li>Ricevi l'esito qui e nei messaggi di Vetroom.</li></ol>
+        <div class="actions-bar" style="margin-top:10px"><button class="btn btn-ghost btn-small" type="button" data-annulla="${r.id}">Annulla la richiesta</button></div>`;
+      if (r.stato === 'rifiutata') extra = r.nota_admin ? `<p class="muted" style="margin:6px 0 0">${esc(r.nota_admin)}</p>` : '<p class="muted" style="margin:6px 0 0">Per chiarimenti scrivi a info@vetroom.it.</p>';
+      if (r.stato === 'completata') extra = `<div class="actions-bar" style="margin-top:10px"><a class="btn btn-primary btn-small" href="clinica/">Apri il gestionale</a></div>`;
+      if (r.stato === 'approvata') {
+        if (mieStrutture === null) {
+          const { data: m } = await VR.sb.from('clinic_members').select('clinic_id, clinics(name)').eq('user_id', uid).eq('role', 'admin').eq('status', 'active');
+          mieStrutture = m || [];
+        }
+        extra = `<p style="margin:8px 0 0"><b>Ultimo passo:</b> attiva la struttura su Vetroom.</p>
+          <div class="rv-choice" data-attiva="${r.id}">
+            <label><input type="radio" name="m${r.id}" value="nuova" checked><span><b>Crea la struttura</b><br><span class="muted">Con il nome e l'indirizzo di questa scheda: ne sarai il titolare.</span></span></label>
+            ${mieStrutture.map((c) => `<label><input type="radio" name="m${r.id}" value="${esc(c.clinic_id)}"><span><b>Collega a ${esc(c.clinics?.name || 'una tua struttura')}</b><br><span class="muted">La usi già su Vetroom: la scheda pubblica porterà a questa.</span></span></label>`).join('')}
+          </div>
+          <div class="grid" style="margin-top:10px" data-nuova="${r.id}">
+            <div class="s12"><label for="n${r.id}">Nome della struttura</label><input type="text" id="n${r.id}" maxlength="120" value="${esc(r.nome || '')}"></div>
+            <div class="s6"><label for="k${r.id}">Tipo</label><select id="k${r.id}">${Object.entries(KIND).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
+            <div class="s6"><label for="f${r.id}">Chi è titolare della partita IVA</label><select id="f${r.id}"><option value="individuale">Io, con la mia partita IVA</option><option value="associato">Un'associazione tra professionisti</option><option value="societa">Una società (S.r.l., S.t.p.…)</option></select></div>
+          </div>
+          <div class="actions-bar" style="margin-top:12px"><button class="btn btn-primary" type="button" data-vai="${r.id}">Attiva la struttura</button></div>`;
+      }
+      parti.push(`<div class="rv-req"><div class="top"><strong>${esc(r.nome || 'Struttura veterinaria')}</strong><span class="pill ${cls}">${esc(lbl)}</span></div>
+        <div class="muted" style="font-size:14px">${esc(indirizzo(r))}${r.ruolo ? ' · ' + esc(r.ruolo) : ''} · richiesta del ${fmt(r.creata_il)}</div>${extra}</div>`);
+    }
+    $('#mie').innerHTML = parti.join('');
+  };
+  $('#mie').addEventListener('change', (e) => {
+    const box = e.target.closest('[data-attiva]'); if (!box) return;
+    const g = $(`[data-nuova="${box.dataset.attiva}"]`); if (g) g.hidden = e.target.value !== 'nuova';
+  });
+  $('#mie').addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-annulla]');
+    if (a) {
+      if (!confirm('Annullare la richiesta?')) return;
+      const { error } = await VR.sb.rpc('osm_rivendicazione_annulla', { p_id: Number(a.dataset.annulla) });
+      if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+      VR.say(msg, 'Richiesta annullata.', 'ok'); await disegnaMie(); await disegnaScheda(); return;
+    }
+    const v = e.target.closest('[data-vai]'); if (!v) return;
+    const id = v.dataset.vai, modo = $(`input[name="m${id}"]:checked`)?.value || 'nuova';
+    const before = v.textContent; v.disabled = true; v.textContent = 'Un attimo…';
+    const fail = (err) => { VR.say(msg, VR.errorText(err), 'error'); v.disabled = false; v.textContent = before; };
+    let clinic = modo;
+    if (modo === 'nuova') {
+      const name = $(`#n${id}`).value.trim();
+      if (!name) return fail({ message: 'Scrivi il nome della struttura.' });
+      const { error: pe } = await VR.sb.rpc('set_professional', { p_kind: 'vet' });
+      if (pe && !/set_professional/.test(pe.message || '')) return fail(pe);
+      const res = await VR.sb.rpc('create_structure', { p_name: name, p_kind: $(`#k${id}`).value, p_legal_form: $(`#f${id}`).value });
+      if (res.error) return fail(res.error);
+      clinic = res.data;
+    }
+    const { error } = await VR.sb.rpc('osm_rivendicazione_completa', { p_id: Number(id), p_clinic: clinic });
+    if (error) return fail(error);
+    try { localStorage.setItem(VR.CLINIC_KEY, clinic); } catch { /* ok */ }
+    VR.say(msg, 'Fatto: la struttura è tua. Ti porto nel gestionale…', 'ok');
+    setTimeout(() => VR.go('clinica/'), 1200);
+  });
+
+  // ---------- Scheda della struttura scelta ----------
+  const disegnaScheda = async () => {
+    if (!scelta) return;
+    const { data: s, error } = await VR.sb.rpc('osm_struttura_pubblica', { p_type: scelta[1], p_id: Number(scelta[2]) });
+    $('#schedaBox').hidden = false;
+    if (error || !s) { $('#scheda').innerHTML = '<p style="margin:0">Questa scheda non è disponibile. Cerca la tua struttura qui sotto.</p>'; $('#formBox').hidden = $('#loginBox').hidden = true; return; }
+    const mia = s.mia && ['in_attesa', 'approvata', 'completata'].includes(s.mia.stato) ? s.mia : null;
+    $('#scheda').innerHTML = `<div class="muted" style="font-size:13px">Struttura scelta</div><h2 style="margin:2px 0 0;color:var(--ink)">${esc(s.nome || 'Struttura veterinaria')}</h2><p class="addr">${esc(indirizzo(s) || s.regione || '')}</p>
+      ${mia ? `<p style="margin:8px 0 0"><span class="pill ${STATO[mia.stato][1]}">${STATO[mia.stato][0]}</span> La tua richiesta è qui sopra, in "Le tue richieste".</p>`
+        : s.assegnata ? '<p style="margin:8px 0 0"><span class="pill">Già rivendicata</span> Questa struttura è già gestita su Vetroom. Se pensi sia un errore scrivi a <a href="mailto:info@vetroom.it">info@vetroom.it</a>.</p>' : ''}`;
+    const libera = !mia && !s.assegnata;
+    $('#formBox').hidden = !(libera && session);
+    $('#loginBox').hidden = !(libera && !session);
+  };
+  $('#btnLogin').addEventListener('click', async () => {
+    try { localStorage.setItem('vetroom_rivendica', scelta ? scelta[0] : ''); } catch { /* ok */ }
+    try { await VR.signIn(); } catch (e) { VR.say(msg, VR.errorText(e), 'error'); }
+  });
+  $('#fRiv').addEventListener('submit', async (e) => {
+    e.preventDefault(); VR.hide(msg);
+    const tel = $('#rTel').value.trim();
+    if (tel.replace(/\D/g, '').length < 6) { VR.say(msg, 'Scrivi un numero di telefono valido per ricontattarti.', 'error'); $('#rTel').focus(); return; }
+    const b = $('#btnRiv'); b.disabled = true;
+    const { error } = await VR.sb.rpc('osm_rivendica', { p_type: scelta[1], p_id: Number(scelta[2]), p_ruolo: $('#rRuolo').value, p_telefono: tel, p_albo: $('#rAlbo').value.trim() || null, p_messaggio: $('#rMsg').value.trim() || null });
+    b.disabled = false;
+    if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
+    VR.say(msg, 'Richiesta inviata. Ti richiameremo al numero pubblico della struttura per la verifica: di solito entro due giorni lavorativi.', 'ok');
+    await disegnaMie(); await disegnaScheda();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // ---------- Ricerca ----------
+  let t, ultima = '';
+  const cerca = async () => {
+    const q = $('#q').value.trim();
+    if (q.length < 3) { $('#hits').innerHTML = ''; $('#nessuna').hidden = true; return; }
+    ultima = q;
+    const { data, error } = await VR.sb.rpc('osm_cerca_pubblica', { p_q: q });
+    if (q !== ultima) return;
+    if (error) { $('#hits').innerHTML = `<li class="muted">${esc(VR.errorText(error))}</li>`; return; }
+    const rows = data || [];
+    $('#hits').innerHTML = rows.map((s) => `<li><a href="?s=${esc(s.t)}/${Number(s.i)}"><strong>${esc(s.nome || 'Struttura veterinaria')}${s.su_vetroom ? ' <span class="pill pill-ok">già su Vetroom</span>' : ''}</strong><span>${esc(indirizzo(s) || s.regione || '')}</span></a></li>`).join('')
+      || '<li class="muted">Nessuna struttura trovata con queste parole.</li>';
+    $('#nessuna').hidden = false;
+  };
+  $('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(cerca, 300); });
+  if (scelta) $('#cercaTitolo').textContent = 'Non è questa? Cerca la tua struttura';
+
+  await disegnaMie();
+  await disegnaScheda();
+})();
+</script>
+</body>
+</html>

@@ -15,6 +15,7 @@
   const I = {
     ponte: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"/></svg>',
     cliniche: '<svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/><path d="M12 8.5v3M10.5 10h3"/></svg>',
+    rivendicazioni: '<svg viewBox="0 0 24 24"><path d="M4 20V10l8-5.5L20 10v10"/><path d="M9.5 20v-5h5v5"/><path d="M15.5 4.5l1.6 1.6 3.4-3.4"/></svg>',
     censimento: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-6-5.6-6-10a6 6 0 0 1 12 0c0 4.4-6 10-6 10z"/><circle cx="12" cy="10.5" r="2.2"/><path d="M3.5 20.5h4M16.5 20.5h4"/></svg>',
     utenti: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.5 14.3c2.6-.3 4.4 1.2 5 4.2"/></svg>',
     prenotazioni: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15"/><path d="M3.5 9.5h17M8 3v4M16 3v4M8 14l2.5 2.5L16 12"/></svg>',
@@ -34,6 +35,7 @@
       { k: 'ponte', l: 'Ponte di comando', h: './' },
       { k: 'cliniche', l: 'Strutture', h: 'cliniche.html' },
       { k: 'censimento', l: 'Censimento OSM', h: 'censimento.html' },
+      { k: 'rivendicazioni', l: 'Rivendicazioni', h: 'rivendicazioni.html', badge: 'claims' },
       { k: 'utenti', l: 'Utenti', h: 'utenti.html' },
       { k: 'prenotazioni', l: 'Prenotazioni', h: 'prenotazioni.html' }
     ] },
@@ -444,12 +446,17 @@
     set('support', by.support?.n || 0);
     set('errors', by.errors?.n || 0, by.errors?.level === 'bad');
     set('trash', by.trash?.n || 0);
+    // Richieste di rivendicazione delle strutture da decidere (patch SQL v5 del censimento)
+    const claims = Number(await PL.try('osm_rivendicazioni_conta', {}, 0)) || 0;
+    set('claims', claims, claims > 0);
+
     const m = $('#plMaint'); if (m) { m.hidden = !by.maintenance; m.className = 'pl-light hide-m bad'; }
     // Spia del Collaudo: problemi dell'ultimo controllo (rossa se ce ne sono di gravi)
     const hc = await PL.try('platform_health_history', { p_limit: 1 }, null);
     const last = hc && hc[0] && hc[0].summary;
     if (last) set('health', Number(last.bad) + Number(last.err) + Number(last.warn), Number(last.bad) + Number(last.err) > 0);
     PL.alerts = (alerts || []).slice();
+    if (claims) PL.alerts.push({ kind: 'claims', level: 'warn', n: claims, text: `${claims === 1 ? '1 richiesta' : claims + ' richieste'} di rivendicazione da decidere`, href: 'rivendicazioni.html' });
     if (hc) {
       const gravi = last ? Number(last.bad) + Number(last.err) : 0, guardare = last ? Number(last.warn) : 0;
       const age = hc[0] ? (Date.now() - new Date(hc[0].at).getTime()) / 864e5 : Infinity;

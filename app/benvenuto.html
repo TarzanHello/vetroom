@@ -76,6 +76,7 @@
         <p class="hint-small" style="margin:.6rem 0 0">Lavori in più posti? Scegline uno ora: le altre strutture le aggiungi quando vuoi.</p>
 
         <form id="fCreate" class="sub-form" hidden novalidate>
+          <p class="notice notice-info" style="margin-top:0">La tua struttura potrebbe essere già in Vetroom, presa dall'elenco pubblico di OpenStreetMap. <a href="rivendica.html"><b>Cercala e rivendicala</b></a>: tieni nome e indirizzo già pronti.</p>
           <div class="grid">
             <div class="s12"><label for="stName">Nome della struttura</label><input type="text" id="stName" maxlength="120" placeholder="Es. Ambulatorio Veterinario San Francesco"></div>
             <div class="s6"><label for="stKind">Tipo</label>
@@ -184,6 +185,13 @@
       // 3. Dove deve andare questo utente?
       profile = await VR.loadProfile(uid);
       VR.hide(loading);
+
+      // 3a. Stava rivendicando una struttura dall'elenco pubblico: torna lì
+      const rivendica = localStorage.getItem('vetroom_rivendica');
+      if (rivendica !== null) {
+        localStorage.removeItem('vetroom_rivendica');
+        VR.go('rivendica.html' + (/^(node|way|relation)\/\d+$/.test(rivendica) ? '?s=' + rivendica : '')); return;
+      }
 
       if (inviteFailed && (profile.is_staff || profile.is_owner)) {
         VR.$('#found h1').textContent = 'Invito non accettato';

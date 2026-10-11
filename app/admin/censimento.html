@@ -11,7 +11,7 @@
   <script src="../vendor/supabase-2.117.2.js"></script>
   <script src="../js/config.js?v=2026-10-10c"></script>
   <script src="../js/app.js?v=2026-10-10c"></script>
-  <script src="plancia.js?v=2026-10-10d"></script>
+  <script src="plancia.js?v=2026-10-11a"></script>
   <script src="censimento-dati.js?v=2026-10-10e"></script>
   <style>
     .cz-steps { list-style: none; margin: 14px 0 0; padding: 0; }
@@ -110,8 +110,9 @@
     <details id="scartateBox" style="margin-top:14px" hidden><summary class="small dim">Strutture eliminate <span id="scartateN"></span></summary>
       <p class="small faint" style="margin:8px 0">I loro dati sono stati cancellati: resta solo il numero della scheda OpenStreetMap, così il censimento non le rimette dentro. Se ne ripristini una, torna al prossimo censimento.</p>
       <ul class="list" id="scartate"></ul></details>
-    <p class="small faint" style="margin:12px 0 0"><b>Selezione</b>: spunta le caselle (o tocca le righe, anche da telefono) per lavorare più strutture insieme; da computer tieni premuto Maiusc per selezionare un intervallo. La barra in basso offre Va bene, Escludi, Da decidere, Esporta ed Elimina.</p>
-    <p class="small faint" style="margin:6px 0 0"><b>Da controllare</b>: strutture che forse non sono veterinarie (farmacie, negozi, canili…) o possibili doppioni (a meno di 40 metri o con lo stesso telefono). Per ognuna scegli <b>Va bene</b> o <b>Escludi</b>: la decisione resta anche dopo i prossimi censimenti.</p>
+    <p class="small faint" style="margin:12px 0 0"><b>Selezione</b>: spunta le caselle (o tocca le righe, anche da telefono) per lavorare più strutture insieme; da computer tieni premuto Maiusc per selezionare un intervallo. La barra in basso offre Abilita, Escludi, Da decidere, Esporta ed Elimina.</p>
+    <p class="small faint" style="margin:6px 0 0"><b>Abilita</b>: la struttura compare nella ricerca pubblica <a href="/trova-struttura.html" target="_blank" rel="noopener">Trova la tua struttura</a> e il titolare può rivendicarla. Le richieste arrivano in <a href="rivendicazioni.html">Rivendicazioni</a>.</p>
+    <p class="small faint" style="margin:6px 0 0"><b>Da controllare</b>: strutture che forse non sono veterinarie (farmacie, negozi, canili…) o possibili doppioni (a meno di 40 metri o con lo stesso telefono). Per ognuna scegli <b>Abilita</b> o <b>Escludi</b>: la decisione resta anche dopo i prossimi censimenti.</p>
     <p class="small faint" style="margin:6px 0 0"><b>Contatti cambiati</b>: telefono, email o sito sono stati modificati su OpenStreetMap dopo il primo censimento. Chiunque può modificare OpenStreetMap: per la rivendicazione valgono solo i contatti presenti da prima della richiesta, gli altri vanno controllati a mano.</p>
     <p class="small faint" style="margin:6px 0 0">Dati © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, licenza ODbL. Molte strutture portano il nome del medico: prima di pubblicarle servono informativa e tasto "Rimuovi la mia scheda".</p>
   </section>
@@ -407,6 +408,8 @@ foreach->.v(
     ['complete', 'Complete', (r) => valida(r) && completa(r)],
     ['incomplete', 'Incomplete', (r) => valida(r) && !completa(r)],
     ['controllare', 'Da controllare', daControllare],
+    ['abilitate', 'Abilitate', (r) => valida(r) && r.revisione === 'ok'],
+    ['vetroom', 'Su Vetroom', (r) => r.su_vetroom || r.richieste > 0 || r.approvata],
     ['telefono', 'Con telefono', (r) => valida(r) && r.telefono],
     ['luogo', 'Senza comune o provincia', incompleta],
     ['cambiati', 'Contatti cambiati', (r) => valida(r) && r.cambi > 0],
@@ -417,8 +420,8 @@ foreach->.v(
   const nomeDi = (r) => r.nome || 'Struttura senza nome';
   const decisione = (r) => {
     if (r.revisione === 'escluso') return `<span class="pill bad" title="${esc(PL.dt(r.revisionato_il))}">esclusa</span>${r.revisione_nota ? `<span class="sub">${esc(r.revisione_nota)}</span>` : ''}<div class="actions" style="margin-top:6px"><button class="btn sm ghost" data-rev="" data-k="${esc(key(r))}">Ripristina</button></div>`;
-    if (r.revisione === 'ok') return `<span class="pill ok" title="${esc(PL.dt(r.revisionato_il))}">verificata</span><div class="actions" style="margin-top:6px"><button class="btn sm ghost" data-rev="" data-k="${esc(key(r))}">Annulla</button></div>`;
-    return `<div class="actions" style="flex-wrap:nowrap"><button class="btn sm" data-rev="ok" data-k="${esc(key(r))}">Va bene</button><button class="btn sm danger" data-rev="escluso" data-k="${esc(key(r))}">Escludi</button></div>`;
+    if (r.revisione === 'ok') return `<span class="pill ok" title="${esc(PL.dt(r.revisionato_il))}">abilitata</span><div class="actions" style="margin-top:6px"><button class="btn sm ghost" data-rev="" data-k="${esc(key(r))}">Annulla</button></div>`;
+    return `<div class="actions" style="flex-wrap:nowrap"><button class="btn sm" data-rev="ok" data-k="${esc(key(r))}">Abilita</button><button class="btn sm danger" data-rev="escluso" data-k="${esc(key(r))}">Escludi</button></div>`;
   };
   const T = PL.table({
     el: $('#tbl'), pageSize: 50, sortKey: 'luogo', sortDir: 1,
@@ -429,7 +432,10 @@ foreach->.v(
       { k: 'nome', l: 'Struttura', sort: (r) => (r.nome || '~').toLowerCase(), render: (r) => {
         const d = valida(r) && r.revisione !== 'ok' ? dop.get(key(r)) : null;
         const manca = requisiti.length && valida(r) ? mancanti(r) : [];
-        const avvisi = [manca.length ? `<span class="pill">manca: ${esc(manca.join(', '))}</span>` : '',
+        const avvisi = [r.su_vetroom ? '<span class="pill ok">attiva su Vetroom</span>' : '',
+          r.approvata && !r.su_vetroom ? '<a class="pill info" href="rivendicazioni.html?stato=approvata">rivendicazione approvata</a>' : '',
+          r.richieste > 0 ? `<a class="pill warn" href="rivendicazioni.html">${n(r.richieste)} ${r.richieste === 1 ? 'richiesta' : 'richieste'} di rivendicazione</a>` : '',
+          manca.length ? `<span class="pill">manca: ${esc(manca.join(', '))}</span>` : '',
           r.avviso && valida(r) && r.revisione !== 'ok' ? `<span class="pill warn">${esc(r.avviso)}</span>` : '',
           ...(d || []).map((x) => `<span class="pill warn">possibile doppione di «${esc(x.nome || 'senza nome')}» (${esc(x.perche)})</span>`)].filter(Boolean).join(' ');
         return `<strong${r.nome ? '' : ' class="dim"'}>${esc(nomeDi(r))}</strong><span class="sub">${esc([[r.via, r.civico].filter(Boolean).join(' '), r.cap].filter(Boolean).join(', ') || 'indirizzo non indicato')}</span>${avvisi ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${avvisi}</div>` : ''}`;
@@ -510,7 +516,7 @@ foreach->.v(
     document.body.classList.toggle('cz-selecting', sel.size > 0);
     if (!sel.size) { bar.innerHTML = ''; return; }
     bar.innerHTML = `<b>${n(sel.size)}</b><span class="small dim">${sel.size === 1 ? 'selezionata' : 'selezionate'}${nascoste ? ` · ${n(nascoste)} non visibili con questo filtro` : ''}</span><span class="grow"></span>
-      <button class="btn sm" data-bulk="ok">Va bene</button>
+      <button class="btn sm" data-bulk="ok">Abilita</button>
       <button class="btn sm" data-bulk="escluso">Escludi</button>
       <button class="btn sm ghost" data-bulk="nulla">Da decidere</button>
       <button class="btn sm ghost" data-bulk="csv">Esporta</button>
@@ -550,8 +556,8 @@ foreach->.v(
     if (azione === 'via') { sel.clear(); $$('#tbl .cz-chk').forEach((c) => { c.checked = false; c.closest('tr')?.classList.remove('cz-on'); }); barra(); return; }
     if (azione === 'csv') { esporta(righe, 'selezione'); return; }
     if (azione === 'ok' || azione === 'nulla') {
-      if (!(await PL.ask({ title: azione === 'ok' ? `Segnare ${quante} come verificate?` : `Riportare ${quante} da decidere?`, ok: azione === 'ok' ? 'Va bene' : 'Conferma',
-        html: azione === 'ok' ? 'Spariscono da "Da controllare" e restano attive.' : 'Tolgo la decisione (verificata o esclusa): tornano come appena censite.' }))) return;
+      if (!(await PL.ask({ title: azione === 'ok' ? `Abilitare ${quante}?` : `Riportare ${quante} da decidere?`, ok: azione === 'ok' ? 'Abilita' : 'Conferma',
+        html: azione === 'ok' ? 'Compaiono nella ricerca pubblica "Trova la tua struttura" e i titolari possono rivendicarle. Spariscono da "Da controllare".' : 'Tolgo la decisione (abilitata o esclusa): non sono più rivendicabili e tornano come appena censite.' }))) return;
       const scelta = azione === 'ok' ? 'ok' : null;
       const fatto = await PL.run(b, () => aGruppi(keys, (c) => PL.rpc('osm_revisiona_gruppo', { p_chiavi: c, p_revisione: scelta, p_nota: null })), (x) => `${n(x)} aggiornate.`);
       if (fatto === undefined) return;
@@ -676,7 +682,7 @@ foreach->.v(
       nota = [v.motivo, v.nota.trim()].filter(Boolean).join(' — ');
     }
     const ok = await PL.run(b, () => PL.rpc('osm_revisiona', { p_type: r.t, p_id: Number(r.i), p_revisione: scelta, p_nota: nota }),
-      scelta === 'escluso' ? 'Struttura esclusa.' : scelta === 'ok' ? 'Segnata come verificata.' : 'Torna da decidere.');
+      scelta === 'escluso' ? 'Struttura esclusa.' : scelta === 'ok' ? 'Abilitata: ora si può rivendicare.' : 'Torna da decidere.');
     if (ok === undefined) return;
     Object.assign(r, { revisione: scelta, revisione_nota: nota, revisionato_il: scelta ? new Date().toISOString() : null });
     disegna();
@@ -693,7 +699,7 @@ foreach->.v(
       ['Orari', (r) => r.orari], ['Su OSM', (r) => (r.attivo ? 'sì' : 'non più')], ['Contatti attuali dal', (r) => PL.d(r.contatti_dal)],
       ['Campi mancanti', (r) => mancanti(r).join(', ')],
       ['Da controllare', (r) => [r.avviso, ...(dop.get(key(r)) || []).map((x) => 'possibile doppione di ' + (x.nome || 'senza nome') + ' (' + x.perche + ')')].filter(Boolean).join(' · ')],
-      ['Decisione', (r) => ({ ok: 'verificata', escluso: 'esclusa' }[r.revisione] || '')], ['Nota', (r) => r.revisione_nota],
+      ['Decisione', (r) => ({ ok: 'abilitata', escluso: 'esclusa' }[r.revisione] || '')], ['Nota', (r) => r.revisione_nota],
       ['Latitudine', (r) => r.lat], ['Longitudine', (r) => r.lon], ['Scheda OSM', (r) => `https://www.openstreetmap.org/${r.t}/${r.i}`]
     ]);
   };

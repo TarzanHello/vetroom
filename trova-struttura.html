@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#033860" />
+
+  <title>La tua struttura veterinaria è già su Vetroom? Rivendicala gratis | Vetroom</title>
+  <meta name="description" content="Cerca il tuo ambulatorio, la tua clinica o il tuo studio veterinario: se è già nell'elenco di Vetroom rivendicalo gratis e gestiscilo con agenda, cartelle cliniche, fatture e prenotazioni online." />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://vetroom.it/trova-struttura.html" />
+
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+  <meta property="og:locale" content="it_IT" />
+  <meta property="og:site_name" content="Vetroom" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="La tua struttura veterinaria è già su Vetroom? Rivendicala gratis" />
+  <meta property="og:description" content="Cerca il tuo ambulatorio o la tua clinica veterinaria e rivendicalo: gestionale gratuito, senza commissioni." />
+  <meta property="og:url" content="https://vetroom.it/trova-struttura.html" />
+
+  <link rel="stylesheet" href="/assets/site.css?v=2026-10-10" />
+  <style>
+    .hero{ padding: 56px 0 26px; }
+    .hero h1{ font-size: clamp(28px, 4.4vw, 48px); line-height: 1.08; margin: 10px 0 12px; }
+    .finder{ margin-top: 22px; background:#fff; border:1px solid var(--border); border-radius: var(--radius2); box-shadow: var(--shadow); padding: 18px; }
+    .finder label{ display:block; font-weight:700; margin-bottom:8px; }
+    .finder input{ width:100%; font: inherit; font-size: 18px; padding: 14px 16px; border-radius: 14px; border: 2px solid var(--border); outline: none; }
+    .finder input:focus{ border-color: var(--teal); }
+    .hits{ list-style:none; margin: 14px 0 0; padding:0; display:grid; gap:10px; }
+    .hits li{ display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; padding: 12px 14px; border:1px solid var(--border); border-radius: 16px; }
+    .hits strong{ display:block; font-size: 17px; }
+    .hits .addr{ color: var(--muted); font-size: 14px; }
+    .hits .on{ font-size: 13px; font-weight: 700; color: #065f46; background:#ecfdf5; border:1px solid #a7f3d0; padding: 6px 10px; border-radius: 999px; }
+    .hint{ color: var(--muted); font-size: 14px; margin: 12px 0 0; }
+    .steps{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .step{ border:1px solid var(--border); border-radius: var(--radius); padding: 18px; background:#fff; }
+    .step b{ display:inline-grid; place-items:center; width:32px; height:32px; border-radius:50%; background: var(--navy); color:#fff; margin-bottom:8px; }
+    .step h3{ margin: 4px 0 6px; font-size: 18px; }
+    .step p{ margin:0; color: var(--muted); }
+    .credit{ font-size: 13px; color: var(--muted2); }
+    @media (max-width: 760px){ .steps{ grid-template-columns: 1fr; } .finder input{ font-size: 16px; } }
+  </style>
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"WebPage","name":"Rivendica la tua struttura veterinaria su Vetroom","url":"https://vetroom.it/trova-struttura.html","inLanguage":"it-IT","publisher":{"@type":"Organization","name":"Vetroom","url":"https://vetroom.it/"}}
+  </script>
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="container">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="Vetroom, vai alla home">
+          <span class="brand-logo" aria-hidden="true"><img src="/app/img/logo-bianco.png" alt="Vetroom" width="504" height="132" /></span>
+          <span class="sr-only">Vetroom</span>
+        </a>
+        <nav class="nav" id="nav" aria-label="Navigazione principale">
+          <a href="/">Home</a>
+          <a href="#come-funziona">Come funziona</a>
+          <a href="/guida/">Guida</a>
+          <a class="btn small primary" href="/app/">Accedi</a>
+        </nav>
+        <button class="nav-toggle" type="button" aria-controls="nav" aria-expanded="false" aria-label="Apri menu">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="container">
+        <nav class="crumbs" aria-label="Percorso"><a href="/">Vetroom</a> › Trova la tua struttura</nav>
+        <h1>La tua struttura veterinaria è già su Vetroom?</h1>
+        <p class="lead">Abbiamo raccolto ambulatori, cliniche e studi veterinari di tutta Italia dall'elenco pubblico di OpenStreetMap. <strong>Cerca la tua e rivendicala</strong>: dopo una breve verifica telefonica la gestisci tu, gratis e senza commissioni.</p>
+
+        <div class="finder" role="search">
+          <label for="q">Nome, comune o via della struttura</label>
+          <input type="search" id="q" placeholder="Es. Clinica veterinaria San Francesco, Roma" autocomplete="off" />
+          <ul class="hits" id="hits" aria-live="polite"></ul>
+          <p class="hint" id="hint">Scrivi almeno 3 lettere.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="come-funziona">
+      <div class="container">
+        <h2>Come funziona</h2>
+        <div class="steps">
+          <div class="step"><b>1</b><h3>Trova la scheda</h3><p>Cerca per nome, comune o via. Se non c'è, puoi creare la tua struttura da zero in un minuto.</p></div>
+          <div class="step"><b>2</b><h3>Chiedi di gestirla</h3><p>Accedi con Google e invia la richiesta. Ti richiamiamo al numero pubblico della struttura: così nessuno può prendere la scheda di un altro.</p></div>
+          <div class="step"><b>3</b><h3>È tua</h3><p>Una volta approvata, attivi la struttura su Vetroom: agenda, cartelle cliniche, fatture, invio al Sistema TS e prenotazioni dai clienti con FurrFinder.</p></div>
+        </div>
+        <p class="credit" style="margin-top:22px">Elenco delle strutture: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, licenza ODbL. Vuoi che una scheda venga tolta o corretta? Scrivi a <a href="mailto:info@vetroom.it">info@vetroom.it</a>.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="fine">
+          <a href="/" class="footer-brand" aria-label="Vetroom"><img src="/app/img/logo-bianco.png" alt="Vetroom" width="504" height="132" loading="lazy" /></a>
+          <p class="footer-claim">Il gestionale veterinario gratuito in cloud, per lo studio e per le visite a domicilio.</p>
+          <a class="btn primary footer-cta" href="/app/">Login</a>
+        </div>
+        <nav class="footer-col" aria-label="Sezioni">
+          <h4>Vetroom</h4>
+          <a href="/">Gestionale veterinario gratuito</a>
+          <a href="/veterinario-a-domicilio.html">Veterinario a domicilio</a>
+          <a href="/trova-struttura.html">Trova la tua struttura</a>
+          <a href="/guida/">Guida</a>
+          <a href="/guida/invio-spese-veterinarie-sistema-ts.html">Invio al Sistema TS</a>
+        </nav>
+        <div class="footer-col">
+          <h4>Contatti</h4>
+          <a href="mailto:info@vetroom.it">info@vetroom.it</a>
+          <a href="/privacy.html">Privacy</a>
+          <a href="/privacy.html#cookie">Cookie</a>
+          <a href="/termini.html">Termini di servizio</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 Vetroom è un servizio di AF&amp;B S.r.l.s. · Via Mario Ugo Guattari 48, 00173 Roma (RM) · P.IVA 13698751008 · REA RM-1466364 · Capitale sociale € 2.700,00 i.v.</span>
+        <span><a href="/privacy.html">Informativa privacy</a> · <a href="/termini.html">Termini</a></span>
+      </div>
+    </div>
+  </footer>
+  <script src="/assets/cookie-notice.js" defer></script>
+  <script>
+    const toggle = document.querySelector('.nav-toggle');
+    const nav = document.getElementById('nav');
+    if (toggle && nav) {
+      toggle.addEventListener('click', () => {
+        const isOpen = nav.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(isOpen));
+      });
+      nav.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => { nav.classList.remove('open'); toggle.setAttribute('aria-expanded', 'false'); }));
+    }
+  </script>
+  <script src="/app/vendor/supabase-2.117.2.js" defer></script>
+  <script src="/app/js/config.js?v=2026-10-10c" defer></script>
+  <script defer>
+    window.addEventListener('DOMContentLoaded', () => {
+      const cfg = window.VETROOM_CONFIG || {};
+      if (!window.supabase || !cfg.SUPABASE_URL) return;
+      const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      const q = document.getElementById('q'), hits = document.getElementById('hits'), hint = document.getElementById('hint');
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const addr = (s) => [[s.via, s.civico].filter(Boolean).join(' '), [s.cap, s.comune].filter(Boolean).join(' '), s.provincia ? '(' + s.provincia + ')' : ''].filter(Boolean).join(', ').replace(', (', ' (');
+      let t, last = '';
+      const run = async () => {
+        const v = q.value.trim();
+        if (v.length < 3) { hits.innerHTML = ''; hint.textContent = 'Scrivi almeno 3 lettere.'; return; }
+        last = v; hint.textContent = 'Cerco…';
+        const { data, error } = await sb.rpc('osm_cerca_pubblica', { p_q: v });
+        if (v !== last) return;
+        if (error) { hint.textContent = 'La ricerca non è disponibile in questo momento. Riprova tra poco.'; hits.innerHTML = ''; return; }
+        const rows = data || [];
+        hits.innerHTML = rows.map((s) => `<li><div><strong>${esc(s.nome || 'Struttura veterinaria')}</strong><span class="addr">${esc(addr(s) || s.regione || '')}</span></div>
+          ${s.su_vetroom ? '<span class="on">Già gestita su Vetroom</span>' : `<a class="btn small primary" href="/app/rivendica.html?s=${esc(s.t)}/${Number(s.i)}">Rivendica</a>`}</li>`).join('');
+        hint.innerHTML = rows.length ? 'Non è tra queste? Prova con altre parole, oppure <a href="/app/">crea la tua struttura</a> da zero.'
+          : 'Nessuna struttura trovata. Prova con il comune o la via, oppure <a href="/app/">crea la tua struttura</a> da zero.';
+      };
+      q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(run, 300); });
+    });
+  </script>
+</body>
+</html>

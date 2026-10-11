@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Rivendicazioni · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-10c">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../js/config.js?v=2026-10-10c"></script>
+  <script src="../js/app.js?v=2026-10-10c"></script>
+  <script src="plancia.js?v=2026-10-11a"></script>
+  <style>
+    .rv-card { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .rv-card h3 { margin: 0 0 4px; font: 600 17px var(--display); letter-spacing: .02em; }
+    .rv-card .lbl { font: 500 11px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin: 0 0 6px; }
+    .rv-card dl.kv { font-size: 14px; }
+    .rv-alert { border-left: 3px solid var(--amber); background: var(--amber-soft); padding: 8px 12px; margin: 10px 0 0; font-size: 14px; }
+    .rv-alert.bad { border-left-color: var(--red); background: var(--red-soft); }
+    .rv-tel { font: 600 18px var(--mono); color: var(--signal); }
+    @media (max-width: 860px) { .rv-card { grid-template-columns: 1fr; gap: 12px; } }
+  </style>
+</head>
+<body class="pl" data-station="rivendicazioni">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Rivendicazioni</h1><p>Veterinari che chiedono di gestire una struttura del Censimento. Prima di approvare chiama il <b>numero pubblico della struttura</b> (non quello del richiedente) e chiedi conferma: è l'unico modo per essere sicuri che sia davvero lui.</p></div>
+    <div class="actions"><a class="btn" href="censimento.html">Censimento</a><a class="btn ghost" href="/trova-struttura.html" target="_blank" rel="noopener">Pagina pubblica ↗</a></div></div>
+  <section class="pn">
+    <div class="pn-h" style="margin-bottom:10px"><div class="seg" role="group" aria-label="Stato" id="fil"></div></div>
+    <div id="list"><p class="loader">Caricamento</p></div>
+  </section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+  const FILTRI = [['in_attesa', 'Da decidere'], ['approvata', 'Approvate, da attivare'], ['completata', 'Attivate'], ['rifiutata', 'Rifiutate']];
+  const STATO = { in_attesa: ['da decidere', 'warn'], approvata: ['approvata · il veterinario deve attivarla', 'info'], completata: ['attivata su Vetroom', 'ok'], rifiutata: ['rifiutata', 'bad'] };
+  let filtro = new URLSearchParams(location.search).get('stato') || 'in_attesa', rows = [];
+  const indirizzo = (r) => [[r.via, r.civico].filter(Boolean).join(' '), [r.cap, r.comune].filter(Boolean).join(' '), r.provincia ? `(${r.provincia})` : ''].filter(Boolean).join(', ').replace(', (', ' (');
+  const telLink = (t) => (t ? `<a class="rv-tel" href="tel:${esc(t.replace(/[^\d+]/g, ''))}">${esc(t)}</a>` : '<span class="faint">nessuno su OpenStreetMap</span>');
+
+  const card = (r) => {
+    const recenti = r.contatti_dal && (new Date(r.creata_il) - new Date(r.contatti_dal)) < 30 * 864e5 && r.cambi > 0;
+    const prec = (r.contatti_precedenti || []).slice(-1)[0];
+    const [sl, st] = STATO[r.stato] || [r.stato, ''];
+    const azioni = r.stato === 'in_attesa'
+      ? `<button class="btn prim" data-dec="approvata" data-id="${r.id}">Approva</button><button class="btn danger" data-dec="rifiutata" data-id="${r.id}">Rifiuta</button>`
+      : r.stato === 'completata' ? '' : `<button class="btn ghost sm" data-dec="in_attesa" data-id="${r.id}">Riporta da decidere</button>`;
+    return `<article class="pn" style="margin-bottom:14px">
+      <div class="pn-h"><h2 style="margin:0">${esc(r.nome || 'Struttura senza nome')}</h2><div class="tools"><span class="pill ${st}">${esc(sl)}</span></div></div>
+      <div class="rv-card">
+        <div>
+          <p class="lbl">Struttura · dati pubblici</p>
+          <p style="margin:0 0 8px">${esc(indirizzo(r) || 'indirizzo non indicato')}</p>
+          <dl class="kv">
+            <dt>Telefono pubblico</dt><dd>${telLink(r.telefono)}</dd>
+            <dt>Email</dt><dd>${r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : '<span class="faint">—</span>'}</dd>
+            <dt>Sito</dt><dd>${r.sito && /^https?:\/\//.test(r.sito) ? `<a href="${esc(r.sito)}" target="_blank" rel="noopener nofollow">${esc(r.sito.replace(/^https?:\/\/(www\.)?/, ''))}</a>` : '<span class="faint">—</span>'}</dd>
+            <dt>Contatti attuali dal</dt><dd>${PL.d(r.contatti_dal)}</dd>
+            <dt>Scheda</dt><dd><a href="https://www.openstreetmap.org/${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener">OpenStreetMap ↗</a> · <a href="../rivendica.html?s=${esc(r.t)}/${Number(r.i)}" target="_blank" rel="noopener">pagina di rivendicazione ↗</a></dd>
+          </dl>
+          ${!r.struttura_esiste ? '<p class="rv-alert bad">La scheda non è più nell\'archivio (eliminata o sparita da OpenStreetMap).</p>' : ''}
+          ${recenti ? `<p class="rv-alert bad"><b>Attenzione:</b> i contatti di questa scheda sono cambiati su OpenStreetMap il ${PL.d(r.contatti_dal)}, poco prima della richiesta.${prec ? ` Prima il telefono era <b>${esc(prec.telefono || 'assente')}</b>.` : ''} Potrebbe essere qualcuno che ha modificato la scheda per prenderla: verifica con un numero trovato altrove (sito, Google, Ordine).</p>`
+            : r.cambi > 0 ? `<p class="rv-alert">I contatti sono cambiati su OpenStreetMap il ${PL.d(r.contatti_dal)}.</p>` : ''}
+          ${!r.telefono ? '<p class="rv-alert">Nessun telefono pubblico: verifica con l\'email della struttura, il sito o l\'Ordine dei veterinari.</p>' : ''}
+        </div>
+        <div>
+          <p class="lbl">Richiedente</p>
+          <p style="margin:0 0 8px"><a href="${PL.userHref(r.user_id)}"><strong>${esc(r.richiedente || r.email_richiedente || 'Utente')}</strong></a>${r.ruolo ? ` · ${esc(r.ruolo)}` : ''}</p>
+          <dl class="kv">
+            <dt>Email</dt><dd>${esc(r.email_richiedente || '—')}</dd>
+            <dt>Telefono indicato</dt><dd>${r.telefono_richiedente ? `<a href="tel:${esc(r.telefono_richiedente.replace(/[^\d+]/g, ''))}">${esc(r.telefono_richiedente)}</a>` : '—'}</dd>
+            <dt>Ordine (dichiarato)</dt><dd>${esc(r.albo || '—')}</dd>
+            <dt>Ordine (profilo)</dt><dd>${r.albo_profilo ? `${esc(r.albo_profilo)} ${r.albo_verificato ? '<span class="pill ok">verificata</span>' : '<span class="pill warn">non verificata</span>'}` : '—'}</dd>
+            <dt>Richiesta del</dt><dd>${PL.dt(r.creata_il)}</dd>
+            ${r.decisa_il ? `<dt>Decisa il</dt><dd>${PL.dt(r.decisa_il)}</dd>` : ''}
+            ${r.completata_il ? `<dt>Attivata il</dt><dd>${PL.dt(r.completata_il)}</dd>` : ''}
+          </dl>
+          ${r.messaggio ? `<p class="note" style="margin:10px 0 0;white-space:pre-wrap">${esc(r.messaggio)}</p>` : ''}
+          ${r.nota_admin ? `<p class="small dim" style="margin:8px 0 0">Nota: ${esc(r.nota_admin)}</p>` : ''}
+          ${Number(r.altre) ? `<p class="rv-alert">Ci sono altre ${n(r.altre)} richieste in attesa per questa struttura: approvandone una, le altre vengono rifiutate.</p>` : ''}
+        </div>
+      </div>
+      ${azioni ? `<div class="actions" style="margin-top:14px">${azioni}</div>` : ''}
+    </article>`;
+  };
+
+  const disegna = () => {
+    $('#fil').innerHTML = FILTRI.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${filtro === k}">${l}<span class="n">${n(rows.filter((r) => r.stato === k).length)}</span></button>`).join('');
+    const vis = rows.filter((r) => r.stato === filtro);
+    $('#list').innerHTML = vis.map(card).join('') || `<p class="empty" style="padding:24px 0;text-align:center">${filtro === 'in_attesa' ? 'Nessuna richiesta da decidere. 👍' : 'Niente qui.'}</p>`;
+  };
+  const carica = async () => {
+    try { rows = await PL.rpc('osm_rivendicazioni_elenco') || []; disegna(); }
+    catch (e) { $('#list').innerHTML = `<p class="note warn">${esc(e.message)}</p>`; }
+  };
+  $('#fil').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; disegna(); } });
+
+  const avvisa = async (r, testo) => {
+    const x = await PL.try('platform_message_many', { p_targets: [{ kind: 'user', id: r.user_id }], p_body: testo }, null);
+    return !!(x && x.sent);
+  };
+  $('#list').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-dec]'); if (!b) return;
+    const r = rows.find((x) => String(x.id) === b.dataset.id); if (!r) return;
+    const esito = b.dataset.dec, nome = r.nome || 'la struttura';
+    let nota = null;
+    if (esito === 'approvata') {
+      const v = await PL.ask({ title: `Approvare la richiesta per ${nome}?`, ok: 'Approva',
+        html: `Il richiedente potrà attivare la struttura su Vetroom e diventarne titolare.${Number(r.altre) ? ` Le altre ${n(r.altre)} richieste per questa struttura verranno rifiutate.` : ''}`,
+        fields: [{ name: 'ok', type: 'checkbox', label: `Ho chiamato il numero pubblico${r.telefono ? ' ' + r.telefono : ''} e la struttura ha confermato` }, { name: 'nota', label: 'Nota interna (facoltativa)' }] });
+      if (!v) return;
+      if (!v.ok) { PL.toast('Prima verifica con una telefonata al numero pubblico della struttura, poi spunta la casella.', 'bad'); return; }
+      nota = v.nota.trim() || null;
+    } else if (esito === 'rifiutata') {
+      const v = await PL.ask({ title: `Rifiutare la richiesta per ${nome}?`, ok: 'Rifiuta', danger: true,
+        html: 'Il richiedente vede il motivo che scrivi qui.',
+        fields: [{ name: 'nota', label: 'Motivo (lo legge il richiedente)', type: 'select', value: 'La struttura non ha confermato la richiesta.', options: [
+          ['La struttura non ha confermato la richiesta.', 'La struttura non ha confermato'],
+          ['Non siamo riusciti a contattare la struttura: scrivici a info@vetroom.it.', 'Struttura non raggiungibile'],
+          ['La richiesta non è completa: scrivici a info@vetroom.it.', 'Richiesta incompleta'],
+          ['Altro: scrivici a info@vetroom.it per i dettagli.', 'Altro']] }] });
+      if (!v) return;
+      nota = v.nota;
+    } else if (!(await PL.ask({ title: 'Riportare la richiesta da decidere?', ok: 'Conferma' }))) return;
+    const fatto = await PL.run(b, () => PL.rpc('osm_rivendicazione_decidi', { p_id: Number(r.id), p_esito: esito, p_nota: nota }),
+      esito === 'approvata' ? 'Richiesta approvata.' : esito === 'rifiutata' ? 'Richiesta rifiutata.' : 'Riportata da decidere.');
+    if (fatto === undefined) return;
+    if (esito !== 'in_attesa') {
+      const link = new URL('../rivendica.html', location.href).href;
+      const testo = esito === 'approvata'
+        ? `Buone notizie: la tua richiesta per ${nome} è stata approvata. Apri ${link} e premi "Attiva la struttura" per iniziare a usarla su Vetroom.`
+        : `La tua richiesta per ${nome} non è stata approvata. ${nota || ''}`;
+      if (await avvisa(r, testo)) PL.toast('Il richiedente è stato avvisato nei messaggi di Vetroom.', 'info');
+    }
+    await carica(); PL.refreshSignals();
+  });
+
+  carica();
+})();
+</script>
+</body>
+</html>
