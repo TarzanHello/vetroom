@@ -91,37 +91,16 @@ function sm_assoluti($html) {
   return str_replace(['href="/app/', 'href="/veterinari/'], ['href="' . SM_APP . '/app/', 'href="' . SM_APP . '/veterinari/'], $html);
 }
 
-// ---------- zona mostrata in pubblico ----------
-// Quando l'animale è tornato a casa la via non serve più: resta solo una zona generica (municipio o quartiere) e la città.
-function sm_zona_vaga($s) {
-  $l = trim((string)($s['luogo'] ?? ''));
-  if ($l === '') return '';
-  $z = preg_split('/,?\s*\bvicino\s+(a|al|alla|allo|ai|agli|alle|all\')\s*/iu', $l)[0];   // "Municipio Roma VII, vicino a Via …" → "Municipio Roma VII"
-  $z = trim(explode(',', $z)[0]);
-  $citta = trim((string)($s['citta'] ?? ''));
-  if ($citta !== '') $z = trim(preg_replace('/^(Municipio|Municipalit[àa])\s+' . preg_quote($citta, '/') . '\s+/iu', '$1 ', $z));   // "Municipio Roma VII" → "Municipio VII"
-  if ($z === '' || mb_strlen($z, 'UTF-8') > 40 || ($citta !== '' && mb_strtolower($z, 'UTF-8') === mb_strtolower($citta, 'UTF-8'))) return '';
-  if (preg_match('/^(Municipio|Municipalit[àa]|Circoscrizione|Quartiere|Rione|Zona)\b/iu', $z)) return $z;
-  // Tutto il resto lo teniamo solo se non sembra un indirizzo (via, piazza… o un numero civico)
-  if (preg_match('/^(via|viale|v\.le|piazza|p\.za|piazzale|piazzetta|largo|corso|c\.so|vicolo|vico|lungotevere|lungomare|lungolago|strada|stradone|salita|discesa|circonvallazione|borgo|contrada|c\.da|localit[àa]|loc\.|traversa|rampa|scalinata|galleria|ponte|parco|giardino|villa|via\.)\b/iu', $z) || preg_match('/\d/', $z)) return '';
-  return $z;
-}
-// Il testo della zona da mostrare: per gli avvisi aperti quello scelto dal proprietario, per i ritrovati solo la zona generica
-function sm_luogo_pubblico($s) { return ($s['stato'] ?? '') === 'ritrovato' ? sm_zona_vaga($s) : trim((string)($s['luogo'] ?? '')); }
-// Coordinate: per i ritrovati arrotondate a circa un chilometro
-function sm_coord($s, $k) { if (!isset($s[$k]) || $s[$k] === null || $s[$k] === '') return null; return ($s['stato'] ?? '') === 'ritrovato' ? round((float)$s[$k], 2) : $s[$k]; }
-
 function sm_card($s) {
   $foto = sm_foto($s['foto_path'] ?? '');
   $trovato = ($s['stato'] ?? '') === 'ritrovato';
-  $luogo = sm_luogo_pubblico($s);
-  $cerca = mb_strtolower(implode(' ', [$s['nome'] ?? '', $s['specie'] ?? '', $s['razza'] ?? '', $luogo, $s['citta'] ?? '', $s['provincia'] ?? '']), 'UTF-8');
+  $cerca = mb_strtolower(implode(' ', [$s['nome'] ?? '', $s['specie'] ?? '', $s['razza'] ?? '', $s['luogo'] ?? '', $s['citta'] ?? '', $s['provincia'] ?? '']), 'UTF-8');
   return '<li class="sm-card' . ($trovato ? ' is-found' : '') . '" data-cerca="' . h($cerca) . '"'
-    . (sm_coord($s, 'lat') !== null ? ' data-lat="' . h(sm_coord($s, 'lat')) . '" data-lon="' . h(sm_coord($s, 'lon')) . '"' : '') . '><a href="' . h($s['url']) . '">'
+    . (isset($s['lat']) ? ' data-lat="' . h($s['lat']) . '" data-lon="' . h($s['lon']) . '"' : '') . '><a href="' . h($s['url']) . '">'
     . ($foto ? '<img src="' . h($foto) . '" alt="' . h($s['nome']) . '" loading="lazy" width="320" height="240">' : '<span class="sm-card-nofoto">' . h(mb_substr($s['nome'], 0, 1, 'UTF-8')) . '</span>')
     . '<span class="sm-card-tag">' . ($trovato ? (sm_f($s) ? 'Ritrovata' : 'Ritrovato') : ucfirst(sm_perso($s))) . '</span>'
     . '<span class="sm-card-body"><strong>' . h($s['nome']) . '</strong><span>' . h(ucfirst(sm_specie($s)) . (!empty($s['razza']) ? ' · ' . $s['razza'] : '')) . '</span>'
-    . '<span class="sm-card-where">' . h(implode(', ', array_filter([$luogo, $s['citta'] ?? '']))) . '</span>'
+    . '<span class="sm-card-where">' . h(implode(', ', array_filter([$s['luogo'] ?? '', $s['citta'] ?? '']))) . '</span>'
     . '<span class="sm-card-km" hidden></span><span class="sm-card-when">' . ($trovato ? (sm_f($s) ? 'Tornata' : 'Tornato') . ' a casa ' . h(sm_fa($s['chiuso_il'])) : 'Dal ' . h(sm_giorno($s['perso_il']))) . '</span></span></a></li>';
 }
 
