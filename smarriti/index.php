@@ -156,7 +156,7 @@ $foto = sm_foto($s['foto_path'] ?? '');
 $trovato = $stato === 'ritrovato';
 $specie = sm_specie($s);
 $dettagli = array_filter([ucfirst($specie), $s['razza'] ?? '', ($s['sesso'] ?? '') === 'F' ? 'femmina' : ((($s['sesso'] ?? '') === 'M') ? 'maschio' : '')]);
-$dove = implode(', ', array_filter([$s['luogo'] ?? '', $citta . (!empty($s['provincia']) ? ' (' . $s['provincia'] . ')' : '')]));
+$dove = implode(', ', array_filter([sm_luogo_pubblico($s), $citta . (!empty($s['provincia']) ? ' (' . $s['provincia'] . ')' : '')]));
 $quando = sm_giorno($s['perso_il'], true) . ' verso le ' . sm_ora($s['perso_il']);
 
 if ($trovato) {
@@ -175,7 +175,8 @@ $b .= '<div class="sm-lost-grid"><div class="sm-lost-photo">' . ($foto ? '<img s
   . (!empty($s['ricompensa']) ? '<span class="sm-reward">Ricompensa</span>' : '') . '</div><div class="sm-lost-info">';
 $b .= '<h1>' . h($nome) . '</h1><p class="sm-lost-kind">' . h(implode(' · ', $dettagli)) . '</p>';
 if ($trovato) {
-  $b .= '<p class="sm-found-msg">È ' . sm_tornato($s) . ' a casa ' . h(sm_fa($s['chiuso_il'])) . '. Grazie a tutti quelli che hanno condiviso l\'avviso e lo hanno cercato!</p>';
+  $b .= '<p class="sm-found-msg">È ' . sm_tornato($s) . ' a casa ' . h(sm_fa($s['chiuso_il'])) . '. Grazie a tutti quelli che hanno condiviso l\'avviso e lo hanno cercato!</p>'
+    . '<p class="sm-muted">Si era ' . sm_perso($s) . ' in zona ' . h($dove) . '.</p>';
 } else {
   $b .= '<dl class="sm-facts"><dt>' . (sm_f($s) ? 'Vista' : 'Visto') . ' l\'ultima volta</dt><dd>' . h($dove) . '</dd><dt>Quando</dt><dd>' . h(ucfirst($quando)) . '</dd>';
   if (!empty($s['descrizione'])) $b .= '<dt>Come riconoscerlo</dt><dd>' . nl2br(h($s['descrizione'])) . '</dd>';
@@ -225,7 +226,7 @@ sm_pagina(['url' => $s['url'], 'indicizza' => true, 'articolo' => true, 'mappa' 
   'colore' => $trovato ? '#15803d' : '#b91c1c',
   'title' => $title, 'og' => $og, 'description' => $desc, 'immagine' => $foto ?: null, 'crumbs' => $crumbs, 'jsonld' => $jsonld,
   'js' => ['api' => VR_SUPABASE_URL, 'key' => VR_SUPABASE_KEY, 'codice' => $s['codice'], 'id' => $s['id'] ?? null, 'nome' => $nome,
-    'stato' => $stato, 'lat' => $s['lat'], 'lon' => $s['lon'], 'raggio' => $s['raggio_m'] ?? 400, 'url' => VR_SITO . $s['url'],
+    'stato' => $stato, 'lat' => $trovato ? null : $s['lat'], 'lon' => $trovato ? null : $s['lon'], 'raggio' => $s['raggio_m'] ?? 400, 'url' => VR_SITO . $s['url'],
     'testo' => $trovato ? "$nome è " . sm_tornato($s) . " a casa! Grazie a tutti quelli che hanno condiviso l'avviso."
       : 'AIUTO! ' . $nome . ' (' . $specie . ') si è ' . sm_perso($s) . ' a ' . $dove . ' il ' . sm_giorno($s['perso_il']) . '. Se l\'hai visto, segnalalo qui:'],
   'body' => $b]);
