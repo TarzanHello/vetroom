@@ -6,6 +6,36 @@
 (function () {
   var S = window.SM; if (!S) return;
   var $ = function (s) { return document.querySelector(s); };
+
+  // ---------- elenco (pagina principale e pagine delle città): ricerca e "più vicini a me" ----------
+  if (S.hub) {
+    var lista = $('#lista'); if (!lista) return;
+    var cards = Array.prototype.slice.call(lista.children), cerca = $('#cerca');
+    var filtra = function () {
+      var q = (cerca ? cerca.value : '').toLowerCase().trim(), n = 0;
+      cards.forEach(function (c) { var ok = !q || (c.getAttribute('data-cerca') || '').indexOf(q) >= 0; c.hidden = !ok; if (ok) n++; });
+      var none = $('#nessuno'); if (none) none.hidden = n > 0;
+    };
+    if (cerca) cerca.addEventListener('input', filtra);
+    var km = function (a, b, c, d) { var r = Math.PI / 180, x = (d - b) * r * Math.cos((a + c) / 2 * r), y = (c - a) * r; return Math.sqrt(x * x + y * y) * 6371; };
+    var btn = $('#vicino');
+    if (btn) btn.addEventListener('click', function () {
+      if (!navigator.geolocation) { btn.textContent = 'Posizione non disponibile'; return; }
+      btn.disabled = true; btn.textContent = 'Cerco la tua posizione…';
+      navigator.geolocation.getCurrentPosition(function (p) {
+        var la = p.coords.latitude, lo = p.coords.longitude;
+        cards.forEach(function (c) {
+          var lat = parseFloat(c.getAttribute('data-lat')), lon = parseFloat(c.getAttribute('data-lon'));
+          c._km = isNaN(lat) ? 1e9 : km(la, lo, lat, lon);
+          var el = c.querySelector('.sm-card-km');
+          if (el && c._km < 1e9) { el.textContent = c._km < 1 ? 'a meno di 1 km da te' : 'a circa ' + Math.round(c._km) + ' km da te'; el.hidden = false; }
+        });
+        cards.sort(function (a, b) { return a._km - b._km; }).forEach(function (c) { lista.appendChild(c); });
+        btn.disabled = false; btn.textContent = '📍 Ordinati per distanza';
+      }, function () { btn.disabled = false; btn.textContent = 'Posizione non disponibile: cerca per città'; }, { timeout: 12000 });
+    });
+    return;
+  }
   var headers = function () { var h = { apikey: S.key, 'Content-Type': 'application/json' }; if (S.key.indexOf('eyJ') === 0) h.Authorization = 'Bearer ' + S.key; return h; };
   var rpc = function (name, args) {
     return fetch(S.api + '/rest/v1/rpc/' + name, { method: 'POST', headers: headers(), body: JSON.stringify(args), keepalive: true })

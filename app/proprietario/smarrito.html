@@ -25,7 +25,7 @@
   <script src="../js/clinica.js?v=2026-10-11d"></script>
   <script src="../js/proprietario.js?v=2026-10-11d"></script>
   <script src="../js/notifiche.js?v=2026-10-11d"></script>
-  <script src="../js/smarrito.js?v=2026-10-11d"></script>
+  <script src="../js/smarrito.js?v=2026-10-11e"></script>
 </head>
 <body data-shell="owner" data-nav="animali">
 
@@ -275,6 +275,7 @@
       document.querySelectorAll('[name=contatto]').forEach((r) => r.addEventListener('change', () => { $('#telBox').hidden = r.value !== 'telefono' || !r.checked; }));
 
       const go = (n) => {
+        if (![1, 2, 3].includes(n)) return;   // solo i 3 passi della procedura
         if (n >= 2 && !point) { VR.say($('#m1'), 'Tocca la mappa nel punto in cui l\'hai visto l\'ultima volta.', 'error'); n = 1; }
         else if (n >= 2 && !$('#citta').value.trim()) { VR.say($('#m1'), 'Scrivi il comune.', 'error'); n = 1; }
         else if (n >= 3 && !newFile && !pet.photo_path) { VR.say($('#m2'), 'Aggiungi una foto: senza foto è molto più difficile riconoscerlo.', 'error'); n = 2; }
@@ -284,7 +285,8 @@
         if (n === 1) setTimeout(() => map.invalidateSize(), 50);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
-      document.querySelectorAll('[data-next]').forEach((b) => b.addEventListener('click', () => go(Number(b.dataset.next))));
+      // solo i pulsanti della procedura: anche la guida iniziale ha pulsanti "Avanti" (data-next) e non devono cambiare passo
+      $('#wizard').querySelectorAll('[data-pane] [data-next]').forEach((b) => b.addEventListener('click', () => go(Number(b.dataset.next))));
 
       $('#publish').addEventListener('click', async () => {
         const b = $('#publish'); VR.hide($('#m3'));
