@@ -12,14 +12,16 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="FurrFinder">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-11d">
+  <link rel="stylesheet" href="../vendor/leaflet-1.9.4/leaflet.css">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-16">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-11d"></script>
-  <script src="../js/app.js?v=2026-10-11d"></script>
-  <script src="../js/i18n.js?v=2026-10-11d"></script>
-  <script src="../js/layout.js?v=2026-10-11d"></script>
-  <script src="../js/clinica.js?v=2026-10-11d"></script>
-  <script src="../js/proprietario.js?v=2026-10-11d"></script>
+  <script src="../vendor/leaflet-1.9.4/leaflet.js"></script>
+  <script src="../js/config.js?v=2026-10-16"></script>
+  <script src="../js/app.js?v=2026-10-16"></script>
+  <script src="../js/i18n.js?v=2026-10-16"></script>
+  <script src="../js/layout.js?v=2026-10-16"></script>
+  <script src="../js/clinica.js?v=2026-10-16"></script>
+  <script src="../js/proprietario.js?v=2026-10-16"></script>
 </head>
 <body data-shell="owner" data-nav="cliniche">
   <main>
@@ -49,6 +51,23 @@
         <p><strong>Nessuna clinica collegata.</strong></p>
         <p class="muted">Chiedi al tuo veterinario il codice Vetroom della clinica.</p>
       </div>
+
+      <!-- Cliniche vicine (patch 40) -->
+      <section class="panel" id="nearPanel" hidden>
+        <h2>Cliniche vicine</h2>
+        <p class="hint-small" style="margin-top:0">Le strutture veterinarie intorno a te. Quelle con il bollino <span class="pill pill-ok">Usa Vetroom</span> si collegano a FurrFinder: prenoti e scrivi direttamente dall'app.</p>
+        <form class="row-inline near-search" id="nearForm" novalidate>
+          <input type="search" id="nearQ" placeholder="Città, quartiere o via (es. Pigneto, Roma)" autocomplete="off" aria-label="Dove cercare">
+          <button class="btn btn-ghost btn-small" type="submit">Cerca</button>
+          <button class="btn btn-ghost btn-small" type="button" id="nearGeo">📍 Vicino a me</button>
+        </form>
+        <div id="nearHits" class="picker-results"></div>
+        <div id="nearMsg" hidden></div>
+        <div id="nearMap" class="lost-map" hidden role="application" aria-label="Mappa delle cliniche vicine"></div>
+        <p class="hint-small" id="nearLegend" hidden><span class="near-dot vr"></span> usa Vetroom <span class="near-dot"></span> altre strutture <span class="near-dot me"></span> tu</p>
+        <div id="nearList"></div>
+        <p class="hint-small" id="nearCredit" hidden>Dati delle strutture © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Manca la tua clinica o un dato è sbagliato? Scrivici a <a href="mailto:info@vetroom.it">info@vetroom.it</a>.</p>
+      </section>
     </div>
   </main>
 
@@ -62,6 +81,7 @@
     }
     const { data: pets } = await VR.sb.from('pets').select('id, name').eq('owner_user_id', ctx.uid).is('deleted_at', null).order('name');
     VR.hide(loading); VR.show(VR.$('#page'));
+    if (window.VR_NEAR) window.VR_NEAR(ctx, !!(pets && pets.length)).catch((e) => VR.reportError && VR.reportError(e, 'cliniche vicine'));
 
     // Codice da QR o da link
     const pending = VR.param('codice') || localStorage.getItem('vetroom_codice');
@@ -156,6 +176,145 @@
     if (pending) VR.$('#linkForm').requestSubmit ? VR.$('#linkForm').requestSubmit() : null;
     load();
   })();
+
+  // ---------- Cliniche vicine (patch 40) ----------
+  // Si avvia da sola con la posizione usata l'ultima volta, oppure con la città del profilo.
+  window.VR_NEAR = async (ctx, hasPets) => {
+    const $ = VR.$, panel = $('#nearPanel'), nmsg = $('#nearMsg');
+    if (!window.L) return;
+    VR.show(panel);
+    const KEY = 'ff_vicine_pos_' + ctx.uid;
+    const VRC = '#0f766e', ALTRE = '#64748b';
+    const pin = (color) => window.L.divIcon({
+      className: 'lost-pin', iconSize: [26, 36], iconAnchor: [13, 35], popupAnchor: [0, -30],
+      html: `<svg viewBox="0 0 28 38" width="26" height="36" aria-hidden="true"><path d="M14 1C7 1 1.5 6.4 1.5 13.3 1.5 22.6 14 37 14 37s12.5-14.4 12.5-23.7C26.5 6.4 21 1 14 1z" fill="${color}" stroke="#fff" stroke-width="2"/><circle cx="14" cy="13.5" r="4.6" fill="#fff"/></svg>` });
+    let map = null, layer = null, rows = [], mostra = 12, centro = null;
+
+    const telLink = (t) => { let n = String(t || '').replace(/[^\d+]/g, ''); if (n && n[0] !== '+' && /^[03]\d{5,10}$/.test(n)) n = '+39' + n; return n; };
+    const distanza = (km) => (km < 1 ? Math.round(km * 1000 / 10) * 10 + ' m' : km.toFixed(km < 10 ? 1 : 0).replace('.', ',') + ' km');
+    const dove = (c) => [c.indirizzo, c.comune].filter(Boolean).filter((x, i, a) => i === 0 || !String(a[0]).toLowerCase().includes(String(x).toLowerCase())).join(', ');
+    const azioni = (c, k) => [
+      c.su_vetroom && c.codice && hasPets ? `<button type="button" class="btn btn-primary btn-small" data-collega="${VR.esc(c.codice)}">Collega i miei pet</button>` : '',
+      c.telefono ? `<a class="btn btn-ghost btn-small" href="tel:${VR.esc(telLink(c.telefono))}">Chiama</a>` : '',
+      `<a class="btn btn-ghost btn-small" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}">Indicazioni</a>`,
+      `<button type="button" class="btn btn-ghost btn-small" data-vedi="${k}">Sulla mappa</button>`
+    ].join('');
+
+    const disegna = () => {
+      const vis = rows.slice(0, mostra);
+      $('#nearList').innerHTML = rows.length ? vis.map((c, k) => `
+        <div class="member near-item">
+          <div class="member-main"><strong>${VR.esc(c.nome || 'Struttura veterinaria')}</strong>
+            <span>${VR.esc(distanza(Number(c.km)))}${dove(c) ? ' · ' + VR.esc(dove(c)) : ''}</span>
+            ${c.su_vetroom ? `<span><span class="pill pill-ok">Usa Vetroom</span>${c.domicilio ? ' <span class="pill">Anche a domicilio</span>' : ''}</span>` : ''}</div>
+          <div class="member-ctl">${azioni(c, k)}</div>
+        </div>`).join('') + (rows.length > mostra ? `<div class="actions-bar" style="margin-top:10px"><button type="button" class="btn btn-ghost btn-small" data-altre>Mostra altre ${Math.min(12, rows.length - mostra)}</button></div>` : '')
+        : '<p class="muted" style="margin:10px 0 0">Nessuna struttura veterinaria trovata in questa zona. Prova a cercare un\'altra città.</p>';
+      if (!map) {
+        VR.show($('#nearMap'));
+        map = window.L.map($('#nearMap'), { scrollWheelZoom: false, tap: true }).setView([centro.lat, centro.lon], 13);
+        window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19,
+          attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' }).addTo(map);
+        layer = window.L.layerGroup().addTo(map);
+        fumetti();
+      }
+      layer.clearLayers();
+      window.L.circleMarker([centro.lat, centro.lon], { radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }).addTo(layer).bindPopup('Sei qui');
+      const pts = [[centro.lat, centro.lon]];
+      // prima le altre, poi quelle su Vetroom (così restano sopra)
+      rows.map((c, k) => [c, k]).sort((a, b) => Number(a[0].su_vetroom) - Number(b[0].su_vetroom)).forEach(([c, k]) => {
+        const m = window.L.marker([c.lat, c.lon], { icon: pin(c.su_vetroom ? VRC : ALTRE), zIndexOffset: c.su_vetroom ? 500 : 0 }).addTo(layer);
+        m.bindPopup(`<b>${VR.esc(c.nome || 'Struttura veterinaria')}</b><br>${VR.esc(distanza(Number(c.km)))}${dove(c) ? ' · ' + VR.esc(dove(c)) : ''}`
+          + (c.su_vetroom ? '<br><b style="color:#0f766e">Usa Vetroom</b>' : '')
+          + `<div class="near-pop">${azioni(c, k).replace(/<button type="button" class="btn btn-ghost btn-small" data-vedi="\d+">Sulla mappa<\/button>/, '')}</div>`);
+        if (k < 12) pts.push([c.lat, c.lon]);
+      });
+      if (pts.length > 1) map.fitBounds(pts, { padding: [28, 28], maxZoom: 15 }); else map.setView([centro.lat, centro.lon], 13);
+      setTimeout(() => map.invalidateSize(), 80);
+      VR.show($('#nearLegend')); VR.show($('#nearCredit'));
+    };
+
+    const cerca = async (lat, lon, etichetta) => {
+      VR.hide(nmsg); $('#nearHits').innerHTML = '';
+      centro = { lat, lon }; mostra = 12;
+      $('#nearList').innerHTML = '<p class="loader">Cerco le cliniche vicine…</p>';
+      try {
+        let km = 10;
+        for (;;) {
+          const { data, error } = await VR.sb.rpc('osm_vicine', { p_lat: lat, p_lon: lon, p_km: km, p_quante: 60 });
+          if (error) throw error;
+          rows = data || [];
+          if (rows.length >= 3 || km >= 50) break;
+          km = km === 10 ? 25 : 50;   // poche strutture vicine: allargo la ricerca
+        }
+        try { localStorage.setItem(KEY, JSON.stringify({ lat, lon, etichetta: etichetta || '' })); } catch { /* ok */ }
+        if (etichetta) $('#nearQ').value = etichetta;
+        disegna();
+      } catch (e) {
+        $('#nearList').innerHTML = '';
+        VR.say(nmsg, /osm_vicine/.test(e?.message || '') ? 'La ricerca delle cliniche vicine non è ancora attiva: manca l\'aggiornamento del database.' : VR.errorText(e), 'error');
+      }
+    };
+
+    const geocodifica = async (q) => {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=it&accept-language=it&q=${encodeURIComponent(q)}`);
+      if (!r.ok) return [];
+      return (await r.json()).map((x) => ({ lat: Number(x.lat), lon: Number(x.lon), nome: x.display_name }));
+    };
+
+    $('#nearForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const q = $('#nearQ').value.trim(); if (q.length < 2) return;
+      const hits = await geocodifica(q).catch(() => []);
+      if (!hits.length) { $('#nearHits').innerHTML = '<p class="hint-small">Nessun luogo trovato: prova con città e via.</p>'; return; }
+      if (hits.length === 1) { cerca(hits[0].lat, hits[0].lon, q); return; }
+      $('#nearHits').innerHTML = hits.map((h, i) => `<button type="button" data-hit="${i}">${VR.esc(h.nome)}</button>`).join('');
+      $('#nearHits').onclick = (e) => { const b = e.target.closest('[data-hit]'); if (!b) return; const h = hits[Number(b.dataset.hit)]; cerca(h.lat, h.lon, h.nome.split(',').slice(0, 2).join(',')); };
+    });
+    $('#nearGeo').addEventListener('click', () => {
+      if (!navigator.geolocation) { VR.say(nmsg, 'Questo dispositivo non condivide la posizione: scrivi la città.', 'info'); return; }
+      $('#nearGeo').disabled = true;
+      navigator.geolocation.getCurrentPosition((p) => { $('#nearGeo').disabled = false; cerca(p.coords.latitude, p.coords.longitude, ''); $('#nearQ').value = ''; },
+        () => { $('#nearGeo').disabled = false; VR.say(nmsg, 'Posizione non disponibile: scrivi la città o il quartiere.', 'info'); }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 600000 });
+    });
+    const collega = (codice) => {
+      $('#code').value = codice;
+      $('#code').dispatchEvent(new Event('input'));
+      $('#linkPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if ($('#linkForm').requestSubmit) $('#linkForm').requestSubmit();
+    };
+    panel.addEventListener('click', (ev) => {
+      const c = ev.target.closest('[data-collega]'), v = ev.target.closest('[data-vedi]'), a = ev.target.closest('[data-altre]');
+      if (a) { mostra += 12; disegna(); return; }
+      if (c) { collega(c.dataset.collega); return; }
+      if (v && map) {
+        const r = rows[Number(v.dataset.vedi)];
+        $('#nearMap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        map.setView([r.lat, r.lon], 16);
+        layer.eachLayer((m) => { if (m.getLatLng && m.getPopup && m.getLatLng().lat === r.lat && m.getLatLng().lng === r.lon) m.openPopup(); });
+      }
+    });
+    // i fumetti della mappa fermano i clic: il pulsante "Collega" lo ascolto lì dentro
+    const fumetti = () => map && map.on('popupopen', (e) => {
+      const el = e.popup.getElement(); if (!el || el.dataset.ok) return;
+      el.dataset.ok = '1';
+      el.addEventListener('click', (ev) => { const c = ev.target.closest('[data-collega]'); if (c) { map.closePopup(); collega(c.dataset.collega); } });
+    });
+
+    // avvio
+    let salvata = null;
+    try { salvata = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { salvata = null; }
+    if (salvata && isFinite(salvata.lat) && isFinite(salvata.lon)) { cerca(salvata.lat, salvata.lon, salvata.etichetta); return; }
+    const p = ctx.profile || {};
+    const citta = [p.address_city, p.address_province].filter(Boolean).join(' ');
+    if (citta) {
+      const q = [[p.address_street, p.address_number].filter(Boolean).join(' '), citta].filter(Boolean).join(', ');
+      const hits = await geocodifica(q).catch(() => []) ;
+      const h = hits[0] || (await geocodifica(citta).catch(() => []))[0];
+      if (h) { cerca(h.lat, h.lon, p.address_city); return; }
+    }
+    $('#nearList').innerHTML = '<p class="muted" style="margin:10px 0 0">Scrivi la tua città o premi <b>Vicino a me</b> per vedere le cliniche intorno a te.</p>';
+  };
   </script>
 </body>
 </html>
