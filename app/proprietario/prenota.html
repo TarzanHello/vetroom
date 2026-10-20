@@ -12,14 +12,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="FurrFinder">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-16">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-20">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-16"></script>
-  <script src="../js/app.js?v=2026-10-16"></script>
-  <script src="../js/i18n.js?v=2026-10-16"></script>
-  <script src="../js/layout.js?v=2026-10-16"></script>
-  <script src="../js/clinica.js?v=2026-10-16"></script>
-  <script src="../js/proprietario.js?v=2026-10-16"></script>
+  <script src="../js/config.js?v=2026-10-20"></script>
+  <script src="../js/app.js?v=2026-10-20"></script>
+  <script src="../js/i18n.js?v=2026-10-20"></script>
+  <script src="../js/layout.js?v=2026-10-20"></script>
+  <script src="../js/clinica.js?v=2026-10-20"></script>
+  <script src="../js/proprietario.js?v=2026-10-20"></script>
 </head>
 <body data-shell="owner" data-nav="cliniche">
 
@@ -118,6 +118,9 @@
     });
     if (busyErr) return fail(VR.errorText(busyErr));
     const busyRanges = (busy || []).map((b) => { const s = new Date(b.starts_at).getTime(); return [s, s + b.duration_min * 60000]; });
+    // Ore chiuse dalla struttura (patch 39): senza la patch la chiamata fallisce e si prenota come prima
+    const shut = await VR.sb.rpc('get_closed_slots', { p_clinic: clinicId, p_from: start.toISOString(), p_to: end.toISOString() });
+    if (!shut.error) (shut.data || []).forEach((c) => busyRanges.push([new Date(c.starts_at).getTime(), new Date(c.ends_at).getTime()]));
     const minStart = Date.now() + 2 * 3600e3; // almeno 2 ore di preavviso
 
     // ---------- Dove: in clinica o a casa ----------
