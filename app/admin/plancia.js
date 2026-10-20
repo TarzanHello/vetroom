@@ -438,7 +438,13 @@
   PL.refreshSignals = async () => {
     const db = $('#plDb');
     const t0 = performance.now();
-    const alerts = await PL.try('platform_alerts', {}, null);
+    // Le quattro richieste partono insieme (prima andavano una dopo l'altra)
+    const [alerts, claimsN, lostN, hc] = await Promise.all([
+      PL.try('platform_alerts', {}, null),
+      PL.try('osm_rivendicazioni_conta', {}, 0),
+      PL.try('smarriti_admin_conta', {}, 0),
+      PL.try('platform_health_history', { p_limit: 1 }, null)
+    ]);
     if (db) {
       db.className = 'pl-light hide-m ' + (alerts ? 'ok' : 'bad');
       db.title = alerts ? `Database collegato (${Math.round(performance.now() - t0)} ms)` : 'Database non raggiungibile';
@@ -449,16 +455,15 @@
     set('errors', by.errors?.n || 0, by.errors?.level === 'bad');
     set('trash', by.trash?.n || 0);
     // Richieste di rivendicazione delle strutture da decidere (patch SQL v5 del censimento)
-    const claims = Number(await PL.try('osm_rivendicazioni_conta', {}, 0)) || 0;
+    const claims = Number(claimsN) || 0;
     set('claims', claims, claims > 0);
 
     // Avvisi di animali smarriti segnalati dal pubblico (patch 38)
-    const lost = Number(await PL.try('smarriti_admin_conta', {}, 0)) || 0;
+    const lost = Number(lostN) || 0;
     set('lost', lost, lost > 0);
 
     const m = $('#plMaint'); if (m) { m.hidden = !by.maintenance; m.className = 'pl-light hide-m bad'; }
     // Spia del Collaudo: problemi dell'ultimo controllo (rossa se ce ne sono di gravi)
-    const hc = await PL.try('platform_health_history', { p_limit: 1 }, null);
     const last = hc && hc[0] && hc[0].summary;
     if (last) set('health', Number(last.bad) + Number(last.err) + Number(last.warn), Number(last.bad) + Number(last.err) > 0);
     PL.alerts = (alerts || []).slice();

@@ -182,6 +182,7 @@
 
   // ---------- Caricamento ----------
   const load = async () => {
+    PL.codes();   // i codici servono all'elenco dei nuovi iscritti: si chiedono subito, insieme al resto
     const [st, dy, wk, cl, ap, us] = await Promise.all([
       PL.try('platform_stats', {}, {}), PL.try('platform_growth_daily', { p_days: 30 }, []), PL.try('platform_growth', { p_weeks: 12 }, []),
       PL.try('platform_clinics', {}, []), PL.try('platform_clinic_app_stats', {}, []), PL.try('platform_users', { p_limit: 1000 }, [])
