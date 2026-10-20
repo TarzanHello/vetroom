@@ -433,14 +433,9 @@
       try { const { data } = await VR.sb.rpc('msg_unread'); VR.navBadge(Number(data || 0)); } catch { /* non importante */ }
     };
     read();
-    try {
-      if (VR.sb.channel) {
-        VR.sb.channel('vr-badge')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, read)
-          .subscribe();
-      }
-    } catch { /* resta il controllo periodico */ }
-    setInterval(() => { if (document.visibilityState === 'visible') read(); }, 60000);
+    // Niente collegamento in tempo reale qui: teneva il database sempre al lavoro per ogni pagina aperta.
+    // Basta un controllo ogni 30 secondi (e quando si torna sulla pagina); le pagine dei messaggi restano in tempo reale.
+    setInterval(() => { if (document.visibilityState === 'visible') read(); }, 30000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') read(); });
   };
 

@@ -83,8 +83,21 @@
 
   // ---------- Chiamate al database ----------
   PL.missing = (e) => e && (e.code === 'PGRST202' || /Could not find the function|does not exist/i.test(e.message || ''));
+  // ---------- Cronometro: quanto ci mette ogni parte della pagina ----------
+  const T = PL.timing = { calls: [], pending: 0, session: null, ready: null };
+  let idleTimer = null;
+  const checkIdle = () => {
+    clearTimeout(idleTimer);
+    if (T.ready !== null || !T.booted || T.pending) return;
+    const at = performance.now();
+    idleTimer = setTimeout(() => { if (!T.pending && T.ready === null) T.ready = at; }, 500);
+  };
   PL.rpc = async (name, args) => {
-    const { data, error } = await VR.sb.rpc(name, args || {});
+    const t0 = performance.now(); T.pending++;
+    let res;
+    try { res = await VR.sb.rpc(name, args || {}); }
+    finally { T.pending--; T.calls.push({ name, start: t0, ms: performance.now() - t0 }); checkIdle(); }
+    const { data, error } = res;
     if (error) {
       if (PL.missing(error)) {
         const err = new Error(`Manca una funzione del database (${name}): esegui l'ultima patch SQL su Supabase.`);
@@ -480,12 +493,37 @@
     return PL.alerts;
   };
 
+  // Finestra "Tempi di questa pagina" (clic sulla spia Database)
+  PL.showTiming = async () => {
+    const nav = performance.getEntriesByType('navigation')[0] || {};
+    const ms = (x) => (x == null ? '—' : Math.round(x).toLocaleString('it-IT') + ' ms');
+    const first = new Map();   // per ogni funzione: la prima chiamata (quella del caricamento)
+    T.calls.forEach((c) => { if (!first.has(c.name)) first.set(c.name, c); });
+    const calls = [...first.values()].sort((a, b) => b.ms - a.ms);
+    const lines = [
+      `TEMPI PLANCIA · ${location.pathname.split('/').pop() || 'index.html'} · ${new Date().toLocaleString('it-IT')} · versione ${VR.VERSION}`,
+      `Pagina pronta dopo: ${ms(T.ready)}`,
+      `Risposta del sito (Aruba): ${ms(nav.responseStart)}`,
+      `Pagina e file scaricati: ${ms(nav.domContentLoadedEventEnd)}`,
+      `Controllo dell'accesso: ${ms(T.session)}`,
+      'Funzioni del database (dalla più lenta):',
+      ...calls.map((c) => `  ${c.name}: ${ms(c.ms)} (partita a ${ms(c.start)})`)
+    ];
+    const r = await PL.ask({ title: 'Tempi di questa pagina',
+      html: `<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;margin:0">${esc(lines.join('\n'))}</pre>
+        <p class="small" style="margin-top:8px">Il conto parte da quando hai aperto la pagina. Copialo e mandalo a chi ti aiuta con Vetroom.</p>`,
+      ok: 'Copia' });
+    if (r) { try { await navigator.clipboard.writeText(lines.join('\n')); PL.toast('Tempi copiati.'); } catch { PL.toast('Selezionali e copiali a mano.', 'bad'); } }
+  };
+
   // Avvio: controlla sessione e permessi, costruisce la plancia
   PL.boot = async () => {
     const active = document.body.dataset.station || '';
     const main = $('main');
     let session;
+    const s0 = performance.now();
     try { session = await VR.requireSession(); } catch { return new Promise(() => {}); }
+    T.session = performance.now() - s0;
     let ok = false;
     try { ok = !!(await PL.rpc('is_platform_admin')); } catch { ok = false; }
     if (!ok) {
@@ -497,6 +535,9 @@
     sessionStorage.setItem('vetroom_is_platform', '1');
     buildShell(active, session.user.email || '');
     PL.session = session;
+    T.booted = true; setTimeout(checkIdle, 0);
+    $('#plDb').style.cursor = 'pointer';
+    $('#plDb').addEventListener('click', PL.showTiming);
     PL.refreshSignals();
     setInterval(() => { if (document.visibilityState === 'visible') PL.refreshSignals(); }, 60000);
     return session;
