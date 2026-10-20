@@ -1,135 +1,187 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://vetroom.it/</loc>
+    <loc>https://www.vetroom.it/</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/veterinario-a-domicilio.html</loc>
+    <loc>https://www.vetroom.it/veterinario-a-domicilio.html</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/privacy.html</loc>
+    <loc>https://www.vetroom.it/privacy.html</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/termini.html</loc>
+    <loc>https://www.vetroom.it/termini.html</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/accordo-trattamento-dati.html</loc>
+    <loc>https://www.vetroom.it/accordo-trattamento-dati.html</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/</loc>
+    <loc>https://www.vetroom.it/guida/</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/iniziare-con-vetroom.html</loc>
+    <loc>https://www.vetroom.it/guida/iniziare-con-vetroom.html</loc>
     <lastmod>2026-09-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/importare-clienti-da-excel.html</loc>
+    <loc>https://www.vetroom.it/guida/importare-clienti-da-excel.html</loc>
     <lastmod>2026-09-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/registrare-nuovo-paziente.html</loc>
+    <loc>https://www.vetroom.it/guida/registrare-nuovo-paziente.html</loc>
     <lastmod>2026-09-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/agenda-veterinaria-online.html</loc>
+    <loc>https://www.vetroom.it/guida/agenda-veterinaria-online.html</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/cartella-clinica-veterinaria.html</loc>
+    <loc>https://www.vetroom.it/guida/cartella-clinica-veterinaria.html</loc>
     <lastmod>2026-09-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/referto-veterinario-pdf.html</loc>
+    <loc>https://www.vetroom.it/guida/referto-veterinario-pdf.html</loc>
     <lastmod>2026-09-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/richiami-vaccinali-promemoria.html</loc>
+    <loc>https://www.vetroom.it/guida/richiami-vaccinali-promemoria.html</loc>
     <lastmod>2026-09-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/moduli-visita-consenso-certificato.html</loc>
+    <loc>https://www.vetroom.it/guida/moduli-visita-consenso-certificato.html</loc>
     <lastmod>2026-09-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/veterinario-a-domicilio.html</loc>
+    <loc>https://www.vetroom.it/guida/veterinario-a-domicilio.html</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/furrfinder-app-clienti.html</loc>
+    <loc>https://www.vetroom.it/guida/furrfinder-app-clienti.html</loc>
     <lastmod>2026-10-07</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/messaggi-clienti-veterinario.html</loc>
+    <loc>https://www.vetroom.it/guida/messaggi-clienti-veterinario.html</loc>
     <lastmod>2026-10-08</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/backup-privacy-gdpr-veterinario.html</loc>
+    <loc>https://www.vetroom.it/guida/backup-privacy-gdpr-veterinario.html</loc>
     <lastmod>2026-09-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/invio-spese-veterinarie-sistema-ts.html</loc>
+    <loc>https://www.vetroom.it/guida/invio-spese-veterinarie-sistema-ts.html</loc>
     <lastmod>2026-10-07</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/guida/fatture-veterinarie-cassa.html</loc>
+    <loc>https://www.vetroom.it/guida/fatture-veterinarie-cassa.html</loc>
     <lastmod>2026-10-07</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/veterinari/</loc>
+    <loc>https://www.vetroom.it/veterinari/</loc>
     <lastmod>2026-10-11</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://vetroom.it/trova-struttura.html</loc>
+    <loc>https://www.vetroom.it/trova-struttura.html</loc>
     <lastmod>2026-10-11</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/software-veterinario.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/gestionale-veterinario-open-source.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/modelli/</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/strumenti/</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/modelli/consenso-informato-veterinario.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/modelli/consenso-eutanasia-veterinario.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/modelli/cartella-clinica-veterinaria-fac-simile.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/modelli/fattura-veterinaria-fac-simile.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/modelli/certificato-buona-salute-veterinario.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/modelli/preventivo-veterinario.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/strumenti/calcolo-fattura-veterinaria.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/strumenti/scadenze-sistema-ts.html</loc>
+    <lastmod>2026-10-18</lastmod>
+  </url>
+  <url>
+    <loc>https://www.vetroom.it/strumenti/prezzo-visita-domicilio.html</loc>
+    <lastmod>2026-10-18</lastmod>
   </url>
 </urlset>

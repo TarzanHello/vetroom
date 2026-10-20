@@ -1,0 +1,3 @@
+# Vetroom · modelli scaricabili
+AddType application/pdf .pdf
+AddType application/vnd.openxmlformats-officedocument.wordprocessingml.document .docx

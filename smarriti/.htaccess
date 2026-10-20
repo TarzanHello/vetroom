@@ -5,6 +5,13 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
 RewriteEngine On
+# Indirizzo unico del sito: https://www.vetroom.it (un solo passaggio 301)
+RewriteCond %{HTTP_HOST} ^vetroom\.it$ [NC]
+RewriteRule ^ https://www.vetroom.it%{REQUEST_URI} [L,R=301]
+# Forza HTTPS
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 RewriteBase /smarriti/
 # La copia locale dei dati (se finisce qui) non si apre dal browser
 RewriteRule ^cache/ - [F,L]

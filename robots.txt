@@ -2,6 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /app/
 
-Sitemap: https://vetroom.it/sitemap.xml
-Sitemap: https://vetroom.it/veterinari/sitemap.xml
-Sitemap: https://vetroom.it/smarriti/sitemap.xml
+Sitemap: https://www.vetroom.it/sitemap.xml
+Sitemap: https://www.vetroom.it/veterinari/sitemap.xml
+Sitemap: https://www.vetroom.it/smarriti/sitemap.xml

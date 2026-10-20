@@ -8,7 +8,7 @@ define('VR_SUPABASE_URL', getenv('VR_SUPABASE_URL') ?: 'https://mwherdrijnllnuvp
 define('VR_SUPABASE_KEY', getenv('VR_SUPABASE_KEY') ?: 'sb_publishable_QWT2sf0Wn8ajJ-1SCddL8g_YOlEH-GW');
 
 // Indirizzo del sito, senza barra finale
-define('VR_SITO', getenv('VR_SITO') ?: 'https://vetroom.it');
+define('VR_SITO', getenv('VR_SITO') ?: 'https://www.vetroom.it');
 
 // Dati mostrati nelle schede. Se il legale consiglia di non pubblicare il telefono, metti false.
 define('VR_MOSTRA_TELEFONO', true);

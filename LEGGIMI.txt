@@ -1,0 +1,64 @@
+VETROOM - PACCHETTO SEO COMPLETO (18 ottobre 2026)
+===================================================
+Questo zip SOSTITUISCE il precedente (vetroom-seo-2026-10-18.zip):
+contiene tutte quelle modifiche piu' le pagine nuove. Carica solo questo.
+
+COSA C'E' DENTRO
+1) Indirizzo unico https://www.vetroom.it (chi apre vetroom.it viene
+   portato su www) e nuovi titoli su Google per 5 pagine.
+2) PAGINE NUOVE
+   - /software-veterinario.html            come scegliere un software veterinario
+   - /gestionale-veterinario-open-source.html
+   - /modelli/   6 modelli gratuiti in PDF e Word:
+       consenso informato, consenso all'eutanasia, cartella clinica,
+       fattura (ordinario e forfettario), certificato di buona salute, preventivo
+   - /strumenti/ 3 calcolatori:
+       calcolo fattura veterinaria (ENPAV, IVA, bollo, anche dal totale)
+       scadenze del Sistema TS (con promemoria per il calendario)
+       prezzo della visita a domicilio (con listino per distanza)
+3) Collegamenti alle pagine nuove da home, indice della guida e 5 guide,
+   sitemap aggiornata.
+
+PRIMA DI CARICARE (2 minuti)
+A) Supabase: Authentication > URL Configuration > "Redirect URLs".
+   Deve esserci:  https://www.vetroom.it/**
+   Se manca: "Add URL", incollalo, salva.
+B) FileZilla: scarica in una cartella "backup" questi 3 file del sito:
+     .htaccess   veterinari/.htaccess   smarriti/.htaccess
+   (Se non li vedi: menu Server > "Forza la visualizzazione dei file nascosti")
+
+CARICAMENTO
+1) Estrai lo zip sul computer.
+2) FileZilla: a sinistra la cartella estratta, a destra la cartella
+   principale di vetroom.it (dove c'e' index.html).
+3) Seleziona tutto a sinistra (tranne LEGGIMI.txt) e trascinalo a destra.
+   Scegli "Sovrascrivi" e spunta "Usa sempre questa azione".
+   Le cartelle nuove "modelli" e "strumenti" si creano da sole.
+
+CONTROLLO
+1) https://vetroom.it          -> diventa https://www.vetroom.it
+2) https://www.vetroom.it/modelli/   -> si apre la pagina dei modelli;
+   prova a scaricare un PDF e un Word.
+3) https://www.vetroom.it/strumenti/calcolo-fattura-veterinaria.html
+   -> deve comparire subito il totale 130,30 EUR.
+4) Entra nell'app con Google: deve funzionare come sempre.
+
+SE QUALCOSA NON VA
+"Troppi reindirizzamenti" o accesso che non funziona: ricarica i 3 .htaccess
+dalla cartella "backup" e scrivimi.
+
+DOPO: SEARCH CONSOLE (proprieta' Dominio vetroom.it)
+1) Sitemap: aggiungi  https://www.vetroom.it/sitemap.xml
+                      https://www.vetroom.it/veterinari/sitemap.xml
+                      https://www.vetroom.it/smarriti/sitemap.xml
+2) Controllo URL: incolla e premi "Richiedi indicizzazione" per
+     https://www.vetroom.it/software-veterinario.html
+     https://www.vetroom.it/modelli/
+     https://www.vetroom.it/modelli/consenso-informato-veterinario.html
+     https://www.vetroom.it/modelli/fattura-veterinaria-fac-simile.html
+     https://www.vetroom.it/strumenti/calcolo-fattura-veterinaria.html
+     https://www.vetroom.it/gestionale-veterinario-open-source.html
+   (Google ne accetta una decina al giorno: le altre le trova dalla sitemap.)
+
+GITHUB
+Carica gli stessi file su TarzanHello/vetroom (ramo main).

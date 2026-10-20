@@ -1,0 +1,82 @@
+/* Vetroom · modelli e strumenti gratuiti (si aggiunge a /guida/guida.css) */
+.footer-grid-4{grid-template-columns:1.3fr .9fr .9fr .7fr}
+@media (max-width:900px){.footer-grid-4{grid-template-columns:1fr 1fr}.footer-grid-4 .fine{grid-column:1/-1}}
+
+/* Pulsanti di download */
+.downloads{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 8px}
+.btn.dl{gap:10px;background:var(--teal);color:#fff;border:0}
+.btn.dl:hover{background:var(--teal2);color:#fff}
+.btn.dl.alt{background:#fff;color:var(--teal2);border:2px solid var(--teal)}
+.btn.dl small{font-weight:600;opacity:.85}
+.dl-note{font-size:13px;color:#6b7280;margin:0 0 18px}
+
+/* Anteprima del modello su "foglio" */
+.paper{background:#fff;border:1px solid #d1d5db;border-radius:6px;box-shadow:0 18px 40px rgba(15,23,42,.10);padding:28px 30px;margin:18px 0 26px;font-size:14px;line-height:1.5;max-width:760px}
+.paper .p-head{display:flex;justify-content:space-between;gap:12px;border-bottom:2px solid var(--teal);padding-bottom:8px;margin-bottom:12px;color:#6b7280;font-size:12px}
+.paper h3{font-size:1.05rem;text-align:center;margin:4px 0 12px;color:var(--navy);text-transform:uppercase;letter-spacing:.02em}
+.paper h4{font-size:.85rem;margin:14px 0 6px;color:var(--teal2);text-transform:uppercase;letter-spacing:.06em}
+.paper p{margin:6px 0;font-size:14px}
+.paper .f{display:flex;gap:8px;margin:5px 0;font-size:14px}
+.paper .f span{white-space:nowrap}
+.paper .f i{flex:1;border-bottom:1px solid #9ca3af;min-width:40px}
+.paper .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.paper ul.cb{list-style:none;padding:0;margin:6px 0}
+.paper ul.cb li{padding:2px 0 2px 24px;position:relative;font-size:14px}
+.paper ul.cb li::before{content:"";position:absolute;left:2px;top:6px;width:12px;height:12px;border:1.5px solid #374151;border-radius:2px}
+.paper table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+.paper th,.paper td{border:1px solid #9ca3af;padding:5px 6px;text-align:left}
+.paper th{background:#f0fdfa}
+.paper td{height:22px}
+.paper .sign{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:22px}
+.paper .sign div{border-top:1px solid #374151;padding-top:4px;font-size:12px;color:#4b5563}
+.paper .p-foot{margin-top:18px;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:6px}
+.paper .fade{position:relative;max-height:520px;overflow:hidden}
+.paper .fade::after{content:"";position:absolute;left:0;right:0;bottom:0;height:120px;background:linear-gradient(transparent,#fff)}
+.paper .num{text-align:right}
+@media (max-width:600px){.paper{padding:18px 14px}.paper .grid2{grid-template-columns:1fr}.paper .f span{white-space:normal}}
+
+/* Calcolatori */
+.calc{border:1px solid var(--border);border-radius:18px;background:#f8fafc;padding:20px;margin:18px 0 24px}
+.calc fieldset{border:0;padding:0;margin:0 0 14px;min-width:0}
+.calc legend{font-weight:800;color:var(--navy);margin-bottom:8px;padding:0}
+.calc label{display:block;font-weight:700;font-size:14px;color:#374151;margin:0 0 4px}
+.calc .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:12px}
+.calc input[type=number],.calc input[type=text],.calc input[type=date],.calc select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:var(--ink)}
+.calc input:focus,.calc select:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,118,110,.18)}
+.calc .hint{font-size:12.5px;color:#6b7280;margin-top:3px;display:block}
+.seg{display:inline-flex;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden;background:#fff;flex-wrap:wrap}
+.seg label{margin:0;display:flex;align-items:center;gap:6px;padding:10px 14px;cursor:pointer;font-weight:700;font-size:14px;border-right:1px solid #e5e7eb}
+.seg label:last-child{border-right:0}
+.seg input{accent-color:var(--teal)}
+.lines .line{display:grid;grid-template-columns:1fr 130px 150px 40px;gap:8px;margin-bottom:8px;align-items:center}
+.lines .line button{height:44px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:18px;color:#6b7280}
+.lines .line button:hover{color:#b91c1c;border-color:#fecaca}
+.addline{font:inherit;font-weight:700;color:var(--teal2);background:#fff;border:1px dashed var(--teal);border-radius:12px;padding:9px 14px;cursor:pointer}
+@media (max-width:600px){.lines .line{grid-template-columns:1.3fr 1fr 40px}.lines .line input:first-child{grid-column:1/-1}.seg{display:flex;width:100%}.seg label{flex:1 1 100%;border-right:0;border-bottom:1px solid #e5e7eb}.seg label:last-child{border-bottom:0}}
+.result{background:#fff;border:2px solid var(--teal);border-radius:16px;padding:16px 18px;margin-top:16px}
+.result .big{font-size:2rem;font-weight:800;color:var(--navy);line-height:1.1}
+.result .big small{font-size:1rem;color:#6b7280;font-weight:600}
+.result table{width:100%;border-collapse:collapse;margin-top:10px;font-size:15px}
+.result td{padding:7px 4px;border-bottom:1px solid #f1f5f9}
+.result td:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.result tr.tot td{font-weight:800;border-top:2px solid #e5e7eb;border-bottom:0;font-size:16px}
+.result .notes{font-size:13px;color:#4b5563;margin-top:10px}
+.result .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.result .actions .btn{min-height:40px;padding:8px 14px;font-size:14px}
+.chip{display:inline-block;font-size:12px;font-weight:800;padding:3px 9px;border-radius:999px;background:var(--orangesoft);color:#9a3412;margin-left:6px;vertical-align:middle}
+
+/* Pagine indice (modelli, strumenti) */
+.res-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:16px 0}
+.res-card{display:flex;flex-direction:column;gap:6px;border:1px solid var(--border);border-radius:16px;padding:18px;background:#fff;text-decoration:none;color:var(--ink);transition:transform .12s,box-shadow .12s}
+.res-card:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(15,23,42,.08);color:var(--ink)}
+.res-card .tag{font-size:12px;font-weight:800;color:var(--teal2);text-transform:uppercase;letter-spacing:.06em}
+.res-card strong{color:var(--navy);font-size:1.08rem;line-height:1.3}
+.res-card span{color:var(--muted);font-size:.95rem;line-height:1.5}
+.res-card .go{margin-top:auto;padding-top:6px;font-weight:800;color:var(--teal2);font-size:14px}
+
+/* Tabella di confronto */
+.compare td:first-child{font-weight:700;color:var(--navy)}
+.yes{color:#047857;font-weight:800}
+.no{color:#b45309;font-weight:800}
+@media print{.site-header,.site-footer,.crumbs,.related,.cta-box,.downloads,.calc fieldset,.addline{display:none!important}.article{border:0;box-shadow:none;padding:0}}
+@media (prefers-reduced-motion:reduce){.res-card{transition:none}}

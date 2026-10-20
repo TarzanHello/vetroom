@@ -14,7 +14,7 @@ $sm_host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
 define('SM_MARCA', getenv('SM_MARCA') ?: (strpos($sm_host, 'furrfinder') !== false ? 'furrfinder' : 'vetroom'));
 
 // Indirizzo di questo sito, senza barra finale (compare nei link condivisi e per Google)
-define('VR_SITO', getenv('VR_SITO') ?: (SM_MARCA === 'furrfinder' ? 'https://www.furrfinder.com' : 'https://vetroom.it'));
+define('VR_SITO', getenv('VR_SITO') ?: (SM_MARCA === 'furrfinder' ? 'https://www.furrfinder.com' : 'https://www.vetroom.it'));
 
 // Dove sta l'app (accesso, pubblicazione dell'avviso) e l'elenco dei veterinari: su vetroom.it
 define('SM_APP', getenv('SM_APP') !== false ? getenv('SM_APP') : (SM_MARCA === 'furrfinder' ? 'https://www.vetroom.it' : ''));
