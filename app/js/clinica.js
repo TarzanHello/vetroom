@@ -36,7 +36,9 @@
       if (!error || !/column|does not exist|schema cache/i.test(error.message || '')) break;
     }
     if (error) throw error;
-    if (!rows || rows.length === 0) {
+    // le strutture eliminate dal titolare (nel cestino per 30 giorni) non si vedono più
+    rows = (rows || []).filter((r) => !VR.closedByOwner(r.clinics));
+    if (rows.length === 0) {
       // nessuna struttura (o richiesta di adesione in attesa): si sceglie dove lavorare
       VR.go('benvenuto.html?strutture=1'); throw new Error('redirect');
     }

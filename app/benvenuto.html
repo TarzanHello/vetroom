@@ -12,12 +12,12 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="css/app.css?v=2026-10-20b">
+  <link rel="stylesheet" href="css/app.css?v=2026-10-21">
   <script src="vendor/supabase-2.117.2.js"></script>
-  <script src="js/config.js?v=2026-10-20b"></script>
-  <script src="js/app.js?v=2026-10-20b"></script>
-  <script src="js/i18n.js?v=2026-10-20b"></script>
-  <script src="js/layout.js?v=2026-10-20b"></script>
+  <script src="js/config.js?v=2026-10-21"></script>
+  <script src="js/app.js?v=2026-10-21"></script>
+  <script src="js/i18n.js?v=2026-10-21"></script>
+  <script src="js/layout.js?v=2026-10-21"></script>
 </head>
 <body>
   <header class="welcome-top">
@@ -204,8 +204,8 @@
       }
       if (profile.is_owner && localStorage.getItem('vetroom_intent') === 'owner') { localStorage.removeItem('vetroom_intent'); VR.go('proprietario/'); return; }
       if (profile.is_staff) {
-        const { data: mem } = await VR.sb.from('clinic_members').select('clinic_id').eq('user_id', uid).eq('status', 'active').limit(1);
-        if (mem && mem.length) { VR.go('clinica/'); return; }
+        const { data: mem } = await VR.sb.from('clinic_members').select('clinic_id, clinics(status, suspended_reason)').eq('user_id', uid).eq('status', 'active');
+        if ((mem || []).some((r) => !VR.closedByOwner(r.clinics))) { VR.go('clinica/'); return; }
         if (await VR.checkPlatformAdmin()) { VR.go('admin/'); return; }
         noStructure = true;
       }

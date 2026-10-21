@@ -12,15 +12,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-20b">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-21">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-20b"></script>
-  <script src="../js/app.js?v=2026-10-20b"></script>
-  <script src="../js/i18n.js?v=2026-10-20b"></script>
-  <script src="../js/layout.js?v=2026-10-20b"></script>
-  <script src="../js/clinica.js?v=2026-10-20b"></script>
+  <script src="../js/config.js?v=2026-10-21"></script>
+  <script src="../js/app.js?v=2026-10-21"></script>
+  <script src="../js/i18n.js?v=2026-10-21"></script>
+  <script src="../js/layout.js?v=2026-10-21"></script>
+  <script src="../js/clinica.js?v=2026-10-21"></script>
   <script src="../vendor/jspdf-2.5.2.min.js"></script>
-  <script src="../js/pdf.js?v=2026-10-20b"></script>
+  <script src="../js/pdf.js?v=2026-10-21"></script>
 </head>
 <body data-shell="clinic" data-nav="impostazioni">
 
@@ -156,7 +156,7 @@
         <button class="btn btn-ghost" type="button" id="leave">Esci dalla clinica</button>
       </div>
       <div id="deleteBox" hidden style="margin-top:14px">
-        <p class="hint-small" style="margin-top:0">Elimina la clinica: cancella per sempre proprietari, animali creati dalla clinica, visite, referti, appuntamenti e documenti. <b>Scarica prima il backup.</b> Gli animali dei proprietari iscritti restano nei loro libretti.</p>
+        <p class="hint-small" style="margin-top:0">Elimina la clinica: si chiude subito per tutto il team e sparisce da FurrFinder. Dopo 30 giorni vengono cancellati per sempre proprietari, animali creati dalla clinica, visite, referti, appuntamenti e documenti. Fino ad allora, se cambi idea, scrivi all'assistenza Vetroom e la ripristiniamo. <b>Scarica prima il backup.</b> Gli animali dei proprietari iscritti restano nei loro libretti.</p>
         <button class="btn btn-danger" type="button" id="delClinic">Elimina la clinica</button>
       </div>
       <div id="dzMsg" hidden></div>
@@ -343,15 +343,16 @@
       if (t.trim() !== clinic.name.trim()) { VR.say(m, 'Il nome non corrisponde: la clinica non è stata eliminata.', 'error'); return; }
       const b = ev.currentTarget; b.disabled = true; VR.say(m, 'Eliminazione in corso…', 'info');
       try {
-        // file della clinica (documenti e immagini)
-        const docs = await VR.fetchAll(() => VR.sb.from('documents').select('storage_path').eq('clinic_id', ctx.clinicId).order('id'));
-        const paths = docs.map((d) => d.storage_path);
-        for (let i = 0; i < paths.length; i += 100) await VR.sb.storage.from('pet-files').remove(paths.slice(i, i + 100));
-        const { data: assets } = await VR.sb.storage.from('clinic-assets').list(ctx.clinicId, { limit: 1000 });
-        if (assets?.length) await VR.sb.storage.from('clinic-assets').remove(assets.map((a) => `${ctx.clinicId}/${a.name}`));
-        const { error } = await VR.sb.rpc('delete_my_clinic', { p_clinic: ctx.clinicId });
-        if (error) throw error;
-        localStorage.removeItem(VR.CLINIC_KEY); location.replace('./');
+        // La clinica va nel cestino per 30 giorni (patch 40): niente si cancella subito, nemmeno i file.
+        // L'eliminazione definitiva, file compresi, la fa l'amministratore di Vetroom dal Cestino.
+        const { data: done, error } = await VR.sb.rpc('trash_my_clinic', { p_clinic: ctx.clinicId, p_confirm_name: t });
+        if (error) {
+          if (/trash_my_clinic|schema cache|could not find the function/i.test(error.message || '')) throw new Error('Funzione non ancora disponibile: riprova fra qualche minuto o scrivi all\'assistenza Vetroom.');
+          throw error;
+        }
+        localStorage.removeItem(VR.CLINIC_KEY);
+        alert(done || 'Struttura eliminata. Resta recuperabile per 30 giorni: se hai cambiato idea scrivi all\'assistenza Vetroom.');
+        location.replace('./');
       } catch (e) { VR.say(m, VR.errorText(e), 'error'); b.disabled = false; }
     });
 

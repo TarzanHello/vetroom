@@ -273,6 +273,8 @@
       'clinica.sospesa': `ha sospeso la clinica ${esc(a.label || '')}`,
       'clinica.riattivata': `ha riattivato la clinica ${esc(a.label || '')}`,
       'clinica.rinominata': `ha rinominato la clinica in ${esc(a.label || '')}`,
+      'clinica.cestino': `ha eliminato la clinica ${esc(a.label || '')} (nel cestino per 30 giorni)`,
+      'clinica.eliminata': `ha eliminato definitivamente la clinica ${esc(a.label || '')}`,
       'team.entrato': a.actor_id && a.actor_id === a.target_id ? `ha accettato l'invito nel team come ${role(m.ruolo)}` : `ha inserito nel team ${T} come ${role(m.ruolo)}`,
       'team.uscito': a.actor_id && a.actor_id === a.target_id ? 'ha lasciato il team' : `ha tolto dal team ${T}`,
       'team.modificato': `ha cambiato ruolo o stato di ${T}`,
@@ -326,7 +328,7 @@
     const ctx = [a.clinic_name ? `<a href="${PL.clinicHref(a.clinic_id)}">${esc(a.clinic_name)}</a>` : '',
       a.target_kind === 'user' && a.target_id && !/^account\./.test(a.action) ? `<a href="${PL.userHref(a.target_id, a.target_code)}">scheda di ${esc(a.target_name || 'utente')}</a>` : '',
       a.actor_kind === 'admin' ? 'azione amministratore' : ''].filter(Boolean).join(' · ');
-    const tone = /eliminato|sospes/.test(a.action) ? 'k-bad' : /cestino|cancelled|no_show/.test(a.action) ? 'k-warn' : 'k-' + (selfAct ? 'user' : a.actor_kind);
+    const tone = /eliminat[oa]|sospes/.test(a.action) ? 'k-bad' : /cestino|cancelled|no_show/.test(a.action) ? 'k-warn' : 'k-' + (selfAct ? 'user' : a.actor_kind);
     return { html: `${whoHtml} ${what}${ctx ? `<span class="ctx">${ctx}</span>` : ''}`, tone };
   };
   PL.renderLog = (el, rows, { wide = false, fresh = new Set() } = {}) => {

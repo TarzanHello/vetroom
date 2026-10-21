@@ -48,7 +48,7 @@
   // ---------- Monitoraggio errori ----------
   // Ogni errore mostrato all'utente (e ogni errore imprevisto del codice) viene registrato
   // per l'amministratore della piattaforma. Nessun servizio esterno: finisce nel database Vetroom.
-  VR.VERSION = '2026-10-20b';
+  VR.VERSION = '2026-10-21';
   const IGNORE = /Failed to fetch|NetworkError|Load failed|network error|JWT|not authenticated|Accesso richiesto|AbortError|ResizeObserver loop|Area riservata|earlier share has not yet completed|Share canceled|^(redirect|noclinic|suspended)$/i;
   const sent = new Set();
   VR.reportError = (e, where) => {
@@ -161,6 +161,10 @@
 
   // Dove deve andare un utente in base al suo profilo
   VR.CLINIC_KEY = 'vetroom_clinica';   // struttura scelta (anche benvenuto.html la imposta)
+  // Struttura eliminata dal titolare (patch 40): resta 30 giorni nel cestino della Plancia,
+  // ma per lo staff è come se non esistesse più. Il motivo è scritto dal database: non cambiarlo.
+  VR.CLOSED_BY_OWNER = 'Eliminata dal titolare';
+  VR.closedByOwner = (c) => !!c && c.status === 'suspended' && c.suspended_reason === VR.CLOSED_BY_OWNER;
   // Amministratore della piattaforma? Serve a tutte le pagine (anche benvenuto.html):
   // mostra la voce "Piattaforma" e decide dove mandare chi non ha una struttura.
   VR.checkPlatformAdmin = async () => {

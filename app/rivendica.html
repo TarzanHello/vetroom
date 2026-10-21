@@ -9,10 +9,10 @@
   <link rel="manifest" href="/app/manifest-vetroom.webmanifest">
   <link rel="apple-touch-icon" href="/app/img/vetroom-apple-180.png">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="css/app.css?v=2026-10-20b">
+  <link rel="stylesheet" href="css/app.css?v=2026-10-21">
   <script src="vendor/supabase-2.117.2.js"></script>
-  <script src="js/config.js?v=2026-10-20b"></script>
-  <script src="js/app.js?v=2026-10-20b"></script>
+  <script src="js/config.js?v=2026-10-21"></script>
+  <script src="js/app.js?v=2026-10-21"></script>
   <style>
     .rv h1 { font-size: clamp(1.5rem, 4vw, 2rem); margin: 6px 0 6px; color: var(--ink); }
     .rv .lead { color: var(--muted); margin: 0 0 16px; }
@@ -120,8 +120,8 @@
       if (r.stato === 'completata') extra = `<div class="actions-bar" style="margin-top:10px"><a class="btn btn-primary btn-small" href="clinica/">Apri il gestionale</a></div>`;
       if (r.stato === 'approvata') {
         if (mieStrutture === null) {
-          const { data: m } = await VR.sb.from('clinic_members').select('clinic_id, clinics(name)').eq('user_id', uid).eq('role', 'admin').eq('status', 'active');
-          mieStrutture = m || [];
+          const { data: m } = await VR.sb.from('clinic_members').select('clinic_id, clinics(name, status, suspended_reason)').eq('user_id', uid).eq('role', 'admin').eq('status', 'active');
+          mieStrutture = (m || []).filter((x) => !VR.closedByOwner(x.clinics));
         }
         extra = `<p style="margin:8px 0 0"><b>Ultimo passo:</b> attiva la struttura su Vetroom.</p>
           <div class="rv-choice" data-attiva="${r.id}">
