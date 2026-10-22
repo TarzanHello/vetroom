@@ -14,7 +14,7 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="../css/app.css?v=2026-10-21">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../vendor/xlsx-mini-0.18.5.min.js"></script>
+  <script src="../vendor/xlsx-full-0.18.5.min.js"></script>
   <script src="../js/config.js?v=2026-10-21"></script>
   <script src="../js/app.js?v=2026-10-21"></script>
   <script src="../js/i18n.js?v=2026-10-21"></script>
@@ -25,7 +25,7 @@
   <main class="wrap">
     <a class="back" href="clienti.html">← Tutti i proprietari</a>
     <h1>Importa proprietari e animali</h1>
-    <p class="muted">Porta in Vetroom l'archivio del vecchio programma: basta un file Excel (.xlsx) o CSV, con una riga per ogni animale e i dati del suo proprietario.</p>
+    <p class="muted">Porta in Vetroom l'archivio del vecchio programma: basta un file Excel (.xlsx o .xls) o CSV, con una riga per ogni animale e i dati del suo proprietario.</p>
 
     <p class="loader" id="loading">Caricamento…</p>
     <div id="msg" hidden></div>
@@ -121,6 +121,17 @@
         const buf = await f.arrayBuffer();
         const wb = XLSX.read(buf, { type: 'array', cellDates: true, raw: false });
         const sh = wb.Sheets[wb.SheetNames[0]];
+        // Date sempre come giorno/mese/anno: Excel salva spesso il formato breve
+        // "m/d/yy" e l'1 maggio diventerebbe il 5 gennaio.
+        for (const k of Object.keys(sh)) {
+          const c = sh[k];
+          if (k[0] === '!' || !c) continue;
+          // numeri interi lunghi (microchip, telefoni) per intero, non come 3,8026E+14
+          if (c.t === 'n' && Number.isSafeInteger(c.v) && Math.abs(c.v) >= 1e9 && (!c.z || c.z === 'General')) { c.w = String(c.v); continue; }
+          if (c.t !== 'd' || !(c.v instanceof Date) || isNaN(c.v)) continue;
+          const d = new Date(c.v.getTime() + 12 * 3600e3); // evita lo scarto di un giorno per il fuso orario
+          c.w = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+        }
         const aoa = XLSX.utils.sheet_to_json(sh, { header: 1, defval: '', raw: false, dateNF: 'dd/mm/yyyy' })
           .filter((r) => r.some((c) => String(c).trim() !== ''));
         if (aoa.length < 2) throw new Error('Il file sembra vuoto: servono una riga di intestazione e almeno una riga di dati.');
