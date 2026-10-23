@@ -462,3 +462,64 @@ dialog.dl.grp { width: min(860px, calc(100vw - 28px)); }
 .grow-row strong { display: block; font-size: 14px; }
 .grow-row .small { display: block; }
 .foot .grow { flex: 1; align-self: center; }
+
+/* ---------- Mappa (mappa.html) ---------- */
+.gauge b small { font-size: 16px; color: var(--faint); margin-left: 2px; }
+.mp-gauges { margin: 0 0 18px; }
+.mp-ctl { align-items: flex-end; }
+.mp-ctl-row { display: flex; flex-direction: column; gap: 5px; }
+.mp-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 340px; border: 1px solid var(--edge); }
+.mp-map { height: clamp(420px, 70vh, 780px); background: #07101e; }
+.mp-map.picking, .mp-map.picking .leaflet-interactive { cursor: crosshair !important; }
+.mp-side { position: relative; border-left: 1px solid var(--edge); background: var(--hull); padding: 16px 18px; max-height: clamp(420px, 70vh, 780px); overflow-y: auto; }
+.mp-side h3 { font-family: var(--display); font-size: 21px; margin: 2px 0 0; padding-right: 26px; line-height: 1.2; }
+.mp-side .lbl, .mp-pick .lbl { font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--signal); margin: 0 0 6px; }
+.mp-x { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border: 1px solid var(--edge); background: transparent; color: var(--dim); font-size: 20px; line-height: 1; cursor: pointer; }
+.mp-x:hover { color: var(--text); border-color: var(--signal); }
+.mp-nums { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+.mp-nums b { font-size: 19px; }
+.mp-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.mp-bars button { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; text-align: left; background: transparent; border: 1px solid transparent; color: var(--text); font: 14px var(--body); padding: 6px 8px; cursor: pointer; }
+.mp-bars button:hover, .mp-list button:hover { border-color: var(--edge-hi); background: var(--hull-2); }
+.mp-bars .v { font-size: 12.5px; color: var(--dim); align-self: center; }
+.mp-bars .b { grid-column: 1 / -1; height: 4px; background: var(--hull-3); }
+.mp-bars .b i { display: block; height: 100%; background: var(--amber); }
+.mp-bars button.me .b i { background: var(--green); }
+.mp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.mp-list button { width: 100%; display: flex; align-items: center; gap: 9px; text-align: left; background: transparent; border: 1px solid transparent; color: var(--text); font: 14px var(--body); padding: 7px 8px; cursor: pointer; }
+.mp-list button > span:last-child:not(.pill) { margin-left: auto; }
+.mp-list button i { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+.mp-holes button { flex-direction: column; align-items: flex-start; gap: 1px; }
+.mp-holes button > span:last-child:not(.pill) { margin-left: 0; }
+.mp-loc { list-style: none; margin: 0; padding: 0; }
+.mp-loc li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 0; border-bottom: 1px solid var(--edge); }
+.mp-loc li:last-child { border-bottom: 0; }
+.mp-loc li > div:first-child { flex: 1; min-width: 220px; }
+.mp-pick h3 { margin-bottom: 8px; }
+.mp-pick { border-left: 3px solid var(--amber); padding-left: 12px; }
+.mp-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; padding: 12px 2px 0; font-size: 13px; color: var(--dim); }
+.mp-lg-g { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.mp-legend i { display: inline-block; vertical-align: -1px; margin-right: 6px; }
+.mp-legend .dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid #050a14; box-sizing: content-box; }
+.mp-legend .dot.sm { width: 6px; height: 6px; border: 0; }
+.mp-legend .sw { width: 16px; height: 11px; border: 1px solid var(--edge-hi); }
+.mp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin-top: 18px; }
+.mp-grid > .pn { margin-bottom: 18px; }
+/* Leaflet in tema scuro */
+.mp-map.leaflet-container { font: 13px var(--body); }
+.mp-map .leaflet-tile.mp-tiles, .mp-map .mp-tiles { filter: invert(1) hue-rotate(185deg) brightness(.82) contrast(.92) saturate(.55); }
+.mp-map .leaflet-bar a { background: var(--hull-2); color: var(--text); border-color: var(--edge); }
+.mp-map .leaflet-bar a:hover { background: var(--hull-3); }
+.mp-map .leaflet-bar { border: 1px solid var(--edge-hi); box-shadow: none; border-radius: 0; }
+.mp-map .leaflet-bar a, .mp-map .leaflet-bar a:first-child, .mp-map .leaflet-bar a:last-child { border-radius: 0; }
+.mp-map .leaflet-control-attribution { background: rgba(5, 10, 20, .75); color: var(--faint); font-size: 10.5px; }
+.mp-map .leaflet-control-attribution a { color: var(--dim); }
+.leaflet-tooltip.mp-tip { background: var(--hull-2); color: var(--text); border: 1px solid var(--edge-hi); border-radius: 0; box-shadow: 0 6px 20px rgba(0, 0, 0, .45); font: 13px/1.4 var(--body); padding: 7px 10px; }
+.leaflet-tooltip.mp-tip::before { display: none; }
+.leaflet-tooltip.mp-tip .dim { color: var(--dim); }
+@media (max-width: 1000px) {
+  .mp-wrap { grid-template-columns: 1fr; }
+  .mp-side { border-left: 0; border-top: 1px solid var(--edge); max-height: none; }
+  .mp-map { height: clamp(360px, 62vh, 620px); }
+  .mp-grid { grid-template-columns: 1fr; }
+}

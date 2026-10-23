@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="it" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a14">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Mappa · Plancia Vetroom</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="../vendor/leaflet-1.9.4/leaflet.css">
+  <link rel="stylesheet" href="plancia.css?v=2026-10-23">
+  <script src="../vendor/supabase-2.117.2.js"></script>
+  <script src="../vendor/leaflet-1.9.4/leaflet.js"></script>
+  <script src="../js/config.js?v=2026-10-21"></script>
+  <script src="../js/app.js?v=2026-10-21"></script>
+  <script src="plancia.js?v=2026-10-23"></script>
+  <script src="mappa-province.js?v=2026-10-23"></script>
+</head>
+<body class="pl" data-station="mappa">
+<main>
+  <div class="pl-head"><div class="grow"><h1>Mappa</h1><p>Dove sono le strutture del circuito Vetroom e da dove arrivano i loro proprietari. Tocca una struttura per vedere la provenienza dei suoi clienti, oppure una provincia per i suoi numeri.</p></div>
+    <div class="actions"><a class="btn ghost" href="cliniche.html">Elenco strutture</a><button class="btn" type="button" id="csv">Esporta per provincia</button></div></div>
+  <div id="warn"></div>
+  <div class="gauges mp-gauges" id="gauges"></div>
+
+  <section class="pn mp">
+    <div class="pn-h mp-ctl">
+      <div class="mp-ctl-row"><span class="small dim">Colora le province per</span><div class="seg" role="group" aria-label="Colora le province per" id="fColore"></div></div>
+      <div class="mp-ctl-row"><span class="small dim">Strutture</span><div class="seg" role="group" aria-label="Fase delle strutture" id="fFase"></div></div>
+      <div class="tools">
+        <label class="check" title="Tutte le strutture veterinarie del Censimento OSM, iscritte o no"><input type="checkbox" id="oCens"> Strutture censite</label>
+        <label class="check" title="Mostra strade e città sotto le province"><input type="checkbox" id="oStrade"> Strade</label>
+      </div>
+    </div>
+    <div class="mp-wrap">
+      <div class="mp-map" id="map" role="application" aria-label="Mappa d'Italia con le strutture Vetroom"></div>
+      <aside class="mp-side" id="side" aria-live="polite"></aside>
+    </div>
+    <div class="mp-legend" id="legend"></div>
+  </section>
+
+  <div class="mp-grid">
+    <section class="pn">
+      <div class="pn-h"><h2>Pubblico senza una struttura</h2></div>
+      <p class="small dim" style="margin:-6px 0 12px">Province dove abitano proprietari (nei gestionali o su FurrFinder) ma non c'è ancora nessuna struttura Vetroom: sono le zone da cui il pubblico arriva da lontano.</p>
+      <div id="buchi"><p class="loader">Caricamento</p></div>
+    </section>
+    <section class="pn">
+      <div class="pn-h"><h2>Da localizzare</h2><div class="tools"><button class="btn sm prim" type="button" id="locAll" hidden>Localizza tutte</button></div></div>
+      <p class="small dim" style="margin:-6px 0 12px">Strutture non ancora sulla mappa. Il punto si ricava dall'indirizzo che la struttura ha scritto nell'intestazione dei referti (Impostazioni del gestionale).</p>
+      <div id="daLoc"><p class="loader">Caricamento</p></div>
+    </section>
+  </div>
+
+  <section class="pn">
+    <div class="pn-h"><h2>Per regione</h2></div>
+    <div id="reg"><p class="loader">Caricamento</p></div>
+  </section>
+</main>
+<script>
+(async () => {
+  await PL.boot();
+  const { $, esc, n } = PL;
+  const qs = new URLSearchParams(location.search);
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+
+  // ================= Province: confini, nomi, punti =================
+  const fold = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z]+/g, ' ').trim();
+  const PROV = {};            // sigla → { sigla, nome, regione, f, box, c:[lat,lon] }
+  const ring = (r) => { let a = 0, x = 0, y = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const f = r[j][0] * r[i][1] - r[i][0] * r[j][1]; a += f; x += (r[j][0] + r[i][0]) * f; y += (r[j][1] + r[i][1]) * f; } return { a: a / 2, x: x / (3 * a), y: y / (3 * a) }; };
+  for (const f of window.VR_PROVINCE.features) {
+    const g = f.geometry, polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+    let box = [180, 90, -180, -90], big = null;
+    for (const p of polys) {
+      for (const [x, y] of p[0]) { box = [Math.min(box[0], x), Math.min(box[1], y), Math.max(box[2], x), Math.max(box[3], y)]; }
+      const c = ring(p[0]); if (!big || Math.abs(c.a) > Math.abs(big.a)) big = c;
+    }
+    const s = f.properties.sigla;
+    PROV[s] = { sigla: s, nome: f.properties.nome, regione: f.properties.regione, f, polys, box, c: [big.y, big.x] };
+  }
+  const SIGLE = Object.keys(PROV);
+  const REGIONI = [...new Set(SIGLE.map((s) => PROV[s].regione))].sort((a, b) => a.localeCompare(b, 'it'));
+  const inRing = (x, y, r) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
+  const provAt = (lat, lon) => {
+    if (lat == null || lon == null) return null;
+    for (const s of SIGLE) {
+      const p = PROV[s], b = p.box;
+      if (lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) continue;
+      if (p.polys.some((pl) => inRing(lon, lat, pl[0]) && !pl.slice(1).some((h) => inRing(lon, lat, h)))) return s;
+    }
+    // sulla costa i confini semplificati possono lasciare fuori il punto: prendo la provincia più vicina
+    let best = null, d = 0.12;
+    for (const s of SIGLE) { const p = PROV[s]; const dx = Math.max(p.box[0] - lon, 0, lon - p.box[2]), dy = Math.max(p.box[1] - lat, 0, lat - p.box[3]); const dd = Math.hypot(dx, dy); if (dd < d) { d = dd; best = s; } }
+    return best;
+  };
+  // nomi scritti dalle persone → sigla
+  const ALIAS = {};
+  for (const s of SIGLE) ALIAS[fold(PROV[s].nome)] = s;
+  Object.assign(ALIAS, {
+    BOLZANO: 'BZ', BOZEN: 'BZ', 'ALTO ADIGE': 'BZ', SUDTIROL: 'BZ', AOSTA: 'AO', AOSTE: 'AO', 'VALLE D AOSTA': 'AO',
+    'REGGIO EMILIA': 'RE', 'REGGIO NELL EMILIA': 'RE', 'REGGIO DI CALABRIA': 'RC', 'REGGIO CALABRIA': 'RC',
+    MONZA: 'MB', 'MONZA BRIANZA': 'MB', 'MONZA E BRIANZA': 'MB', PESARO: 'PU', URBINO: 'PU', 'PESARO URBINO': 'PU',
+    FORLI: 'FC', CESENA: 'FC', 'FORLI CESENA': 'FC', MASSA: 'MS', CARRARA: 'MS', 'MASSA CARRARA': 'MS',
+    BARLETTA: 'BT', ANDRIA: 'BT', TRANI: 'BT', VERBANIA: 'VB', CARBONIA: 'CI', IGLESIAS: 'CI', OLBIA: 'OT', 'TEMPIO PAUSANIA': 'OT',
+    SANLURI: 'VS', VILLACIDRO: 'VS', LANUSEI: 'OG', TORTOLI: 'OG', 'LA SPEZIA': 'SP', SPEZIA: 'SP', 'L AQUILA': 'AQ', AQUILA: 'AQ'
+  });
+  const siglaDa = (txt) => {
+    const t = String(txt || '').toUpperCase().trim();
+    if (!t) return null;
+    if (/^[A-Z]{2}$/.test(t)) return PROV[t] ? t : null;
+    const par = t.match(/\(\s*([A-Z]{2})\s*\)/); if (par && PROV[par[1]]) return par[1];
+    const f = fold(t); if (ALIAS[f]) return ALIAS[f];
+    const last = f.split(' ').pop(); if (last.length === 2 && PROV[last]) return last;
+    return null;
+  };
+  const normProv = (p, m) => siglaDa(p) || siglaDa(m);
+  // provincia scritta in un indirizzo libero ("Via Roma 1, 00100 Roma (RM)")
+  const provDaIndirizzo = (a) => {
+    const t = String(a || '');
+    const par = t.toUpperCase().match(/\(\s*([A-Z]{2})\s*\)/); if (par && PROV[par[1]]) return par[1];
+    for (const part of t.split(/[,\n]/).reverse()) { const s = siglaDa(part.replace(/\d+/g, ' ')); if (s) return s; }
+    return null;
+  };
+
+  // ================= Dati =================
+  const [clinics, app, codes, structs, trash, mappa] = await Promise.all([
+    PL.try('platform_clinics', {}, []), PL.try('platform_clinic_app_stats', {}, []), PL.codes(),
+    PL.try('platform_structures', {}, []), PL.try('platform_trash_list', {}, []),
+    PL.rpc('platform_mappa').catch((e) => ({ __err: e }))
+  ]);
+  if (mappa.__err) {
+    $('#warn').innerHTML = mappa.__err.missing
+      ? '<p class="note bad">Per usare la mappa esegui su Supabase la patch SQL <span class="mono">patch-41-mappa.sql</span>, poi ricarica la pagina.</p>'
+      : `<p class="note bad">${esc(mappa.__err.message)}</p>`;
+  }
+  const M = mappa.__err ? { strutture: [], clienti: [], utenti: [] } : mappa;
+  const appBy = Object.fromEntries((app || []).map((r) => [r.clinic_id, r]));
+  const stBy = Object.fromEntries((structs || []).map((r) => [r.id, r]));
+  const geoBy = Object.fromEntries((M.strutture || []).map((r) => [r.id, r]));
+  const inTrash = new Set((trash || []).filter((t) => t.kind === 'clinic' && t.status === 'waiting').map((t) => t.target_id));
+  const stage = (c) => Number(c.clients) === 0 ? ['empty', 'Vuota', ''] : Number(c.visits) === 0 ? ['started', 'Avviata', 'info'] : !(appBy[c.id]?.app_owners) ? ['active', 'Attiva', 'ok'] : ['room', 'Stanza digitale', 'vio'];
+  const FASE_COL = { empty: '#8b9cba', started: '#4fd8e8', active: '#45e0a0', room: '#a594ff' };
+
+  const rows = (clinics || []).filter((c) => !inTrash.has(c.id) && !geoBy[c.id]?.cestino).map((c) => {
+    const g = geoBy[c.id] || {};
+    const r = { ...c, code: codes.clinics?.[c.id] || '', s: stBy[c.id] || {}, stg: stage(c), app: appBy[c.id]?.app_owners || 0,
+      indirizzo: g.indirizzo || '', lat: g.lat ?? null, lon: g.lon ?? null, fonte: g.fonte || null, luogo: g.luogo || '' };
+    r.prov = r.lat != null ? provAt(r.lat, r.lon) : provDaIndirizzo(r.indirizzo);
+    return r;
+  });
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+
+  // proprietari dei gestionali: struttura → provincia → quanti
+  const perClinic = {};       // id → { tot, noti, perProv: {sigla: n}, senza }
+  for (const x of M.clienti || []) {
+    if (!byId[x.c]) continue;
+    const k = (perClinic[x.c] ||= { tot: 0, noti: 0, perProv: {}, senza: 0 });
+    const s = normProv(x.p, x.m), v = Number(x.n) || 0;
+    k.tot += v;
+    if (s) { k.noti += v; k.perProv[s] = (k.perProv[s] || 0) + v; } else k.senza += v;
+  }
+  const utentiProv = {}; let utentiTot = 0, utentiNoti = 0;
+  for (const x of M.utenti || []) {
+    const s = normProv(x.p, x.m), v = Number(x.n) || 0;
+    utentiTot += v; if (s) { utentiNoti += v; utentiProv[s] = (utentiProv[s] || 0) + v; }
+  }
+
+  // ================= Stato della pagina =================
+  let colore = qs.get('colore') || 'clienti', fase = qs.get('fase') || 'all';
+  let sel = null;             // { k:'c', id } | { k:'p', s }
+  let picking = null;         // struttura da posizionare con un clic
+  let cens = null, censProv = {};
+  const COLORI = [['clienti', 'Proprietari', '#4fd8e8'], ['utenti', 'Utenti FurrFinder', '#a594ff'], ['strutture', 'Strutture Vetroom', '#45e0a0'], ['censite', 'Strutture censite', '#ffb547'], ['nessuno', 'Nessun colore', '']];
+  const FASI = [['all', 'Tutte'], ['empty', 'Vuote'], ['started', 'Avviate'], ['active', 'Attive'], ['room', 'Stanza digitale']];
+  const visibili = () => rows.filter((r) => fase === 'all' || r.stg[0] === fase);
+
+  // numeri per provincia, secondo le strutture visibili
+  const conta = () => {
+    const P = Object.fromEntries(SIGLE.map((s) => [s, { strutture: 0, clienti: 0, utenti: utentiProv[s] || 0, censite: censProv[s] || 0, da: {} }]));
+    for (const r of visibili()) {
+      if (r.prov && P[r.prov]) P[r.prov].strutture++;
+      const k = perClinic[r.id]; if (!k) continue;
+      for (const [s, v] of Object.entries(k.perProv)) { P[s].clienti += v; P[s].da[r.id] = v; }
+    }
+    return P;
+  };
+  let P = conta();
+
+  // ================= Mappa =================
+  const map = L.map('map', { zoomSnap: 0.25, minZoom: 4.5, maxZoom: 18, worldCopyJump: false, attributionControl: true });
+  map.attributionControl.setPrefix(false);
+  map.attributionControl.addAttribution('Confini <a href="https://www.istat.it/" target="_blank" rel="noopener">ISTAT</a> (CC BY 4.0)');
+  for (const [name, z] of [['cens', 430], ['flows', 440], ['pins', 610]]) { const p = map.createPane(name); p.style.zIndex = z; if (name !== 'pins') p.style.pointerEvents = 'none'; }
+  const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'mp-tiles',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' });
+
+  const scala = () => {
+    const vals = SIGLE.map((s) => P[s][colore] || 0), max = Math.max(0, ...vals);
+    const passi = [1, 2, 3, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
+    let soglie = [1];
+    if (max > 1) { const goal = max / 5; const step = passi.find((p) => p >= goal) || passi[passi.length - 1]; soglie = [1]; for (let v = step; v <= max && soglie.length < 5; v += step) if (v > 1) soglie.push(v); }
+    return soglie;
+  };
+  let soglie = scala();
+  const tinta = () => (COLORI.find((c) => c[0] === colore) || [])[2] || '#4fd8e8';
+  const alpha = (v) => { if (!v) return 0; let i = 0; while (i + 1 < soglie.length && v >= soglie[i + 1]) i++; return [0.24, 0.4, 0.56, 0.72, 0.9][i] ?? 0.9; };
+  const hex2rgba = (h, a) => `rgba(${parseInt(h.slice(1, 3), 16)},${parseInt(h.slice(3, 5), 16)},${parseInt(h.slice(5, 7), 16)},${a})`;
+
+  const stile = (f) => {
+    const s = f.properties.sigla, base = { weight: 0.8, color: '#2d4670', opacity: 0.9, fillOpacity: 1 };
+    if (sel?.k === 'c') {   // provenienza dei clienti della struttura scelta
+      const k = perClinic[sel.id], v = k?.perProv[s] || 0, mio = byId[sel.id]?.prov === s;
+      const a = v ? 0.18 + 0.7 * (v / Math.max(...Object.values(k.perProv))) : 0;
+      return { ...base, fillColor: v ? hex2rgba('#ffb547', a) : 'rgba(11,19,34,.55)', color: mio ? '#ffb547' : base.color, weight: mio ? 2.2 : base.weight };
+    }
+    const on = sel?.k === 'p' && sel.s === s;
+    const fill = colore === 'nessuno' ? 'rgba(16,27,47,.7)' : (alpha(P[s][colore]) ? hex2rgba(tinta(), alpha(P[s][colore])) : 'rgba(16,27,47,.55)');
+    return { ...base, fillColor: fill, color: on ? '#e3ebf7' : base.color, weight: on ? 2.4 : base.weight };
+  };
+  const provLayer = L.geoJSON(window.VR_PROVINCE, {
+    style: stile,
+    onEachFeature: (f, layer) => {
+      layer.bindTooltip(() => {
+        const s = f.properties.sigla, p = P[s];
+        if (sel?.k === 'c') { const v = perClinic[sel.id]?.perProv[s] || 0; return `<b>${esc(PROV[s].nome)}</b><br>${v ? `${n(v)} ${v === 1 ? 'proprietario' : 'proprietari'} di questa struttura` : 'nessun proprietario di questa struttura'}`; }
+        return `<b>${esc(PROV[s].nome)}</b> <span class="mono">${s}</span><br>${n(p.strutture)} su Vetroom · ${n(p.clienti)} proprietari · ${n(p.utenti)} su FurrFinder${cens ? ` · ${n(p.censite)} censite` : ''}`;
+      }, { sticky: true, className: 'mp-tip', direction: 'top', offset: [0, -8] });
+      layer.on('click', (e) => { if (picking) return; L.DomEvent.stopPropagation(e); scegli({ k: 'p', s: f.properties.sigla }); });
+    }
+  }).addTo(map);
+  const ITALIA = provLayer.getBounds();
+  map.fitBounds(ITALIA, { padding: [8, 8] });
+  map.setMaxBounds(ITALIA.pad(0.6));
+
+  const flows = L.layerGroup().addTo(map);
+  const pins = L.layerGroup().addTo(map);
+  const censLayer = L.layerGroup();
+  const raggio = (r) => 5 + Math.min(13, Math.sqrt(Number(r.clients) || 0) * 1.5);
+
+  const disegnaPins = () => {
+    pins.clearLayers();
+    const vis = visibili().filter((r) => r.lat != null).sort((a, b) => Number(b.clients) - Number(a.clients));
+    for (const r of vis) {
+      const on = sel?.k === 'c' && sel.id === r.id;
+      const m = L.circleMarker([r.lat, r.lon], { pane: 'pins', radius: raggio(r) + (on ? 2 : 0), fillColor: FASE_COL[r.stg[0]], fillOpacity: 0.92,
+        color: r.status === 'suspended' ? '#ff5d6c' : on ? '#ffffff' : '#050a14', weight: on ? 3 : 2, bubblingMouseEvents: false });
+      m.bindTooltip(`<b>${esc(r.name)}</b><br>${esc(r.stg[1])} · ${n(r.clients)} proprietari${r.app ? ` · ${n(r.app)} in app` : ''}${r.fonte === 'comune' ? '<br><span class="dim">posizione approssimativa (solo il comune)</span>' : ''}`, { className: 'mp-tip', direction: 'top', offset: [0, -6] });
+      m.on('click', () => { if (!picking) scegli({ k: 'c', id: r.id }); });
+      m.addTo(pins);
+    }
+  };
+  const disegnaFlussi = () => {
+    flows.clearLayers();
+    if (sel?.k !== 'c') return;
+    const r = byId[sel.id], k = perClinic[sel.id];
+    if (!r || r.lat == null || !k) return;
+    const max = Math.max(1, ...Object.values(k.perProv));
+    for (const [s, v] of Object.entries(k.perProv)) {
+      if (s === r.prov) continue;
+      L.polyline([[r.lat, r.lon], PROV[s].c], { pane: 'flows', color: '#ffb547', opacity: 0.85, weight: 1.2 + 5 * (v / max), lineCap: 'round', interactive: false }).addTo(flows);
+      L.circleMarker(PROV[s].c, { pane: 'flows', radius: 2.5 + 3 * (v / max), color: '#ffb547', weight: 0, fillOpacity: 0.9, interactive: false }).addTo(flows);
+    }
+  };
+  const disegnaCens = () => {
+    censLayer.clearLayers();
+    if (!cens) return;
+    const rend = L.canvas({ pane: 'cens', padding: 0.3 });
+    for (const c of cens) L.circleMarker([c.lat, c.lon], { renderer: rend, radius: 2.3, weight: 0, fillColor: c.su_vetroom ? '#45e0a0' : '#8b9cba', fillOpacity: c.su_vetroom ? 0.95 : 0.55, interactive: false }).addTo(censLayer);
+  };
+
+  // ================= Pannello laterale =================
+  const kpi = (v, l) => `<div><b>${v}</b><span>${l}</span></div>`;
+  const barre = (lista, tot, mio) => `<ol class="mp-bars">${lista.map(([s, v]) => `<li><button type="button" data-prov="${s}" class="${s === mio ? 'me' : ''}">
+      <span class="t"><b>${esc(PROV[s]?.nome || s)}</b>${s === mio ? ' <span class="pill warn">sua provincia</span>' : ''}</span><span class="v mono">${n(v)} · ${pct(v, tot)}%</span>
+      <span class="b"><i style="width:${Math.max(2, pct(v, lista[0][1]))}%"></i></span></button></li>`).join('')}</ol>`;
+
+  const lato = () => {
+    const side = $('#side');
+    if (picking) {
+      side.innerHTML = `<div class="mp-pick"><p class="lbl">Posiziona</p><h3>${esc(picking.name)}</h3><p class="dim">Avvicina la mappa e tocca il punto esatto della struttura.${picking.indirizzo ? `<br>Indirizzo: <b>${esc(picking.indirizzo)}</b>` : ''}</p><button class="btn ghost sm" type="button" data-annulla>Annulla</button></div>`;
+      return;
+    }
+    if (!sel) {
+      const top = SIGLE.filter((s) => P[s].clienti + P[s].utenti).sort((a, b) => (P[b].clienti + P[b].utenti) - (P[a].clienti + P[a].utenti)).slice(0, 8);
+      side.innerHTML = `<p class="lbl">Come si legge</p>
+        <p class="small dim" style="margin:0 0 12px">Ogni cerchio è una struttura: il colore è la fase, la grandezza il numero di proprietari. Le province sono colorate secondo la scelta qui sopra.</p>
+        <p class="lbl">Dove abita il pubblico</p>
+        ${top.length ? `<ol class="mp-bars">${top.map((s) => `<li><button type="button" data-prov="${s}"><span class="t"><b>${esc(PROV[s].nome)}</b>${P[s].strutture ? '' : ' <span class="pill warn">nessuna struttura</span>'}</span><span class="v mono">${n(P[s].clienti)} + ${n(P[s].utenti)}</span>
+          <span class="b"><i style="width:${Math.max(2, pct(P[s].clienti + P[s].utenti, P[top[0]].clienti + P[top[0]].utenti))}%"></i></span></button></li>`).join('')}</ol>
+          <p class="small faint" style="margin:8px 0 0">proprietari nei gestionali + utenti FurrFinder</p>` : '<p class="small dim">Ancora nessun proprietario con la provincia indicata.</p>'}`;
+      return;
+    }
+    if (sel.k === 'c') {
+      const r = byId[sel.id], k = perClinic[sel.id] || { tot: 0, noti: 0, perProv: {}, senza: 0 };
+      const lista = Object.entries(k.perProv).sort((a, b) => b[1] - a[1]);
+      const stessa = r.prov ? (k.perProv[r.prov] || 0) : 0;
+      side.innerHTML = `<button class="mp-x" type="button" data-chiudi aria-label="Chiudi">×</button>
+        <p class="lbl">${esc(PL.KIND[r.s.kind] || 'Struttura')}</p>
+        <h3><a href="${PL.clinicHref(r.id, r.code)}">${esc(r.name)}</a></h3>
+        <p class="small" style="margin:6px 0 12px"><span class="pill ${r.stg[2]}">${esc(r.stg[1])}</span> ${r.s.code ? `<span class="chip">${esc(r.s.code)}</span>` : PL.chip(r.code)}${r.status === 'suspended' ? ' <span class="pill bad">Sospesa</span>' : ''}<br>
+          <span class="dim">${r.prov ? esc(PROV[r.prov].nome) + ' · ' + esc(PROV[r.prov].regione) : 'provincia non nota'}${r.fonte === 'comune' ? ' · posizione approssimativa' : ''}</span></p>
+        <div class="nums mp-nums">${kpi(n(k.tot), 'proprietari')}${kpi(r.prov && k.noti ? pct(stessa, k.noti) + '%' : '—', 'nella sua provincia')}${kpi(n(lista.filter(([s]) => s !== r.prov).length), 'altre province')}</div>
+        ${lista.length ? `<p class="lbl" style="margin-top:14px">Da dove arrivano</p>${barre(lista, k.noti, r.prov)}` : '<p class="small dim" style="margin-top:12px">Nessun proprietario con la provincia indicata.</p>'}
+        ${k.senza ? `<p class="small faint" style="margin:8px 0 0">${n(k.senza)} senza provincia nella scheda</p>` : ''}
+        <div class="actions" style="margin-top:14px"><a class="btn sm" href="${PL.clinicHref(r.id, r.code)}">Apri scheda</a>
+          ${r.lat != null ? `<button class="btn sm ghost" type="button" data-pos="${r.id}">Correggi posizione</button><button class="btn sm ghost" type="button" data-cerca="${r.id}">Cerca indirizzo</button>` : `<button class="btn sm prim" type="button" data-pos="${r.id}">Posiziona sulla mappa</button>`}</div>`;
+      return;
+    }
+    const s = sel.s, p = P[s], pr = PROV[s];
+    const qui = visibili().filter((r) => r.prov === s).sort((a, b) => Number(b.clients) - Number(a.clients));
+    const da = Object.entries(p.da).sort((a, b) => b[1] - a[1]);
+    side.innerHTML = `<button class="mp-x" type="button" data-chiudi aria-label="Chiudi">×</button>
+      <p class="lbl">${esc(pr.regione)}</p><h3>${esc(pr.nome)} <span class="mono dim" style="font-size:15px">${s}</span></h3>
+      <div class="nums mp-nums" style="margin-top:12px">${kpi(n(p.strutture), 'su Vetroom')}${kpi(n(p.clienti), 'proprietari che ci abitano')}${kpi(n(p.utenti), 'utenti FurrFinder')}${cens ? kpi(n(p.censite), 'strutture censite') : ''}</div>
+      ${cens && p.censite ? `<p class="small dim" style="margin:8px 0 0">Copertura: ${pct(p.strutture, p.censite)}% delle strutture censite è su Vetroom.</p>` : ''}
+      <p class="lbl" style="margin-top:14px">Strutture Vetroom qui</p>
+      ${qui.length ? `<ul class="mp-list">${qui.map((r) => `<li><button type="button" data-clinica="${r.id}"><i style="background:${FASE_COL[r.stg[0]]}"></i>${esc(r.name)}<span class="mono dim">${n(r.clients)}</span></button></li>`).join('')}</ul>` : '<p class="small dim">Nessuna.</p>'}
+      ${da.length ? `<p class="lbl" style="margin-top:14px">Chi segue i proprietari che abitano qui</p>
+        <ul class="mp-list">${da.slice(0, 10).map(([id, v]) => { const r = byId[id]; return `<li><button type="button" data-clinica="${id}"><i style="background:${FASE_COL[r.stg[0]]}"></i>${esc(r.name)}${r.prov && r.prov !== s ? ` <span class="pill warn">${esc(r.prov)}</span>` : ''}<span class="mono dim">${n(v)}</span></button></li>`; }).join('')}</ul>` : ''}`;
+  };
+
+  // ================= Indicatori, elenchi, legenda =================
+  const indicatori = () => {
+    const vis = visibili(), loc = vis.filter((r) => r.lat != null).length;
+    const provCop = new Set(vis.map((r) => r.prov).filter(Boolean)), regCop = new Set([...provCop].map((s) => PROV[s].regione));
+    let stessa = 0, noti = 0, fuori = 0;
+    for (const r of vis) { const k = perClinic[r.id]; if (!k || !r.prov) continue; noti += k.noti; stessa += k.perProv[r.prov] || 0; }
+    fuori = noti - stessa;
+    const g = (v, l, hint) => `<div class="gauge" ${hint ? `title="${esc(hint)}"` : ''}><b>${v}</b><span>${l}</span></div>`;
+    $('#gauges').innerHTML = g(`${n(loc)}<small>/${n(vis.length)}</small>`, 'strutture sulla mappa')
+      + g(`${n(provCop.size)}<small>/${SIGLE.length}</small>`, 'province con una struttura')
+      + g(`${n(regCop.size)}<small>/${REGIONI.length}</small>`, 'regioni con una struttura')
+      + g(noti ? pct(stessa, noti) + '%' : '—', 'proprietari nella provincia della struttura', 'Sul totale dei proprietari con la provincia indicata')
+      + g(n(fuori), 'proprietari da altre province')
+      + g(n(utentiNoti) + (utentiTot > utentiNoti ? `<small>/${n(utentiTot)}</small>` : ''), 'utenti FurrFinder con provincia');
+  };
+  const legenda = () => {
+    const vis = visibili();
+    let html = '<span class="mp-lg-g">' + FASI.slice(1).map(([k, l]) => `<span><i class="dot" style="background:${FASE_COL[k]}"></i>${l} <span class="mono faint">${n(vis.filter((r) => r.stg[0] === k && r.lat != null).length)}</span></span>`).join('') + '</span>';
+    if (sel?.k === 'c') html += '<span class="mp-lg-g"><span><i class="sw" style="background:rgba(255,181,71,.75)"></i>province da cui arrivano i suoi proprietari (più scuro = meno)</span></span>';
+    else if (colore !== 'nessuno') {
+      const t = tinta(), label = (COLORI.find((c) => c[0] === colore) || [])[1];
+      html += `<span class="mp-lg-g"><span class="faint">${esc(label)}:</span>${soglie.map((v, i) => `<span><i class="sw" style="background:${hex2rgba(t, alpha(v))}"></i>${n(v)}${soglie[i + 1] ? '–' + n(soglie[i + 1] - 1) : '+'}</span>`).join('')}</span>`;
+    }
+    if (cens) html += '<span class="mp-lg-g"><span><i class="dot sm" style="background:#8b9cba"></i>censita</span><span><i class="dot sm" style="background:#45e0a0"></i>censita, già su Vetroom</span></span>';
+    $('#legend').innerHTML = html;
+  };
+  const buchi = () => {
+    const l = SIGLE.filter((s) => !P[s].strutture && (P[s].clienti + P[s].utenti)).sort((a, b) => (P[b].clienti + P[b].utenti) - (P[a].clienti + P[a].utenti));
+    $('#buchi').innerHTML = l.length ? `<ul class="mp-list mp-holes">${l.slice(0, 10).map((s) => {
+      const top = Object.entries(P[s].da).sort((a, b) => b[1] - a[1])[0];
+      return `<li><button type="button" data-prov="${s}"><b>${esc(PROV[s].nome)}</b><span class="dim small">${n(P[s].clienti)} proprietari · ${n(P[s].utenti)} FurrFinder${top ? ` · seguiti soprattutto da ${esc(byId[top[0]]?.name || '')}` : ''}</span></button></li>`; }).join('')}</ul>${l.length > 10 ? `<p class="small faint">e altre ${n(l.length - 10)} province</p>` : ''}`
+      : '<p class="small dim">Nessuna: dove c\'è pubblico c\'è anche una struttura Vetroom.</p>';
+  };
+  const daLoc = () => {
+    const l = rows.filter((r) => r.lat == null).sort((a, b) => Number(b.clients) - Number(a.clients));
+    const conInd = l.filter((r) => r.indirizzo);
+    $('#locAll').hidden = !conInd.length || !!mappa.__err;
+    $('#locAll').textContent = `Localizza ${conInd.length === 1 ? 'la struttura' : 'tutte (' + n(conInd.length) + ')'}`;
+    $('#daLoc').innerHTML = l.length ? `<ul class="mp-loc">${l.map((r) => `<li data-row="${r.id}"><div><a href="${PL.clinicHref(r.id, r.code)}"><b>${esc(r.name)}</b></a> <span class="pill ${r.stg[2]}">${esc(r.stg[1])}</span>
+        <span class="small ${r.indirizzo ? 'dim' : 'faint'}" style="display:block">${r.indirizzo ? esc(r.indirizzo) : 'Nessun indirizzo nell\'intestazione'}</span></div>
+        <div class="actions">${r.indirizzo ? `<button class="btn sm" type="button" data-cerca="${r.id}">Cerca</button>` : ''}<button class="btn sm ghost" type="button" data-pos="${r.id}">Sulla mappa</button></div></li>`).join('')}</ul>`
+      : '<p class="small dim">Tutte le strutture sono sulla mappa.</p>';
+  };
+  let regTbl = null;
+  const perRegione = () => REGIONI.map((reg) => {
+    const ss = SIGLE.filter((s) => PROV[s].regione === reg);
+    const sum = (k) => ss.reduce((a, s) => a + (P[s][k] || 0), 0);
+    return { reg, prov: ss.length, cop: ss.filter((s) => P[s].strutture).length, strutture: sum('strutture'), clienti: sum('clienti'), utenti: sum('utenti'), censite: sum('censite') };
+  });
+  const regioni = () => {
+    const data = perRegione();
+    if (!regTbl) regTbl = PL.table({ el: $('#reg'), sortKey: 'clienti', sortDir: -1, pageSize: 25, empty: 'Nessun dato.',
+      cols: [
+        { k: 'reg', l: 'Regione', sort: (r) => r.reg, render: (r) => `<strong>${esc(r.reg)}</strong>` },
+        { k: 'strutture', l: 'Strutture', cls: 'num', sort: (r) => r.strutture, render: (r) => n(r.strutture) },
+        { k: 'cop', l: 'Province coperte', cls: 'num', hideM: true, sort: (r) => r.cop / r.prov, render: (r) => `${n(r.cop)}<span class="faint">/${r.prov}</span>` },
+        { k: 'clienti', l: 'Proprietari', cls: 'num', sort: (r) => r.clienti, render: (r) => n(r.clienti) },
+        { k: 'utenti', l: 'FurrFinder', cls: 'num', sort: (r) => r.utenti, render: (r) => n(r.utenti) },
+        { k: 'censite', l: 'Censite', cls: 'num', hideM: true, sort: (r) => r.censite, render: (r) => cens ? n(r.censite) : '<span class="faint">—</span>' }
+      ] });
+    regTbl.set(data);
+  };
+
+  const tutto = () => {
+    P = conta(); soglie = scala();
+    provLayer.setStyle(stile);
+    disegnaPins(); disegnaFlussi(); lato(); indicatori(); legenda(); buchi(); daLoc(); regioni();
+    $('#fColore').innerHTML = COLORI.map(([k, l]) => `<button type="button" data-c="${k}" aria-pressed="${colore === k}">${l}</button>`).join('');
+    $('#fFase').innerHTML = FASI.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${fase === k}">${l}<span class="n">${rows.filter((r) => k === 'all' || r.stg[0] === k).length}</span></button>`).join('');
+    const u = new URL(location.href); u.searchParams.set('colore', colore); u.searchParams.set('fase', fase); history.replaceState(null, '', u);
+  };
+  const scegli = (s) => {
+    sel = s; picking = null; map.getContainer().classList.remove('picking');
+    provLayer.setStyle(stile); disegnaPins(); disegnaFlussi(); lato(); legenda();
+    if (s?.k === 'c') {
+      const r = byId[s.id], k = perClinic[s.id];
+      const pts = r.lat != null ? [[r.lat, r.lon], ...Object.keys(k?.perProv || {}).map((x) => PROV[x].c)] : Object.keys(k?.perProv || {}).map((x) => PROV[x].c);
+      if (pts.length > 1) map.flyToBounds(pts, { padding: [40, 40], maxZoom: 9, duration: 0.6 }); else if (pts.length) map.flyTo(pts[0], Math.max(map.getZoom(), 8), { duration: 0.6 });
+    } else if (s?.k === 'p') {
+      provLayer.eachLayer((l) => { if (l.feature.properties.sigla === s.s) map.flyToBounds(l.getBounds(), { padding: [30, 30], maxZoom: 10, duration: 0.6 }); });
+    }
+    if (s && window.innerWidth < 1000) $('#side').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  // ================= Posizionare le strutture =================
+  let ultimaRichiesta = 0;
+  const geocodifica = async (q) => {
+    const attesa = 1100 - (Date.now() - ultimaRichiesta);   // Nominatim: al massimo una richiesta al secondo
+    if (attesa > 0) await new Promise((r) => setTimeout(r, attesa));
+    ultimaRichiesta = Date.now();
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=it&addressdetails=1&accept-language=it&q=${encodeURIComponent(q)}`);
+    if (!r.ok) throw new Error('Il servizio delle mappe non risponde: riprova tra qualche minuto.');
+    return (await r.json())[0] || null;
+  };
+  const pulisci = (a) => String(a || '').replace(/\(\s*[A-Za-z]{2}\s*\)/g, ' ').replace(/\b(c\/o|presso|int\.?|interno|scala|piano)\b[^,]*/gi, ' ').replace(/\s+/g, ' ').replace(/\s+,/g, ',').trim();
+  const comuneDi = (a) => { const t = pulisci(a); const cap = t.match(/\b\d{5}\s+([^,]+)/); if (cap) return cap[1].trim(); const parts = t.split(',').map((x) => x.trim()).filter(Boolean); return parts.length > 1 ? parts[parts.length - 1] : ''; };
+  const salva = async (r, lat, lon, fonte, indirizzo, luogo) => {
+    await PL.rpc('platform_mappa_posiziona', { p_clinic: r.id, p_lat: lat, p_lon: lon, p_fonte: fonte, p_indirizzo: indirizzo || null, p_luogo: luogo || null });
+    Object.assign(r, { lat, lon, fonte, luogo: luogo || '' });
+    r.prov = lat != null ? provAt(lat, lon) : provDaIndirizzo(r.indirizzo);
+  };
+  const localizza = async (r, q) => {
+    const indirizzo = q || r.indirizzo;
+    let hit = await geocodifica(pulisci(indirizzo)), fonte = 'indirizzo';
+    if (!hit && comuneDi(indirizzo)) { hit = await geocodifica(comuneDi(indirizzo)); fonte = 'comune'; }
+    if (!hit) return false;
+    const a = hit.address || {}, luogo = a.city || a.town || a.village || a.municipality || '';
+    await salva(r, Number(hit.lat), Number(hit.lon), fonte, indirizzo, luogo);
+    return true;
+  };
+
+  // ================= Comandi =================
+  $('#fColore').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-c]'); if (!b) return;
+    colore = b.dataset.c;
+    if (colore === 'censite' && !cens) { await caricaCens(); $('#oCens').checked = true; censLayer.addTo(map); }
+    if (sel?.k === 'c') sel = null;
+    tutto();
+  });
+  $('#fFase').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { fase = b.dataset.f; if (sel?.k === 'c' && byId[sel.id].stg[0] !== fase && fase !== 'all') sel = null; tutto(); } });
+  $('#oStrade').addEventListener('change', (e) => { if (e.target.checked) tiles.addTo(map); else map.removeLayer(tiles); });
+  const caricaCens = async () => {
+    if (cens) return;
+    $('#oCens').disabled = true;
+    try {
+      const all = await PL.rpc('osm_elenco');
+      cens = (all || []).filter((r) => r.attivo && r.revisione !== 'escluso' && r.lat != null && r.lon != null);
+      censProv = {};
+      for (const c of cens) { const s = provAt(Number(c.lat), Number(c.lon)); if (s) censProv[s] = (censProv[s] || 0) + 1; }
+      disegnaCens();
+    } catch (err) { PL.toast(err.message, 'bad'); $('#oCens').checked = false; }
+    finally { $('#oCens').disabled = false; }
+  };
+  $('#oCens').addEventListener('change', async (e) => {
+    if (e.target.checked) { await caricaCens(); if (cens) { censLayer.addTo(map); tutto(); } }
+    else { map.removeLayer(censLayer); if (colore === 'censite') colore = 'clienti'; legenda(); tutto(); }
+  });
+  map.on('click', async (e) => {
+    if (!picking) { if (sel) scegli(null); return; }
+    const r = picking, s = provAt(e.latlng.lat, e.latlng.lng);
+    const v = await PL.ask({ title: `Mettere qui ${r.name}?`, html: `Il punto è in provincia di <b>${esc(s ? PROV[s].nome : 'non riconosciuta')}</b>.`, ok: 'Salva la posizione' });
+    if (!v) return;
+    try { await salva(r, Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6)), 'manuale', r.indirizzo, s ? PROV[s].nome : ''); PL.toast('Posizione salvata.'); picking = null; map.getContainer().classList.remove('picking'); scegli({ k: 'c', id: r.id }); tutto(); }
+    catch (err) { PL.toast(err.message, 'bad'); }
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && picking) { picking = null; map.getContainer().classList.remove('picking'); lato(); } });
+
+  document.addEventListener('click', async (e) => {
+    const t = e.target;
+    const pv = t.closest('[data-prov]'); if (pv) { scegli({ k: 'p', s: pv.dataset.prov }); return; }
+    const cl = t.closest('[data-clinica]'); if (cl) { scegli({ k: 'c', id: cl.dataset.clinica }); return; }
+    if (t.closest('[data-chiudi]')) { scegli(null); return; }
+    if (t.closest('[data-annulla]')) { picking = null; map.getContainer().classList.remove('picking'); lato(); return; }
+    const pos = t.closest('[data-pos]');
+    if (pos) {
+      picking = byId[pos.dataset.pos]; map.getContainer().classList.add('picking'); lato();
+      const r = picking;
+      if (r.lat != null) map.flyTo([r.lat, r.lon], 16, { duration: 0.6 });
+      else if (r.prov) provLayer.eachLayer((l) => { if (l.feature.properties.sigla === r.prov) map.flyToBounds(l.getBounds(), { duration: 0.6 }); });
+      if (!$('#oStrade').checked) { $('#oStrade').checked = true; tiles.addTo(map); }
+      map.getContainer().scrollIntoView({ behavior: 'smooth', block: 'center' });
+      PL.toast('Tocca il punto esatto della struttura sulla mappa.', 'ok');
+      return;
+    }
+    const ce = t.closest('[data-cerca]');
+    if (ce) {
+      const r = byId[ce.dataset.cerca];
+      const v = await PL.ask({ title: `Dov'è ${r.name}?`, html: 'Scrivi via, numero civico e comune. Se non lo trovo, la posizione si può mettere a mano con «Sulla mappa».',
+        fields: [{ name: 'q', label: 'Indirizzo', value: r.indirizzo || '', placeholder: 'Via Roma 10, 00184 Roma', required: true }], ok: 'Cerca e salva' });
+      if (!v) return;
+      try {
+        const ok = await PL.run(ce, () => localizza(r, v.q.trim()), () => '');
+        if (ok) { PL.toast(r.fonte === 'comune' ? 'Trovato solo il comune: la posizione è approssimativa.' : 'Posizione salvata.', r.fonte === 'comune' ? 'bad' : 'ok'); tutto(); }
+        else if (ok === false) PL.toast('Indirizzo non trovato: usa «Sulla mappa».', 'bad');
+      } catch (err) { PL.toast(err.message, 'bad'); }
+    }
+  });
+  $('#locAll').addEventListener('click', async (e) => {
+    const b = e.target, l = rows.filter((r) => r.lat == null && r.indirizzo);
+    b.disabled = true; let ok = 0, ko = 0, appross = 0;
+    for (const [i, r] of l.entries()) {
+      b.textContent = `Localizzo ${i + 1} di ${l.length}…`;
+      try { if (await localizza(r)) { ok++; if (r.fonte === 'comune') appross++; } else ko++; }
+      catch (err) { PL.toast(err.message, 'bad'); break; }
+    }
+    b.disabled = false; tutto();
+    PL.toast(`${n(ok)} sulla mappa${appross ? ` (${n(appross)} solo con il comune)` : ''}${ko ? `, ${n(ko)} non trovate: mettile a mano` : ''}.`, ko ? 'bad' : 'ok');
+  });
+  $('#csv').addEventListener('click', () => PL.csv(`vetroom-mappa-province-${new Date().toISOString().slice(0, 10)}.csv`,
+    SIGLE.map((s) => ({ s, ...P[s] })).sort((a, b) => PROV[a.s].regione.localeCompare(PROV[b.s].regione, 'it') || PROV[a.s].nome.localeCompare(PROV[b.s].nome, 'it')), [
+      ['Sigla', (r) => r.s], ['Provincia', (r) => PROV[r.s].nome], ['Regione', (r) => PROV[r.s].regione],
+      ['Strutture Vetroom', (r) => r.strutture], ['Proprietari nei gestionali (residenti)', (r) => r.clienti], ['Utenti FurrFinder', (r) => r.utenti],
+      ['Strutture censite', (r) => (cens ? r.censite : '')], ['Strutture che seguono i residenti', (r) => Object.keys(r.da).map((id) => byId[id]?.name).filter(Boolean).join(', ')]]));
+
+  if (colore === 'censite') { $('#oCens').checked = true; await caricaCens(); censLayer.addTo(map); }
+  tutto();
+  setTimeout(() => map.invalidateSize(), 60);
+})();
+</script>
+</body>
+</html>

@@ -25,6 +25,7 @@
     sala: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
     collaudo: '<svg viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
     smarriti: '<svg viewBox="0 0 24 24"><circle cx="7" cy="9" r="1.8"/><circle cx="11" cy="6" r="1.8"/><circle cx="15.5" cy="6.5" r="1.8"/><path d="M9.5 12.5c-2.5 1.5-3.5 4-2 5.5s3.5-.2 5-.2 3 1.7 4.5.4.4-4.2-2-5.7-3-1.5-5.5 0z"/><path d="M17.5 13l3 3M20.5 13l-3 3"/></svg>',
+    mappa: '<svg viewBox="0 0 24 24"><path d="M3.5 6.5l5.5-2 6 2 5.5-2v13l-5.5 2-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/></svg>',
     cestino: '<svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
     cerca: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg>',
     menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>'
@@ -35,6 +36,7 @@
     { g: 'Comando', items: [
       { k: 'ponte', l: 'Ponte di comando', h: './' },
       { k: 'cliniche', l: 'Strutture', h: 'cliniche.html' },
+      { k: 'mappa', l: 'Mappa', h: 'mappa.html' },
       { k: 'censimento', l: 'Censimento OSM', h: 'censimento.html' },
       { k: 'rivendicazioni', l: 'Rivendicazioni', h: 'rivendicazioni.html', badge: 'claims' },
       { k: 'utenti', l: 'Utenti', h: 'utenti.html' },
@@ -83,8 +85,21 @@
 
   // ---------- Chiamate al database ----------
   PL.missing = (e) => e && (e.code === 'PGRST202' || /Could not find the function|does not exist/i.test(e.message || ''));
+  // ---------- Cronometro: quanto ci mette ogni parte della pagina ----------
+  const T = PL.timing = { calls: [], pending: 0, session: null, ready: null };
+  let idleTimer = null;
+  const checkIdle = () => {
+    clearTimeout(idleTimer);
+    if (T.ready !== null || !T.booted || T.pending) return;
+    const at = performance.now();
+    idleTimer = setTimeout(() => { if (!T.pending && T.ready === null) T.ready = at; }, 500);
+  };
   PL.rpc = async (name, args) => {
-    const { data, error } = await VR.sb.rpc(name, args || {});
+    const t0 = performance.now(); T.pending++;
+    let res;
+    try { res = await VR.sb.rpc(name, args || {}); }
+    finally { T.pending--; T.calls.push({ name, start: t0, ms: performance.now() - t0 }); checkIdle(); }
+    const { data, error } = res;
     if (error) {
       if (PL.missing(error)) {
         const err = new Error(`Manca una funzione del database (${name}): esegui l'ultima patch SQL su Supabase.`);
@@ -260,6 +275,8 @@
       'clinica.sospesa': `ha sospeso la clinica ${esc(a.label || '')}`,
       'clinica.riattivata': `ha riattivato la clinica ${esc(a.label || '')}`,
       'clinica.rinominata': `ha rinominato la clinica in ${esc(a.label || '')}`,
+      'clinica.cestino': `ha eliminato la clinica ${esc(a.label || '')} (nel cestino per 30 giorni)`,
+      'clinica.eliminata': `ha eliminato definitivamente la clinica ${esc(a.label || '')}`,
       'team.entrato': a.actor_id && a.actor_id === a.target_id ? `ha accettato l'invito nel team come ${role(m.ruolo)}` : `ha inserito nel team ${T} come ${role(m.ruolo)}`,
       'team.uscito': a.actor_id && a.actor_id === a.target_id ? 'ha lasciato il team' : `ha tolto dal team ${T}`,
       'team.modificato': `ha cambiato ruolo o stato di ${T}`,
@@ -313,7 +330,7 @@
     const ctx = [a.clinic_name ? `<a href="${PL.clinicHref(a.clinic_id)}">${esc(a.clinic_name)}</a>` : '',
       a.target_kind === 'user' && a.target_id && !/^account\./.test(a.action) ? `<a href="${PL.userHref(a.target_id, a.target_code)}">scheda di ${esc(a.target_name || 'utente')}</a>` : '',
       a.actor_kind === 'admin' ? 'azione amministratore' : ''].filter(Boolean).join(' · ');
-    const tone = /eliminato|sospes/.test(a.action) ? 'k-bad' : /cestino|cancelled|no_show/.test(a.action) ? 'k-warn' : 'k-' + (selfAct ? 'user' : a.actor_kind);
+    const tone = /eliminat[oa]|sospes/.test(a.action) ? 'k-bad' : /cestino|cancelled|no_show/.test(a.action) ? 'k-warn' : 'k-' + (selfAct ? 'user' : a.actor_kind);
     return { html: `${whoHtml} ${what}${ctx ? `<span class="ctx">${ctx}</span>` : ''}`, tone };
   };
   PL.renderLog = (el, rows, { wide = false, fresh = new Set() } = {}) => {
@@ -438,7 +455,13 @@
   PL.refreshSignals = async () => {
     const db = $('#plDb');
     const t0 = performance.now();
-    const alerts = await PL.try('platform_alerts', {}, null);
+    // Le quattro richieste partono insieme (prima andavano una dopo l'altra)
+    const [alerts, claimsN, lostN, hc] = await Promise.all([
+      PL.try('platform_alerts', {}, null),
+      PL.try('osm_rivendicazioni_conta', {}, 0),
+      PL.try('smarriti_admin_conta', {}, 0),
+      PL.try('platform_health_history', { p_limit: 1 }, null)
+    ]);
     if (db) {
       db.className = 'pl-light hide-m ' + (alerts ? 'ok' : 'bad');
       db.title = alerts ? `Database collegato (${Math.round(performance.now() - t0)} ms)` : 'Database non raggiungibile';
@@ -449,16 +472,15 @@
     set('errors', by.errors?.n || 0, by.errors?.level === 'bad');
     set('trash', by.trash?.n || 0);
     // Richieste di rivendicazione delle strutture da decidere (patch SQL v5 del censimento)
-    const claims = Number(await PL.try('osm_rivendicazioni_conta', {}, 0)) || 0;
+    const claims = Number(claimsN) || 0;
     set('claims', claims, claims > 0);
 
     // Avvisi di animali smarriti segnalati dal pubblico (patch 38)
-    const lost = Number(await PL.try('smarriti_admin_conta', {}, 0)) || 0;
+    const lost = Number(lostN) || 0;
     set('lost', lost, lost > 0);
 
     const m = $('#plMaint'); if (m) { m.hidden = !by.maintenance; m.className = 'pl-light hide-m bad'; }
     // Spia del Collaudo: problemi dell'ultimo controllo (rossa se ce ne sono di gravi)
-    const hc = await PL.try('platform_health_history', { p_limit: 1 }, null);
     const last = hc && hc[0] && hc[0].summary;
     if (last) set('health', Number(last.bad) + Number(last.err) + Number(last.warn), Number(last.bad) + Number(last.err) > 0);
     PL.alerts = (alerts || []).slice();
@@ -475,12 +497,37 @@
     return PL.alerts;
   };
 
+  // Finestra "Tempi di questa pagina" (clic sulla spia Database)
+  PL.showTiming = async () => {
+    const nav = performance.getEntriesByType('navigation')[0] || {};
+    const ms = (x) => (x == null ? '—' : Math.round(x).toLocaleString('it-IT') + ' ms');
+    const first = new Map();   // per ogni funzione: la prima chiamata (quella del caricamento)
+    T.calls.forEach((c) => { if (!first.has(c.name)) first.set(c.name, c); });
+    const calls = [...first.values()].sort((a, b) => b.ms - a.ms);
+    const lines = [
+      `TEMPI PLANCIA · ${location.pathname.split('/').pop() || 'index.html'} · ${new Date().toLocaleString('it-IT')} · versione ${VR.VERSION}`,
+      `Pagina pronta dopo: ${ms(T.ready)}`,
+      `Risposta del sito (Aruba): ${ms(nav.responseStart)}`,
+      `Pagina e file scaricati: ${ms(nav.domContentLoadedEventEnd)}`,
+      `Controllo dell'accesso: ${ms(T.session)}`,
+      'Funzioni del database (dalla più lenta):',
+      ...calls.map((c) => `  ${c.name}: ${ms(c.ms)} (partita a ${ms(c.start)})`)
+    ];
+    const r = await PL.ask({ title: 'Tempi di questa pagina',
+      html: `<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;margin:0">${esc(lines.join('\n'))}</pre>
+        <p class="small" style="margin-top:8px">Il conto parte da quando hai aperto la pagina. Copialo e mandalo a chi ti aiuta con Vetroom.</p>`,
+      ok: 'Copia' });
+    if (r) { try { await navigator.clipboard.writeText(lines.join('\n')); PL.toast('Tempi copiati.'); } catch { PL.toast('Selezionali e copiali a mano.', 'bad'); } }
+  };
+
   // Avvio: controlla sessione e permessi, costruisce la plancia
   PL.boot = async () => {
     const active = document.body.dataset.station || '';
     const main = $('main');
     let session;
+    const s0 = performance.now();
     try { session = await VR.requireSession(); } catch { return new Promise(() => {}); }
+    T.session = performance.now() - s0;
     let ok = false;
     try { ok = !!(await PL.rpc('is_platform_admin')); } catch { ok = false; }
     if (!ok) {
@@ -492,6 +539,9 @@
     sessionStorage.setItem('vetroom_is_platform', '1');
     buildShell(active, session.user.email || '');
     PL.session = session;
+    T.booted = true; setTimeout(checkIdle, 0);
+    $('#plDb').style.cursor = 'pointer';
+    $('#plDb').addEventListener('click', PL.showTiming);
     PL.refreshSignals();
     setInterval(() => { if (document.visibilityState === 'visible') PL.refreshSignals(); }, 60000);
     return session;

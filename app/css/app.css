@@ -1459,3 +1459,16 @@ html[lang="en"] .tw-day.is-today .tw-day-h > span::after { content: " · today";
 .lost-banner.found b { color: #166534; } .lost-banner.found span { color: #14532d; }
 .lost-cta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .lost-cta p { margin: 0; flex: 1 1 260px; font-size: 14px; color: var(--muted); }
+
+/* ---------- Cliniche vicine (patch 40) ---------- */
+.near-search { margin-top: 6px; }
+.near-search input { text-transform: none; letter-spacing: 0; flex: 1 1 220px; min-width: 0; }
+.near-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 8px; vertical-align: middle; background: #64748b; }
+.near-dot.vr { background: #0f766e; } .near-dot.me { background: #2563eb; }
+.near-item .member-main > span { display: block; }
+.near-item .member-main .pill { display: inline-block; }
+.near-item .member-main .pill { margin-top: 4px; }
+.near-item .member-ctl { display: flex; flex-wrap: wrap; gap: 6px; }
+.near-pop { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.near-pop .btn { font-size: 12px; }
+#nearMap { height: 340px; }

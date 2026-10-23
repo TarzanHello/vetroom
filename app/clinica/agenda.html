@@ -12,13 +12,21 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-11d">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-20b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-11d"></script>
-  <script src="../js/app.js?v=2026-10-11d"></script>
-  <script src="../js/i18n.js?v=2026-10-11d"></script>
-  <script src="../js/layout.js?v=2026-10-11d"></script>
-  <script src="../js/clinica.js?v=2026-10-11d"></script>
+  <script src="../js/config.js?v=2026-10-20b"></script>
+  <script src="../js/app.js?v=2026-10-20b"></script>
+  <script src="../js/i18n.js?v=2026-10-20b"></script>
+  <script src="../js/layout.js?v=2026-10-20b"></script>
+  <script src="../js/clinica.js?v=2026-10-20b"></script>
+  <script src="../js/chiusure.js?v=2026-10-20b"></script>
+  <style>
+    /* Ore chiuse (patch 39) */
+    .cal-shut { position: absolute; left: 0; right: 0; z-index: 0; overflow: hidden; cursor: pointer;
+      background: repeating-linear-gradient(135deg, #E3E8ED 0 6px, #EEF1F4 6px 12px); border-top: 2px solid #C5CED8; border-bottom: 2px solid #C5CED8; }
+    .cal-shut span { display: block; padding: .2rem .4rem; font-size: .75rem; font-weight: 600; color: #5A6B7D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cal-shut:hover { border-color: var(--teal); }
+  </style>
 </head>
 <body data-shell="clinic" data-nav="agenda">
 
@@ -40,6 +48,7 @@
         <select id="vetFilter" aria-label="Veterinario" hidden style="width:auto"></select>
         <a class="btn btn-ghost btn-small" href="orari.html">Orari</a>
         <a class="btn btn-ghost btn-small" href="turni.html" data-team-only hidden>Turni</a>
+        <button class="btn btn-ghost btn-small" id="closeHours" type="button" hidden>Chiudi ore</button>
         <button class="btn btn-primary btn-small" id="add" type="button">Nuovo appuntamento</button>
       </div>
     </div>
@@ -119,6 +128,7 @@
         <a class="btn btn-ghost" id="apWa" href="#" target="_blank" rel="noopener" hidden>WhatsApp</a>
         <a class="btn btn-ghost" id="apVisit" href="#" hidden><img class="vr-action-icon" src="../img/icons/add_visit.png" alt="">Inizia visita</a>
         <button class="btn btn-ghost" type="button" id="apCancel">Chiudi</button>
+        <button class="btn btn-ghost" type="button" id="apShut" hidden title="Segna queste ore come chiuse invece di fissare un appuntamento">Chiudi queste ore</button>
         <span class="spacer"></span>
         <button class="btn btn-danger" type="button" id="apDelete" hidden>Elimina</button>
       </div>
@@ -151,6 +161,7 @@
 
     // ---------- Stato ----------
     let hours = [], appts = [], clientsCache = null;
+    let closures = [];   // chiusure di singole ore o giorni (patch 39)
     let anchor = new Date();
     const isNarrow = () => window.matchMedia('(max-width: 820px)').matches;
 
@@ -237,6 +248,10 @@
         .order('starts_at');
       if (error) { VR.say(msg, VR.errorText(error), 'error'); return; }
       appts = data || [];
+      const cr = await VR.chiusure.load(ctx.clinicId, start, end);
+      closures = cr.rows;
+      VR.$('#closeHours').hidden = !cr.ok;
+      VR.$('#apShut')._ok = cr.ok;
       render();
       loadRequests();
     };
@@ -262,6 +277,13 @@
       if (ap) { anchor = new Date(ap.starts_at); load().then(() => openDialog(ap)); }
     });
 
+    // Fasce aperte di un giorno, senza le ore chiuse
+    const openOf = (d) => {
+      const h = hours.find((x) => x.weekday === d.getDay());
+      const base = h ? [[toMin(h.start_time), toMin(h.end_time)], [toMin(h.start_time2), toMin(h.end_time2)]].filter((r) => r[0] != null && r[1] != null) : [];
+      return VR.chiusure.subtract(base, VR.chiusure.dayRanges(closures, d));
+    };
+
     // ---------- Vista mensile ----------
     const renderMonth = () => {
       const { start, month } = period();
@@ -272,10 +294,10 @@
       for (let i = 0; i < 42; i++) {
         const d = addDays(start, i);
         const h = hours.find((x) => x.weekday === d.getDay());
-        const openMin = h ? (toMin(h.end_time) - toMin(h.start_time)) + ((h.start_time2 && h.end_time2) ? toMin(h.end_time2) - toMin(h.start_time2) : 0) : 0;
+        const openMin = openOf(d).reduce((m, [s, e]) => m + (e - s), 0);
         const list = appts.filter((a) => ymd(new Date(a.starts_at)) === ymd(d) && !inactive(a) && passFilter(a));
         const busy = list.reduce((m, a) => m + a.duration_min, 0);
-        const lvl = !h ? 'closed' : busy === 0 ? 'free' : busy / openMin < 0.5 ? 'low' : busy / openMin < 0.85 ? 'mid' : 'full';
+        const lvl = !h || openMin <= 0 ? 'closed' : busy === 0 ? 'free' : busy / openMin < 0.5 ? 'low' : busy / openMin < 0.85 ? 'mid' : 'full';
         const req = list.filter((a) => a.status === 'requested').length;
         cells.push(`
           <button type="button" class="mcell ${d.getMonth() !== month ? 'is-out' : ''} ${ymd(d) === todayStr ? 'is-today' : ''} load-${lvl}" data-date="${ymd(d)}">
@@ -356,10 +378,6 @@
 
       // Colonne: un giorno ciascuna, oppure (vista Giorno con più veterinari) un veterinario ciascuna
       const cols = [];
-      const openOf = (d) => {
-        const h = hours.find((x) => x.weekday === d.getDay());
-        return h ? [[toMin(h.start_time), toMin(h.end_time)], [toMin(h.start_time2), toMin(h.end_time2)]].filter((r) => r[0] != null && r[1] != null) : [];
-      };
       if (days === 1 && multiVet) {
         const dayAppts = appts.filter((a) => ymd(new Date(a.starts_at)) === ymd(start));
         vets.forEach((v) => cols.push({ d: start, vet: v.id, head: `<strong class="cal-vet-name"><span class="vn-full">${VR.esc(v.name)}</span><span class="vn-short">${VR.esc(v.short)}</span></strong>`, appts: dayAppts.filter((a) => a.assigned_to === v.id) }));
@@ -392,6 +410,7 @@
             return `
             <div class="cal-col ${open.length ? '' : 'is-closed'} ${c.unassigned ? 'is-unassigned' : ''}" data-date="${ymd(c.d)}" ${c.vet !== null ? `data-vet="${c.vet}"` : ''}>
               ${open.map(([s, e]) => `<div class="cal-open" style="top:${(s - from) * PX_PER_MIN}px;height:${(e - s) * PX_PER_MIN}px"></div>`).join('')}
+              ${VR.chiusure.dayRanges(closures, c.d).map(([s, e, r]) => { s = Math.max(s, from); e = Math.min(e, to); return e > s ? `<div class="cal-shut" data-closure="${r.id}" style="top:${(s - from) * PX_PER_MIN}px;height:${(e - s) * PX_PER_MIN}px" title="${VR.esc(VR.chiusure.label(r) + (r.note ? ' · ' + r.note : '') + ' · clicca per riaprire')}"><span>Chiuso${r.note ? ' · ' + VR.esc(r.note) : ''}</span></div>` : ''; }).join('')}
               ${ymd(c.d) === todayStr ? '<div class="cal-now" aria-hidden="true"></div>' : ''}
               ${off.map((it) => apptHtml(it, from, showVet)).join('')}
               ${active.map((it) => apptHtml(it, from, showVet)).join('')}
@@ -436,6 +455,13 @@
       if (mc) { anchor = new Date(mc.dataset.date + 'T12:00:00'); setView('day'); load(); return; }
       const b = ev.target.closest('.cal-appt');
       if (b) { const a = appts.find((x) => x.id === b.dataset.id); if (a) openDialog(a); return; }
+      const sh = ev.target.closest('.cal-shut');
+      if (sh) {
+        const r = closures.find((x) => x.id === sh.dataset.closure); if (!r) return;
+        if (!confirm(`Riaprire ${VR.chiusure.label(r)}${r.note ? ' (' + r.note + ')' : ''}?\nLe ore tornano disponibili in agenda e su FurrFinder.`)) return;
+        VR.chiusure.remove(r.id).then(() => { showToast('Ore riaperte.', 4000); load(); }).catch((e) => VR.say(msg, VR.errorText(e), 'error'));
+        return;
+      }
       const col = ev.target.closest('.cal-col');
       if (!col) return;
       const rect = col.getBoundingClientRect();
@@ -704,6 +730,7 @@
       setChosen(a && a.pets ? { petId: a.pets.id, clientId: a.client_id, label: `${a.pets.name}${a.clients ? ' – ' + VR.clientName(a.clients) : ''}`, phone: a.clients?.phone, petName: a.pets.name, address: VR.addressLine(a.clients) } : (preset.pet || null));
       if (hasHome) setPlace(atHome);
       (a ? VR.show : VR.hide)(VR.$('#apDelete'));
+      VR.$('#apShut').hidden = !!a || !VR.$('#apShut')._ok;
       const canVisit = a && a.pets && ctx.isVet && !inactive(a);
       (canVisit ? VR.show : VR.hide)(VR.$('#apVisit'));
       const canWa = a && a.clients?.phone && !['cancelled', 'no_show', 'done'].includes(a.status);
@@ -718,6 +745,19 @@
       try { await navigator.clipboard.writeText(VR.$('#refCode').textContent); ev.target.textContent = 'Copiato!'; setTimeout(() => { ev.target.textContent = 'Copia'; }, 1500); } catch { /* niente */ }
     });
     VR.$('#add').addEventListener('click', () => openDialog(null));
+
+    // ---------- Chiudi delle ore (patch 39) ----------
+    const plusMin = (t, n) => { const m = Math.min(toMin(t) + n, 23 * 60 + 55); return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; };
+    const askClose = async (o) => { if (await VR.chiusure.open({ clinicId: ctx.clinicId, ...o })) { showToast('Ore chiuse: in agenda sono in grigio, clicca per riaprirle.', 6000); load(); } };
+    VR.$('#closeHours').addEventListener('click', () => {
+      const d = effectiveView() === 'day' ? ymd(anchor) : ymd(new Date());
+      askClose({ date: d });
+    });
+    VR.$('#apShut').addEventListener('click', () => {
+      const date = VR.$('#apDate').value, from = VR.$('#apTime').value;
+      dlg.close();
+      askClose({ date, from: from || '09:00', to: from ? plusMin(from, Number(VR.$('#apDur').value) || 60) : '10:00' });
+    });
     VR.$('#apCancel').addEventListener('click', () => dlg.close());
 
     VR.$('#apForm').addEventListener('submit', async (ev) => {

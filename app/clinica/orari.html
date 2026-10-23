@@ -12,20 +12,38 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vetroom">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="../css/app.css?v=2026-10-11d">
+  <link rel="stylesheet" href="../css/app.css?v=2026-10-20b">
   <script src="../vendor/supabase-2.117.2.js"></script>
-  <script src="../js/config.js?v=2026-10-11d"></script>
-  <script src="../js/app.js?v=2026-10-11d"></script>
-  <script src="../js/i18n.js?v=2026-10-11d"></script>
-  <script src="../js/layout.js?v=2026-10-11d"></script>
-  <script src="../js/clinica.js?v=2026-10-11d"></script>
+  <script src="../js/config.js?v=2026-10-20b"></script>
+  <script src="../js/app.js?v=2026-10-20b"></script>
+  <script src="../js/i18n.js?v=2026-10-20b"></script>
+  <script src="../js/layout.js?v=2026-10-20b"></script>
+  <script src="../js/clinica.js?v=2026-10-20b"></script>
+  <script src="../js/chiusure.js?v=2026-10-20b"></script>
+  <style>
+    /* Mattina e pomeriggio attivabili uno per uno (20 ott 2026) */
+    .hours-row .half { display: flex; flex-direction: column; gap: .3rem; }
+    .hours-row .half .check { min-height: 28px; font-size: .92rem; }
+    .hours-row .half .check input { width: 18px; height: 18px; }
+    .hours-row .half.off .range { opacity: .35; }
+    .hours-row.closed .half { opacity: .35; }
+    .hours-row.closed .half .range { opacity: 1; }
+    .cl-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .cl-head h2 { margin: 0; }
+    .cl-list { list-style: none; margin: 1rem 0 0; padding: 0; }
+    .cl-list li { display: flex; align-items: center; gap: .75rem; padding: .6rem 0; border-top: 1px solid var(--line); }
+    .cl-list li > span { flex: 1; min-width: 0; }
+    .cl-list b { color: var(--navy); }
+    .cl-list small { display: block; color: var(--muted); }
+    @media (max-width: 720px) { .hours-row.closed .half { display: none; } }
+  </style>
 </head>
 <body data-shell="clinic" data-nav="agenda">
 
   <main class="wrap">
     <a class="back" href="agenda.html">← Torna all'agenda</a>
     <h1 id="title">Orari di apertura</h1>
-    <p class="muted" id="intro">Servono all'agenda per mostrare le fasce aperte e ai proprietari per chiedere un appuntamento negli orari liberi.</p>
+    <p class="muted" id="intro">Servono all'agenda per mostrare le fasce aperte e ai proprietari per chiedere un appuntamento negli orari liberi. Puoi togliere la mattina o il pomeriggio di un singolo giorno.</p>
 
     <p class="loader" id="loading">Caricamento…</p>
     <div id="msg" hidden></div>
@@ -47,6 +65,16 @@
       <div class="actions-bar"><button class="btn btn-primary" type="submit" id="save">Salva orari</button></div>
       <div id="msg2" hidden></div>
     </form>
+
+    <section class="panel" id="chiusure" hidden style="margin-top:1.5rem">
+      <div class="cl-head">
+        <h2>Chiusure di singole ore o giorni</h2>
+        <button class="btn btn-ghost btn-small" type="button" id="clAdd">Chiudi delle ore</button>
+      </div>
+      <p class="muted" style="margin:.5rem 0 0">Per chiudere solo qualche ora di un giorno preciso (una riunione, un impegno) o giorni interi (ferie). In agenda quelle ore appaiono chiuse e i proprietari non possono chiedere appuntamenti.</p>
+      <div id="clMsgList" hidden></div>
+      <ul class="cl-list" id="clList"></ul>
+    </section>
   </main>
 
   <script>
@@ -60,7 +88,7 @@
 
     if (ctx.homeOnly) {
       VR.$('#title').textContent = 'Orari delle visite';
-      VR.$('#intro').textContent = 'Le fasce in cui fai visite a domicilio. Le vedi in agenda e i tuoi clienti su FurrFinder possono chiedere una visita negli orari liberi.';
+      VR.$('#intro').textContent = 'Le fasce in cui fai visite a domicilio. Le vedi in agenda e i tuoi clienti su FurrFinder possono chiedere una visita negli orari liberi. Puoi togliere la mattina o il pomeriggio di un singolo giorno.';
       document.title = 'Orari delle visite – Vetroom';
     }
     const DAYS = [[1,'Lunedì'],[2,'Martedì'],[3,'Mercoledì'],[4,'Giovedì'],[5,'Venerdì'],[6,'Sabato'],[0,'Domenica']];
@@ -71,18 +99,32 @@
     const t = (v) => (v || '').slice(0, 5);
     const isNew = !data || data.length === 0;
 
+    // Una fascia sola salvata dopo le 13 è un "solo pomeriggio"
+    const AFTERNOON_FROM = '13:00';
     VR.$('#rows').innerHTML = `
-      <div class="hours-head"><span>Giorno</span><span>Mattina / orario unico</span><span>Pomeriggio (facoltativo)</span></div>` +
+      <div class="hours-head"><span>Giorno</span><span>Mattina (o orario continuato)</span><span>Pomeriggio</span></div>` +
       DAYS.map(([wd, label]) => {
         const r = byDay[wd];
         const open = r ? true : (isNew && wd >= 1 && wd <= 5);
-        const s1 = r ? t(r.start_time) : '09:00', e1 = r ? t(r.end_time) : '13:00';
-        const s2 = r ? t(r.start_time2) : (isNew ? '15:00' : ''), e2 = r ? t(r.end_time2) : (isNew ? '19:00' : '');
+        let mOn = true, pOn = true, s1 = '09:00', e1 = '13:00', s2 = '15:00', e2 = '19:00';
+        if (r && r.start_time2 && r.end_time2) {
+          s1 = t(r.start_time); e1 = t(r.end_time); s2 = t(r.start_time2); e2 = t(r.end_time2);
+        } else if (r && t(r.start_time) >= AFTERNOON_FROM) {
+          mOn = false; s2 = t(r.start_time); e2 = t(r.end_time);
+        } else if (r) {
+          pOn = false; s1 = t(r.start_time); e1 = t(r.end_time);
+        }
         return `
         <div class="hours-row" data-wd="${wd}">
           <label class="check"><input type="checkbox" class="open" ${open ? 'checked' : ''}> ${label}</label>
-          <div class="range"><input type="time" class="s1" value="${s1}" step="300" aria-label="${label} apertura"><span>–</span><input type="time" class="e1" value="${e1}" step="300" aria-label="${label} chiusura"></div>
-          <div class="range"><input type="time" class="s2" value="${s2}" step="300" aria-label="${label} riapertura"><span>–</span><input type="time" class="e2" value="${e2}" step="300" aria-label="${label} chiusura pomeriggio"></div>
+          <div class="half m ${mOn ? '' : 'off'}">
+            <label class="check"><input type="checkbox" class="mOn" ${mOn ? 'checked' : ''}> Mattina</label>
+            <div class="range"><input type="time" class="s1" value="${s1}" step="300" aria-label="${label} mattina dalle"><span>–</span><input type="time" class="e1" value="${e1}" step="300" aria-label="${label} mattina alle"></div>
+          </div>
+          <div class="half p ${pOn ? '' : 'off'}">
+            <label class="check"><input type="checkbox" class="pOn" ${pOn ? 'checked' : ''}> Pomeriggio</label>
+            <div class="range"><input type="time" class="s2" value="${s2}" step="300" aria-label="${label} pomeriggio dalle"><span>–</span><input type="time" class="e2" value="${e2}" step="300" aria-label="${label} pomeriggio alle"></div>
+          </div>
         </div>`;
       }).join('');
     const anySlot = (data || [])[0]?.slot_minutes;
@@ -90,10 +132,27 @@
 
     const sync = () => document.querySelectorAll('.hours-row').forEach((row) => {
       const on = row.querySelector('.open').checked;
+      const mOn = row.querySelector('.mOn').checked, pOn = row.querySelector('.pOn').checked;
       row.classList.toggle('closed', !on);
-      row.querySelectorAll('input[type=time]').forEach((i) => i.disabled = !on);
+      row.querySelector('.half.m').classList.toggle('off', !mOn);
+      row.querySelector('.half.p').classList.toggle('off', !pOn);
+      row.querySelectorAll('.mOn, .pOn').forEach((i) => i.disabled = !on);
+      row.querySelectorAll('.s1, .e1').forEach((i) => i.disabled = !on || !mOn);
+      row.querySelectorAll('.s2, .e2').forEach((i) => i.disabled = !on || !pOn);
     });
-    VR.$('#rows').addEventListener('change', sync);
+    VR.$('#rows').addEventListener('change', (ev) => {
+      // Se si tolgono sia mattina sia pomeriggio, il giorno diventa chiuso
+      const row = ev.target.closest('.hours-row');
+      if (row && ev.target.matches('.mOn, .pOn') && !row.querySelector('.mOn').checked && !row.querySelector('.pOn').checked) {
+        row.querySelector('.open').checked = false;
+        ev.target.checked = true;
+      }
+      // Riaprendo un giorno, almeno la mattina torna attiva
+      if (row && ev.target.matches('.open') && ev.target.checked && !row.querySelector('.mOn').checked && !row.querySelector('.pOn').checked) {
+        row.querySelector('.mOn').checked = true;
+      }
+      sync();
+    });
     sync();
     VR.show(form);
 
@@ -106,13 +165,18 @@
         const wd = Number(row.dataset.wd);
         const label = DAYS.find((d) => d[0] === wd)[1];
         if (!row.querySelector('.open').checked) { closed.push(wd); continue; }
+        const mOn = row.querySelector('.mOn').checked, pOn = row.querySelector('.pOn').checked;
         const s1 = row.querySelector('.s1').value, e1 = row.querySelector('.e1').value;
         const s2 = row.querySelector('.s2').value, e2 = row.querySelector('.e2').value;
-        if (!s1 || !e1 || e1 <= s1) { VR.say(msg2, `${label}: controlla l'orario (la chiusura deve essere dopo l'apertura).`, 'error'); return; }
-        if ((s2 && !e2) || (!s2 && e2)) { VR.say(msg2, `${label}: per il pomeriggio servono sia apertura sia chiusura, oppure lascia vuoti entrambi.`, 'error'); return; }
-        if (s2 && (e2 <= s2 || s2 < e1)) { VR.say(msg2, `${label}: il pomeriggio deve iniziare dopo la chiusura del mattino e finire dopo la riapertura.`, 'error'); return; }
-        upserts.push({ clinic_id: ctx.clinicId, weekday: wd, start_time: s1, end_time: e1,
-                       start_time2: s2 || null, end_time2: e2 || null, slot_minutes: slot });
+        if (!mOn && !pOn) { closed.push(wd); continue; }
+        if (mOn && (!s1 || !e1 || e1 <= s1)) { VR.say(msg2, `${label}: controlla l'orario della mattina (la fine deve essere dopo l'inizio).`, 'error'); return; }
+        if (pOn && (!s2 || !e2 || e2 <= s2)) { VR.say(msg2, `${label}: controlla l'orario del pomeriggio (la fine deve essere dopo l'inizio).`, 'error'); return; }
+        if (mOn && pOn && s2 < e1) { VR.say(msg2, `${label}: il pomeriggio deve iniziare dopo la fine della mattina.`, 'error'); return; }
+        if (!mOn && s2 < AFTERNOON_FROM) { VR.say(msg2, `${label}: il pomeriggio deve iniziare dalle ${AFTERNOON_FROM} in poi. Per un orario che parte prima, usa la colonna della mattina.`, 'error'); return; }
+        // Una fascia sola va sempre nella prima coppia di orari: agenda, turni e prenotazioni la leggono da lì
+        const [a1, b1, a2, b2] = mOn && pOn ? [s1, e1, s2, e2] : mOn ? [s1, e1, null, null] : [s2, e2, null, null];
+        upserts.push({ clinic_id: ctx.clinicId, weekday: wd, start_time: a1, end_time: b1,
+                       start_time2: a2, end_time2: b2, slot_minutes: slot });
       }
       const btn = VR.$('#save'); btn.disabled = true;
       if (upserts.length) {
@@ -126,6 +190,30 @@
       btn.disabled = false;
       VR.say(msg2, 'Orari salvati.', 'ok');
     });
+
+    // ---------- Chiusure (patch 39) ----------
+    const clBox = VR.$('#chiusure'), clList = VR.$('#clList'), clMsg = VR.$('#clMsgList');
+    const loadClosures = async () => {
+      const now = new Date(), far = new Date(now.getTime() + 400 * 864e5);
+      const res = await VR.chiusure.load(ctx.clinicId, now, far);
+      if (!res.ok) { if (!res.missing) { VR.show(clBox); VR.say(clMsg, VR.errorText(res.error), 'error'); } return; }
+      VR.show(clBox);
+      clList.innerHTML = res.rows.length
+        ? res.rows.map((r) => `<li><span><b>${VR.esc(VR.chiusure.label(r))}</b>${r.note ? `<small>${VR.esc(r.note)}</small>` : ''}</span>
+            <button class="btn btn-ghost btn-small" type="button" data-del="${r.id}">Riapri</button></li>`).join('')
+        : '<li><span class="muted">Nessuna chiusura in programma.</span></li>';
+    };
+    VR.$('#clAdd').addEventListener('click', async () => {
+      if (await VR.chiusure.open({ clinicId: ctx.clinicId })) { await loadClosures(); VR.say(clMsg, 'Chiusura salvata.', 'ok'); }
+    });
+    clList.addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-del]'); if (!b) return;
+      if (!confirm('Riaprire queste ore? Torneranno disponibili in agenda e su FurrFinder.')) return;
+      b.disabled = true;
+      try { await VR.chiusure.remove(b.dataset.del); await loadClosures(); VR.say(clMsg, 'Ore riaperte.', 'ok'); }
+      catch (e) { b.disabled = false; VR.say(clMsg, VR.errorText(e), 'error'); }
+    });
+    loadClosures();
   })();
   </script>
 </body>
